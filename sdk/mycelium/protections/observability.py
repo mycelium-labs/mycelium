@@ -1,0 +1,1 @@
+# mandatory verification pairs
