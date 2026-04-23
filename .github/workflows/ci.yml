@@ -33,5 +33,5 @@ jobs:
         working-directory: sdk
 
       - name: Tests
-        run: uv run pytest tests/ --allow-no-tests
+        run: uv run pytest tests/
         working-directory: sdk
