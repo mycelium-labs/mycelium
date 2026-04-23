@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Mycelium SDK — runtime protection for AI agents"
 requires-python = ">=3.12"
 
+[tool.hatch.build.targets.wheel]
+packages = ["mycelium"]
+
 [dependency-groups]
 dev = [
     "pyright",
