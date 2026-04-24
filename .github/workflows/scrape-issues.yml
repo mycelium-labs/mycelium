@@ -1,0 +1,61 @@
+name: Scrape GitHub issues → HF dataset
+
+on:
+  schedule:
+    # Daily at 07:00 UTC (~12:30 IST, ~00:00 PT).
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      full_rescrape:
+        description: "Full re-scrape (ignore --since). Slower, costs more API calls."
+        type: boolean
+        default: false
+
+concurrency:
+  group: scrape-issues
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read  # built-in GITHUB_TOKEN can read public repos; that's enough.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install huggingface_hub
+
+      - name: Compute --since (yesterday UTC)
+        id: since
+        run: |
+          if [[ "${{ inputs.full_rescrape }}" == "true" ]]; then
+            echo "value=" >> "$GITHUB_OUTPUT"
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=$(date -u -d 'yesterday' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+            echo "mode=incremental" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Scrape all configured repos
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MYCELIUM_HF_REPO: ${{ secrets.MYCELIUM_HF_REPO }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.since.outputs.mode }}" == "full" ]]; then
+            echo "=== full re-scrape ==="
+            python scripts/scrape_github_issues.py --all
+          else
+            echo "=== incremental since ${{ steps.since.outputs.value }} ==="
+            python scripts/scrape_github_issues.py --all --since "${{ steps.since.outputs.value }}"
+          fi
