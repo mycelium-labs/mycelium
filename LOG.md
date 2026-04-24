@@ -14,6 +14,19 @@ Template:
 
 ---
 
+## 2026-04-25 — company plan in GitHub (milestones + 29 issues)
+
+- did: created 8 labels, 5 milestones with real due dates (May 2, May 16, May 30, Jun 20, Jul 24), 29 issues scoped across them. Plan now lives in the repo, not in a doc.
+- now: M1 due in 7 days. First blocker: fix `MYCELIUM_HF_REPO` secret → CI green → start hand-tagging 50 issues.
+- next: rotate PAT (#5), fix secret + rerun workflow (#1), then hand-tag (#3) to unblock v1-scope decision (#4).
+
+## 2026-04-24 — CI live, first full-rescrape hit HF validation bug (session 3)
+
+- did: committed + pushed daily CI workflow + top-10 repos.txt. First `workflow_dispatch` full-rescrape scraped langchain (656 issues) on the runner but `HfApi.create_repo` 400'd on repo-name validation — almost certainly a trailing-newline in the `MYCELIUM_HF_REPO` secret.
+- did: hardened scraper — `.strip()` all HF env vars, explicit `_validate_hf_repo_id` with clear error messages, pushed fix.
+- now: fix pushed to `main`. Waiting on secret re-entry + workflow re-trigger to confirm green.
+- next: once green, open HF dataset and spot-check all 10 repo folders landed. Then start hand-tagging 50 random issues against AF-001…AF-009.
+
 ## 2026-04-24 — top-10 repos + daily CI wired (session 2)
 
 - did: expanded `scripts/repos.txt` to top-10 agent repos (langchain, langgraph, autogen, crewAI, openai-agents-python, smolagents, OpenHands, cline, stagehand, livekit/agents). Wrote `.github/workflows/scrape-issues.yml` — cron 07:00 UTC daily, `--since yesterday` incremental, plus manual-trigger with full-rescrape toggle.
