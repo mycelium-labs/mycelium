@@ -1,1 +1,37 @@
 mycelium-founding-chat.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.pem
+*.key
+secrets/
+.secrets/
+credentials.json
+
+# Scraped data — source of truth is the Hugging Face dataset repo.
+# Local files in incidents/public/github-issues/ are just an upload buffer.
+incidents/public/github-issues/**/*.jsonl
+incidents/public/github-issues/manifest.json
