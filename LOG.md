@@ -14,6 +14,13 @@ Template:
 
 ---
 
+## 2026-04-24 — top-10 repos + daily CI wired (session 2)
+
+- did: expanded `scripts/repos.txt` to top-10 agent repos (langchain, langgraph, autogen, crewAI, openai-agents-python, smolagents, OpenHands, cline, stagehand, livekit/agents). Wrote `.github/workflows/scrape-issues.yml` — cron 07:00 UTC daily, `--since yesterday` incremental, plus manual-trigger with full-rescrape toggle.
+- found: `huggingface-cli` deprecated → `hf`. HF dataset viewer is PRO-only for private repos (cosmetic, ignore).
+- now: ingestion pipeline code-complete but not yet live. Workflow + repos.txt uncommitted on laptop.
+- next: commit+push, add `HF_TOKEN` and `MYCELIUM_HF_REPO` as repo secrets on GitHub, trigger priming full-scrape via workflow_dispatch.
+
 ## 2026-04-24 — github-issues scraper live, HF corpus started
 
 - did: wired scraper to push JSONL + manifest to a private HF dataset. Set up .venv with uv. First scrape of langchain-ai/langchain = 656 issues pushed to `ndileep/mycelium-agent-failures` (5.49 MB, private).
