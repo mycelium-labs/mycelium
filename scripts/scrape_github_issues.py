@@ -167,7 +167,33 @@ def update_manifest(repo: str, date: str, count: int) -> None:
 
 
 def hf_configured() -> bool:
-    return bool(os.environ.get(HF_TOKEN_ENV) and os.environ.get(HF_REPO_ENV))
+    return bool(_hf_token() and _hf_repo())
+
+
+def _hf_token() -> str:
+    return (os.environ.get(HF_TOKEN_ENV) or "").strip()
+
+
+def _hf_repo() -> str:
+    return (os.environ.get(HF_REPO_ENV) or "").strip()
+
+
+def _validate_hf_repo_id(repo_id: str) -> None:
+    if "/" not in repo_id or repo_id.count("/") != 1:
+        raise ValueError(
+            f"{HF_REPO_ENV} must be in form 'owner/name' (got {repo_id!r}). "
+            "Check the GitHub secret for typos or whitespace."
+        )
+    owner, name = repo_id.split("/")
+    if not owner or not name:
+        raise ValueError(
+            f"{HF_REPO_ENV} must be in form 'owner/name' (got {repo_id!r})."
+        )
+    if any(ch in repo_id for ch in "\n\r\t "):
+        raise ValueError(
+            f"{HF_REPO_ENV} contains whitespace or newlines (got {repo_id!r}). "
+            "Re-add the GitHub secret without trailing whitespace."
+        )
 
 
 def _require_hf() -> None:
@@ -226,7 +252,8 @@ def ensure_hf_repo(repo_id: str) -> None:
     _require_hf()
     from huggingface_hub import HfApi
 
-    api = HfApi(token=os.environ[HF_TOKEN_ENV])
+    _validate_hf_repo_id(repo_id)
+    api = HfApi(token=_hf_token())
     api.create_repo(
         repo_id=repo_id,
         repo_type="dataset",
@@ -246,7 +273,6 @@ def ensure_hf_repo(repo_id: str) -> None:
             commit_message="scraper: seed dataset card",
         )
     except HfHubHTTPError as e:
-        # Card already exists or other non-fatal — ignore.
         print(f"[hf] dataset card step skipped: {e}", file=sys.stderr)
 
 
@@ -254,7 +280,7 @@ def push_to_hf(repo_id: str, local_jsonl: Path, repo_name: str, today: str) -> N
     _require_hf()
     from huggingface_hub import CommitOperationAdd, HfApi
 
-    api = HfApi(token=os.environ[HF_TOKEN_ENV])
+    api = HfApi(token=_hf_token())
     operations = [
         CommitOperationAdd(
             path_in_repo=f"github-issues/{repo_name}/{today}.jsonl",
@@ -290,7 +316,7 @@ def scrape(repo: str, since: str | None, upload: bool) -> int:
                 file=sys.stderr,
             )
             return count
-        repo_id = os.environ[HF_REPO_ENV]
+        repo_id = _hf_repo()
         today = datetime.now(timezone.utc).date().isoformat()
         ensure_hf_repo(repo_id)
         push_to_hf(repo_id, out_file, name, today)
