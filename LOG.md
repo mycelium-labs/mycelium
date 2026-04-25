@@ -14,6 +14,13 @@ Template:
 
 ---
 
+## 2026-04-25 — tagging tool shipped, full corpus on HF (15.8k issues)
+
+- did: full backfill green — 15,792 issues across 10 repos on HF (95 MB). langchain undercount (663 vs ~9.4k expected) noted as a follow-up but not blocking.
+- did: built `scripts/tag_next.py` — `build-queue` samples 5/repo from HF (deterministic, seed=42), then interactive tag loop with required evidence + confidence. Resumable; appends to `incidents/tagged/v0/tagged.jsonl` (the moat, lives in git not HF).
+- now: tooling done. Solo-tagging 50 issues is the unblocker for v1-scope decision (#4).
+- next: run `build-queue`, hand-tag the 50 over the next few sessions, then pick the top-3 AF-* by frequency.
+
 ## 2026-04-25 — caught the clobber bug, fixed full-vs-incremental paths
 
 - did: audited HF dataset — only 158 issues total (langchain has 9,441, we had 17). Found root cause: scheduled cron at 07:57 UTC overwrote the manual full-rescrape's `2026-04-25.jsonl` from 07:14 UTC, since both wrote to the same path.
