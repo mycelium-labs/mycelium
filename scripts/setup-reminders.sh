@@ -1,51 +1,57 @@
 #!/bin/bash
-# One-shot: creates 2 recurring macOS reminders for the Mycelium dev rhythm.
+# One-shot: creates 2 weekly macOS reminders for the Mycelium dev rhythm.
 #
 # Usage:
 #   bash scripts/setup-reminders.sh
 #
-# Idempotent — re-running will create duplicates. If that happens, delete the
-# old ones in Reminders.app.
-#
 # First run will trigger a TCC permission prompt asking the Terminal/Cursor to
 # control Reminders.app. Allow it.
+#
+# AppleScript can't set "Repeat → Weekly" itself (Apple API limitation).
+# After this runs, open Reminders.app and click Repeat: Weekly on each. ~30s.
 
 set -euo pipefail
 
 LIST_NAME="Mycelium"
 
-osascript <<APPLESCRIPT
+# Build dates in AppleScript directly (locale-independent — avoids the
+# "Sunday 7:00 PM" parse error you'll hit on en_IN, en_GB, etc.)
+
+osascript <<'APPLESCRIPT'
+on nextWeekday(targetWeekday, targetHour)
+    -- Returns the next occurrence of targetWeekday at targetHour:00 local time.
+    -- targetWeekday is one of: Monday, Tuesday, ..., Sunday
+    set d to (current date)
+    set hours of d to targetHour
+    set minutes of d to 0
+    set seconds of d to 0
+    repeat while (weekday of d) is not targetWeekday
+        set d to d + (1 * days)
+    end repeat
+    if d < (current date) then
+        set d to d + (7 * days)
+    end if
+    return d
+end nextWeekday
+
 tell application "Reminders"
-    -- Create the Mycelium list if it doesn't exist
-    if not (exists list "$LIST_NAME") then
-        make new list with properties {name:"$LIST_NAME"}
+    if not (exists list "Mycelium") then
+        make new list with properties {name:"Mycelium"}
     end if
 
-    -- Helper: next occurrence of a weekday at a given hour
-    -- (computed in the AppleScript date below)
+    set retroDate to my nextWeekday(Sunday, 19)
+    make new reminder at list "Mycelium" with properties ¬
+        {name:"/retro on the week", ¬
+         body:"Mycelium ritual. In Cursor chat, run: /retro" & linefeed & "Then update LOG.md with the takeaway. ~20 min.", ¬
+         due date:retroDate, ¬
+         remind me date:retroDate}
 
-    -- 1. Weekly: /retro on Sunday 7:00 PM
-    set retroDate to date "Sunday 7:00 PM"
-    -- AppleScript "Sunday 7:00 PM" parses as the next Sunday in the user's locale
-    make new reminder at list "$LIST_NAME" with properties {¬
-        name:"/retro on the week", ¬
-        body:"Mycelium ritual. In Cursor, run: /retro" & linefeed & ¬
-             "Then update LOG.md with the takeaway. ~20 min.", ¬
-        due date:retroDate, ¬
-        remind me date:retroDate}
-
-    -- 2. Weekly: /plan-ceo-review on Monday 9:00 AM
-    set ceoDate to date "Monday 9:00 AM"
-    make new reminder at list "$LIST_NAME" with properties {¬
-        name:"/plan-ceo-review on this week's plan", ¬
-        body:"Mycelium ritual. In Cursor, run: /plan-ceo-review" & linefeed & ¬
-             "Feed it: this week's planned work. Mode: HOLD SCOPE unless something changed. ~10 min.", ¬
-        due date:ceoDate, ¬
-        remind me date:ceoDate}
-
-    -- Note: macOS Reminders doesn't support setting RRULE (weekly recurrence)
-    -- via AppleScript. After running this script, open Reminders.app, click each
-    -- reminder, and set "Repeat → Weekly" in the info panel. ~30 seconds.
+    set ceoDate to my nextWeekday(Monday, 9)
+    make new reminder at list "Mycelium" with properties ¬
+        {name:"/plan-ceo-review on this week's plan", ¬
+         body:"Mycelium ritual. In Cursor chat, run: /plan-ceo-review" & linefeed & "Feed it: this week's planned work. Mode: HOLD SCOPE unless something changed. ~10 min.", ¬
+         due date:ceoDate, ¬
+         remind me date:ceoDate}
 end tell
 APPLESCRIPT
 
@@ -53,10 +59,10 @@ cat <<'EOF'
 
 ✓ Created two reminders in the "Mycelium" list of Reminders.app.
 
-ONE-TIME MANUAL STEP (AppleScript can't set recurrence — Apple's API limit):
+ONE-TIME MANUAL STEP (AppleScript can't set recurrence — Apple API limit):
   1. Open Reminders.app → Mycelium list
-  2. Click "/retro on the week" → ⓘ info → Repeat: Weekly
-  3. Click "/plan-ceo-review on this week's plan" → ⓘ info → Repeat: Weekly
+  2. Click "/retro on the week"            → ⓘ → Repeat: Weekly
+  3. Click "/plan-ceo-review on ..."       → ⓘ → Repeat: Weekly
 
 After that they fire forever. You can delete this script.
 EOF
