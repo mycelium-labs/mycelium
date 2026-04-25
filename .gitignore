@@ -35,3 +35,6 @@ credentials.json
 # Local files in incidents/public/github-issues/ are just an upload buffer.
 incidents/public/github-issues/**/*.jsonl
 incidents/public/github-issues/manifest.json
+
+# Local HF download cache (used by tag_next.py build-queue).
+.cache/
