@@ -14,6 +14,19 @@ Template:
 
 ---
 
+## 2026-04-25 — caught the clobber bug, fixed full-vs-incremental paths
+
+- did: audited HF dataset — only 158 issues total (langchain has 9,441, we had 17). Found root cause: scheduled cron at 07:57 UTC overwrote the manual full-rescrape's `2026-04-25.jsonl` from 07:14 UTC, since both wrote to the same path.
+- did: added `--full` flag → writes to `full-YYYY-MM-DD.jsonl` (separate file, can't be clobbered). Manifest now tracks `last_full_count` separately. Workflow uses `--full` when `full_rescrape=true`. Smoke-tested locally on stagehand → 349 issues pulled (vs 3 incremental).
+- now: fix on `main`. Need one manual `workflow_dispatch` with `full_rescrape=true` to get the real historical corpus on HF.
+- next: trigger full backfill, wait ~30-40 min, then hand-tagging (#3) finally has a real pool to sample from.
+
+## 2026-04-25 — pipeline green end-to-end across 10 repos
+
+- did: secret-fix worked. Re-triggered `workflow_dispatch` full-rescrape — all 10 repos (langchain, langgraph, autogen, crewAI, openai-agents-python, smolagents, OpenHands, cline, stagehand, livekit/agents) landed on HF in 11 commits, ~508 KB.
+- now: research corpus operational. Issue #1 is 2/3 done; final tick auto-completes after cron observed for 3 days.
+- next: hand-tagging (#3) is now the only thing that matters this week. Plus rotate PAT (#5, 5 min).
+
 ## 2026-04-25 — company plan in GitHub (milestones + 29 issues)
 
 - did: created 8 labels, 5 milestones with real due dates (May 2, May 16, May 30, Jun 20, Jul 24), 29 issues scoped across them. Plan now lives in the repo, not in a doc.
