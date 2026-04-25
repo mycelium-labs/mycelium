@@ -34,15 +34,15 @@ jobs:
       - name: Install deps
         run: pip install huggingface_hub
 
-      - name: Compute --since (yesterday UTC)
-        id: since
+      - name: Compute mode
+        id: mode
         run: |
           if [[ "${{ inputs.full_rescrape }}" == "true" ]]; then
-            echo "value=" >> "$GITHUB_OUTPUT"
-            echo "mode=full" >> "$GITHUB_OUTPUT"
+            echo "kind=full" >> "$GITHUB_OUTPUT"
+            echo "since=" >> "$GITHUB_OUTPUT"
           else
-            echo "value=$(date -u -d 'yesterday' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-            echo "mode=incremental" >> "$GITHUB_OUTPUT"
+            echo "kind=incremental" >> "$GITHUB_OUTPUT"
+            echo "since=$(date -u -d 'yesterday' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Scrape all configured repos
@@ -52,10 +52,10 @@ jobs:
           MYCELIUM_HF_REPO: ${{ secrets.MYCELIUM_HF_REPO }}
         run: |
           set -euo pipefail
-          if [[ "${{ steps.since.outputs.mode }}" == "full" ]]; then
-            echo "=== full re-scrape ==="
-            python scripts/scrape_github_issues.py --all
+          if [[ "${{ steps.mode.outputs.kind }}" == "full" ]]; then
+            echo "=== full historical backfill ==="
+            python scripts/scrape_github_issues.py --all --full
           else
-            echo "=== incremental since ${{ steps.since.outputs.value }} ==="
-            python scripts/scrape_github_issues.py --all --since "${{ steps.since.outputs.value }}"
+            echo "=== incremental since ${{ steps.mode.outputs.since }} ==="
+            python scripts/scrape_github_issues.py --all --since "${{ steps.mode.outputs.since }}"
           fi

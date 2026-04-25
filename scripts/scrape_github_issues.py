@@ -15,6 +15,7 @@ Usage:
     python scripts/scrape_github_issues.py langchain-ai/langchain
     python scripts/scrape_github_issues.py langchain-ai/langchain --since 2026-01-01
     python scripts/scrape_github_issues.py --all
+    python scripts/scrape_github_issues.py --all --full         # historical backfill
     python scripts/scrape_github_issues.py langchain-ai/langchain --no-upload
 
 Design notes:
@@ -22,6 +23,8 @@ Design notes:
     - Upload uses huggingface_hub (pip install huggingface_hub).
     - Pull requests are dropped (GitHub returns PRs under /issues).
     - One commit per scrape run: the day's JSONL + updated manifest in one batch.
+    - Full backfills write to `full-YYYY-MM-DD.jsonl` so the next day's
+      incremental run cannot clobber them.
 """
 
 from __future__ import annotations
@@ -120,7 +123,7 @@ def fetch_page(
 # -----------------------------------------------------------------------------
 
 
-def write_buffer(repo: str, since: str | None) -> tuple[Path, int, str]:
+def write_buffer(repo: str, since: str | None, full: bool) -> tuple[Path, int, str]:
     if "/" not in repo:
         raise ValueError(f"repo must be 'owner/name', got: {repo}")
 
@@ -129,7 +132,10 @@ def write_buffer(repo: str, since: str | None) -> tuple[Path, int, str]:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     today = datetime.now(timezone.utc).date().isoformat()
-    out_file = out_dir / f"{today}.jsonl"
+    # Full backfills get their own filename so the next day's incremental
+    # cron (which writes `<today>.jsonl`) cannot clobber the historical dump.
+    filename = f"full-{today}.jsonl" if full else f"{today}.jsonl"
+    out_file = out_dir / filename
 
     count = 0
     page = 1
@@ -147,17 +153,24 @@ def write_buffer(repo: str, since: str | None) -> tuple[Path, int, str]:
             page += 1
             time.sleep(0.25)
 
-    update_manifest(repo, today, count)
+    update_manifest(repo, today, count, full)
     print(f"[{repo}] buffered {count} issues → {out_file}", file=sys.stderr)
     return out_file, count, name
 
 
-def update_manifest(repo: str, date: str, count: int) -> None:
+def update_manifest(repo: str, date: str, count: int, full: bool) -> None:
     BUFFER_ROOT.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, dict[str, Any]] = {}
     if MANIFEST_FILE.exists():
         manifest = json.loads(MANIFEST_FILE.read_text())
-    manifest[repo] = {"last_scraped": date, "count": count}
+    entry = manifest.get(repo, {})
+    if full:
+        entry["last_full_scrape"] = date
+        entry["last_full_count"] = count
+    else:
+        entry["last_scraped"] = date
+        entry["count"] = count
+    manifest[repo] = entry
     MANIFEST_FILE.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
 
@@ -238,8 +251,9 @@ Primary use: building and maintaining the Mycelium failure-mode taxonomy
 ## Structure
 
 ```
-github-issues/{repo-name}/YYYY-MM-DD.jsonl   # one GitHub issue per line
-manifest.json                                # last-scrape date + count per repo
+github-issues/{repo-name}/YYYY-MM-DD.jsonl       # daily incremental (since yesterday)
+github-issues/{repo-name}/full-YYYY-MM-DD.jsonl  # full historical backfill
+manifest.json                                    # per-repo scrape state
 ```
 
 Each line in a `.jsonl` file is the raw GitHub API response for a single
@@ -276,14 +290,21 @@ def ensure_hf_repo(repo_id: str) -> None:
         print(f"[hf] dataset card step skipped: {e}", file=sys.stderr)
 
 
-def push_to_hf(repo_id: str, local_jsonl: Path, repo_name: str, today: str) -> None:
+def push_to_hf(
+    repo_id: str,
+    local_jsonl: Path,
+    repo_name: str,
+    today: str,
+    full: bool,
+) -> None:
     _require_hf()
     from huggingface_hub import CommitOperationAdd, HfApi
 
     api = HfApi(token=_hf_token())
+    filename = f"full-{today}.jsonl" if full else f"{today}.jsonl"
     operations = [
         CommitOperationAdd(
-            path_in_repo=f"github-issues/{repo_name}/{today}.jsonl",
+            path_in_repo=f"github-issues/{repo_name}/{filename}",
             path_or_fileobj=str(local_jsonl),
         ),
         CommitOperationAdd(
@@ -291,13 +312,14 @@ def push_to_hf(repo_id: str, local_jsonl: Path, repo_name: str, today: str) -> N
             path_or_fileobj=str(MANIFEST_FILE),
         ),
     ]
+    tag = "full" if full else "incremental"
     api.create_commit(
         repo_id=repo_id,
         repo_type="dataset",
         operations=operations,
-        commit_message=f"scraper: {repo_name} {today}",
+        commit_message=f"scraper: {repo_name} {today} ({tag})",
     )
-    print(f"[hf] pushed {repo_name}/{today}.jsonl → {repo_id}", file=sys.stderr)
+    print(f"[hf] pushed {repo_name}/{filename} → {repo_id}", file=sys.stderr)
 
 
 # -----------------------------------------------------------------------------
@@ -305,8 +327,8 @@ def push_to_hf(repo_id: str, local_jsonl: Path, repo_name: str, today: str) -> N
 # -----------------------------------------------------------------------------
 
 
-def scrape(repo: str, since: str | None, upload: bool) -> int:
-    out_file, count, name = write_buffer(repo, since)
+def scrape(repo: str, since: str | None, upload: bool, full: bool) -> int:
+    out_file, count, name = write_buffer(repo, since, full)
 
     if upload:
         if not hf_configured():
@@ -319,7 +341,7 @@ def scrape(repo: str, since: str | None, upload: bool) -> int:
         repo_id = _hf_repo()
         today = datetime.now(timezone.utc).date().isoformat()
         ensure_hf_repo(repo_id)
-        push_to_hf(repo_id, out_file, name, today)
+        push_to_hf(repo_id, out_file, name, today, full)
 
     return count
 
@@ -353,11 +375,26 @@ def main() -> int:
         help="ISO datetime, only fetch issues updated after this (e.g. 2026-01-01)",
     )
     parser.add_argument(
+        "--full",
+        action="store_true",
+        help=(
+            "Full historical backfill. Ignores --since and writes to "
+            "`full-YYYY-MM-DD.jsonl` so daily incrementals can't clobber it."
+        ),
+    )
+    parser.add_argument(
         "--no-upload",
         action="store_true",
         help="Skip Hugging Face upload; only write the local buffer",
     )
     args = parser.parse_args()
+
+    if args.full and args.since:
+        print(
+            "NOTE: --full ignores --since (full backfill pulls all history).",
+            file=sys.stderr,
+        )
+        args.since = None
 
     if args.all:
         repos = load_repos_file()
@@ -382,10 +419,11 @@ def main() -> int:
     total = 0
     for repo in repos:
         try:
-            total += scrape(repo, args.since, upload)
+            total += scrape(repo, args.since, upload, args.full)
         except (HTTPError, URLError) as e:
             print(f"[{repo}] failed: {e}", file=sys.stderr)
-    print(f"done. {total} issues across {len(repos)} repo(s).", file=sys.stderr)
+    mode = "full" if args.full else "incremental"
+    print(f"done. {total} issues across {len(repos)} repo(s) ({mode}).", file=sys.stderr)
     return 0
 
 
