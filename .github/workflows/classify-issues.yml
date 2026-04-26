@@ -1,0 +1,62 @@
+name: Classify issues → HF predictions
+
+# Runs after scrape-issues.yml succeeds (so freshly-scraped issues get
+# classified within minutes), and is also manually triggerable for backfills.
+
+on:
+  workflow_run:
+    workflows: ["Scrape GitHub issues → HF dataset"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Cap classifications per repo (smoke test). Leave empty for full."
+        type: string
+        default: ""
+      repo:
+        description: "Restrict to one repo (e.g. langchain-ai/langchain). Leave empty for all."
+        type: string
+        default: ""
+
+concurrency:
+  group: classify-issues
+  cancel-in-progress: false
+
+jobs:
+  classify:
+    # Only run after a *successful* scrape (skip if scrape failed). Manual
+    # dispatches always run.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install huggingface_hub openai python-dotenv
+
+      - name: Classify new issues
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MYCELIUM_HF_REPO: ${{ secrets.MYCELIUM_HF_REPO }}
+        run: |
+          set -euo pipefail
+          ARGS=()
+          if [[ -n "${{ inputs.limit }}" ]]; then
+            ARGS+=(--limit "${{ inputs.limit }}")
+          fi
+          if [[ -n "${{ inputs.repo }}" ]]; then
+            ARGS+=(--repo "${{ inputs.repo }}")
+          fi
+          echo "=== classify run ${ARGS[@]:-} ==="
+          python scripts/classify_corpus.py run "${ARGS[@]:-}"

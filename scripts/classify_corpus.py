@@ -1,22 +1,39 @@
 #!/usr/bin/env python3
-"""Bulk-classify GitHub issues against the Mycelium AF-* taxonomy with an LLM.
+"""Classify the GitHub-issue corpus against the Mycelium AF-* taxonomy.
 
-Two modes:
+The Hugging Face dataset is the source of truth in both directions:
 
-    # 1. Validate the classifier against the 50 hand-labeled issues.
-    #    Prints accuracy report, does NOT write predictions.
+    raw issues:    github-issues/<repo>/...               (written by scrape_github_issues.py)
+    predictions:   predictions/<repo>.jsonl               (written by this script)
+                   predictions/manifest.json              (per-repo classifier state)
+
+Each line in `predictions/<repo>.jsonl` is one issue's classification, keyed
+by `id` (e.g. "langchain-ai/langchain#34906"). Append-only and idempotent:
+re-running won't re-classify what's already there.
+
+Commands:
+
+    # Validate the classifier against the v0 hand-labeled set. No writes.
     python scripts/classify_corpus.py validate
 
-    # 2. Classify the full HF corpus (~15.8k issues). Resumable.
-    python scripts/classify_corpus.py full --limit 100   # smoke test
-    python scripts/classify_corpus.py full               # the real run
+    # Classify everything that hasn't been classified yet (default mode).
+    # Pulls raw issues from HF, classifies new ids, pushes predictions to HF.
+    # Safe to run repeatedly; this is what the daily GitHub Actions cron uses.
+    python scripts/classify_corpus.py run
 
-Output (full mode):
-    incidents/tagged/v1/predictions.jsonl   one row per issue, append-only
+    # Same as `run` but skip the HF push (local-only smoke test).
+    python scripts/classify_corpus.py run --no-push --limit 50
 
-Cost estimate (gpt-4o-mini): ~$0.0006/issue, ~$10 for the full 15.8k.
+    # Restrict to a single repo (handy for debugging).
+    python scripts/classify_corpus.py run --repo langchain-ai/langchain
 
-Auth: set OPENAI_API_KEY in env or in a `.env` file at repo root.
+Auth:
+    OPENAI_API_KEY     classifier (.env or env var)
+    HF_TOKEN           Hugging Face read+write
+    MYCELIUM_HF_REPO   dataset slug, e.g. "ndileep/mycelium-agent-failures"
+
+Cost (gpt-4o-mini): ~$0.0006/issue. Full ~15.8k corpus ≈ $10. Daily increments
+of a few dozen new issues are pennies.
 """
 
 from __future__ import annotations
@@ -29,14 +46,15 @@ import re
 import sys
 import time
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TAXONOMY_DIR = REPO_ROOT / "incidents" / "tagged"
 V0_DIR = TAXONOMY_DIR / "v0"
-V1_DIR = TAXONOMY_DIR / "v1"
-PREDICTIONS = V1_DIR / "predictions.jsonl"
+HF_CACHE = REPO_ROOT / ".cache" / "hf-dl"
+LOCAL_PRED_CACHE = REPO_ROOT / ".cache" / "predictions"
 
 DEFAULT_HF_REPO = "ndileep/mycelium-agent-failures"
 DEFAULT_MODEL = "gpt-4o-mini"
@@ -58,12 +76,11 @@ REPOS = [
 
 
 # -----------------------------------------------------------------------------
-# Taxonomy (load from disk so the spec files are the single source of truth)
+# Taxonomy / prompt
 # -----------------------------------------------------------------------------
 
 
 def load_taxonomy_text() -> str:
-    """Build a compact, model-readable taxonomy block from incidents/tagged/AF-*.md."""
     parts: list[str] = []
     for path in sorted(TAXONOMY_DIR.glob("AF-*.md")):
         text = path.read_text()
@@ -83,11 +100,6 @@ def load_taxonomy_text() -> str:
             block.append(f"  NOT this if: {out_of.group(1).strip().replace(chr(10), '; ')}")
         parts.append("\n".join(block))
     return "\n\n".join(parts)
-
-
-# -----------------------------------------------------------------------------
-# Prompt
-# -----------------------------------------------------------------------------
 
 
 def build_system_prompt() -> str:
@@ -187,15 +199,11 @@ BODY:
 
 
 # -----------------------------------------------------------------------------
-# OpenAI call
+# OpenAI call w/ exponential backoff
 # -----------------------------------------------------------------------------
 
 
 async def classify_one(client, system_prompt: str, issue: dict[str, Any], model: str, max_retries: int = 6) -> dict[str, Any]:
-    """Returns {label, confidence, evidence, reasoning} or {error: ...}.
-
-    Retries with exponential backoff on rate limits / transient API errors.
-    """
     user_msg = build_user_message(issue)
     last_err: Exception | None = None
     for attempt in range(max_retries):
@@ -226,28 +234,26 @@ async def classify_one(client, system_prompt: str, issue: dict[str, Any], model:
                 or "429" in err_text
                 or "timeout" in err_text
                 or "connection" in err_text
-                or "5" in str(getattr(e, "status_code", ""))[:1]  # 5xx
+                or "5" in str(getattr(e, "status_code", ""))[:1]
             )
             if not is_retryable or attempt == max_retries - 1:
                 break
-            # Try to honor server-suggested wait time if present.
             wait = 2 ** attempt
             m = re.search(r"try again in (\d+(?:\.\d+)?)\s*(s|ms)", err_text)
             if m:
                 val = float(m.group(1))
                 wait = val / 1000 if m.group(2) == "ms" else val
-                wait += 0.5  # cushion
+                wait += 0.5
             await asyncio.sleep(min(wait, 60))
     return {"error": f"{type(last_err).__name__}: {last_err}"}
 
 
 # -----------------------------------------------------------------------------
-# Loaders
+# Env / clients
 # -----------------------------------------------------------------------------
 
 
 def load_env() -> None:
-    """Load .env file if present so OPENAI_API_KEY can live there."""
     try:
         from dotenv import load_dotenv
         load_dotenv(REPO_ROOT / ".env")
@@ -255,7 +261,7 @@ def load_env() -> None:
         pass
 
 
-def get_client():
+def get_openai_client():
     if not os.environ.get("OPENAI_API_KEY"):
         print("ERROR: OPENAI_API_KEY not set.", file=sys.stderr)
         print("  Put it in .env at repo root:  echo 'OPENAI_API_KEY=sk-...' >> .env", file=sys.stderr)
@@ -264,65 +270,365 @@ def get_client():
     return AsyncOpenAI()
 
 
-def load_already_classified() -> set[str]:
-    if not PREDICTIONS.exists():
-        return set()
-    ids: set[str] = set()
-    for line in PREDICTIONS.read_text().splitlines():
-        if line.strip():
-            try:
-                ids.add(json.loads(line)["id"])
-            except (json.JSONDecodeError, KeyError):
-                pass
-    return ids
+def get_hf_api():
+    try:
+        from huggingface_hub import HfApi, get_token
+    except ImportError:
+        print("ERROR: huggingface_hub not installed. uv pip install huggingface_hub", file=sys.stderr)
+        sys.exit(2)
+    token = os.environ.get("HF_TOKEN") or get_token()
+    if not token:
+        print("ERROR: no HF token found. Set HF_TOKEN env var or run `huggingface-cli login`.", file=sys.stderr)
+        sys.exit(2)
+    return HfApi(token=token)
 
 
-def append_prediction(entry: dict[str, Any]) -> None:
-    PREDICTIONS.parent.mkdir(parents=True, exist_ok=True)
-    with PREDICTIONS.open("a") as fh:
-        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+def hf_repo_id() -> str:
+    return (os.environ.get("MYCELIUM_HF_REPO") or DEFAULT_HF_REPO).strip()
 
 
 # -----------------------------------------------------------------------------
-# Validate mode — run on the 50 hand-labeled, report agreement
+# Read raw issues from HF (union of all files for a repo, deduped by id)
+# -----------------------------------------------------------------------------
+
+
+def load_raw_issues_for_repo(api, repo_id: str, repo: str) -> list[dict[str, Any]]:
+    """Download all `*.jsonl` files for a repo from HF and dedupe by issue number.
+
+    Later files (more recent dates) win on conflict.
+    """
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.utils import EntryNotFoundError
+
+    _, name = repo.split("/", 1)
+    HF_CACHE.mkdir(parents=True, exist_ok=True)
+
+    try:
+        tree = list(api.list_repo_tree(repo_id, path_in_repo=f"github-issues/{name}", repo_type="dataset"))
+    except EntryNotFoundError:
+        return []
+
+    files = sorted([f.path for f in tree if f.path.endswith(".jsonl")])
+    if not files:
+        return []
+
+    by_number: dict[int, dict[str, Any]] = {}
+    for path in files:
+        local = hf_hub_download(repo_id, path, repo_type="dataset", local_dir=str(HF_CACHE))
+        with open(local) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                d = json.loads(line)
+                if "pull_request" in d:
+                    continue
+                num = d.get("number")
+                if num is None:
+                    continue
+                by_number[num] = d  # later file wins
+
+    out = []
+    for d in by_number.values():
+        out.append({
+            "id": f"{repo}#{d['number']}",
+            "repo": repo,
+            "number": d["number"],
+            "url": d.get("html_url", ""),
+            "title": d.get("title", ""),
+            "body": d.get("body") or "",
+            "state": d.get("state", "?"),
+            "labels": [lbl["name"] for lbl in d.get("labels", [])],
+        })
+    return out
+
+
+# -----------------------------------------------------------------------------
+# Read existing predictions for a repo (so we don't reclassify)
+# -----------------------------------------------------------------------------
+
+
+def hf_predictions_path(repo: str) -> str:
+    _, name = repo.split("/", 1)
+    return f"predictions/{name}.jsonl"
+
+
+def local_predictions_path(repo: str) -> Path:
+    _, name = repo.split("/", 1)
+    return LOCAL_PRED_CACHE / f"{name}.jsonl"
+
+
+def download_existing_predictions(api, repo_id: str, repo: str) -> list[dict[str, Any]]:
+    """Pull the current predictions/<repo>.jsonl from HF (or empty if first run)."""
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.utils import EntryNotFoundError
+
+    LOCAL_PRED_CACHE.mkdir(parents=True, exist_ok=True)
+    try:
+        local = hf_hub_download(
+            repo_id,
+            hf_predictions_path(repo),
+            repo_type="dataset",
+            local_dir=str(LOCAL_PRED_CACHE / "_hf"),
+        )
+    except EntryNotFoundError:
+        return []
+
+    rows = []
+    with open(local) as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
+
+
+# -----------------------------------------------------------------------------
+# Push predictions back to HF
+# -----------------------------------------------------------------------------
+
+
+_PREDICTIONS_CARD_NOTE = """\
+Predictions written by `scripts/classify_corpus.py` against the AF-* taxonomy
+defined in the Mycelium repo. One file per source repo, append-only.
+
+Schema per line:
+  id           e.g. "langchain-ai/langchain#34906"
+  repo, number, url, title
+  label        "n" (not a failure) | "AF-XXX" | "AF-XXX+AF-YYY"
+  confidence   "high" | "medium" | "low"
+  evidence     one-line quote or rejection category
+  reasoning    one-sentence justification
+  model        classifier model used
+  classified_at  ISO-8601 UTC timestamp
+"""
+
+
+def push_predictions(
+    api,
+    repo_id: str,
+    repo: str,
+    rows: list[dict[str, Any]],
+    manifest: dict[str, Any],
+) -> None:
+    from huggingface_hub import CommitOperationAdd
+
+    body_bytes = ("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n").encode("utf-8")
+    manifest_bytes = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+    operations = [
+        CommitOperationAdd(
+            path_in_repo=hf_predictions_path(repo),
+            path_or_fileobj=body_bytes,
+        ),
+        CommitOperationAdd(
+            path_in_repo="predictions/manifest.json",
+            path_or_fileobj=manifest_bytes,
+        ),
+    ]
+    _, name = repo.split("/", 1)
+    api.create_commit(
+        repo_id=repo_id,
+        repo_type="dataset",
+        operations=operations,
+        commit_message=f"classify: {name} +{manifest[repo]['delta']} (total {manifest[repo]['count']})",
+    )
+
+
+def write_predictions_local(repo: str, rows: list[dict[str, Any]]) -> Path:
+    p = local_predictions_path(repo)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w") as fh:
+        for r in rows:
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    return p
+
+
+def fetch_manifest(api, repo_id: str) -> dict[str, Any]:
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.utils import EntryNotFoundError
+
+    try:
+        local = hf_hub_download(
+            repo_id,
+            "predictions/manifest.json",
+            repo_type="dataset",
+            local_dir=str(LOCAL_PRED_CACHE / "_hf"),
+        )
+        return json.loads(Path(local).read_text())
+    except EntryNotFoundError:
+        return {}
+
+
+# -----------------------------------------------------------------------------
+# Orchestration: `run` mode
+# -----------------------------------------------------------------------------
+
+
+async def classify_repo(
+    api,
+    repo_id: str,
+    repo: str,
+    model: str,
+    concurrency: int,
+    limit: int | None,
+    push: bool,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    """Classify all unclassified issues in a single repo. Returns stats."""
+    print(f"\n=== {repo} ===", file=sys.stderr)
+
+    raw_issues = load_raw_issues_for_repo(api, repo_id, repo)
+    if not raw_issues:
+        print(f"  no raw issues on HF for {repo}, skipping", file=sys.stderr)
+        return {"repo": repo, "skipped": True}
+
+    existing = download_existing_predictions(api, repo_id, repo)
+    done_ids = {r["id"] for r in existing}
+
+    todo = [i for i in raw_issues if i["id"] not in done_ids]
+    if limit:
+        todo = todo[:limit]
+
+    print(f"  raw: {len(raw_issues)}  already classified: {len(done_ids)}  to classify: {len(todo)}", file=sys.stderr)
+
+    if not todo:
+        return {"repo": repo, "raw": len(raw_issues), "delta": 0, "errors": 0}
+
+    client = get_openai_client()
+    system_prompt = build_system_prompt()
+    sem = asyncio.Semaphore(concurrency)
+    new_rows: list[dict[str, Any]] = []
+    errors = 0
+    counts: Counter[str] = Counter()
+    completed = 0
+    t0 = time.monotonic()
+    lock = asyncio.Lock()
+
+    async def task(issue: dict[str, Any]) -> None:
+        nonlocal completed, errors
+        async with sem:
+            pred = await classify_one(client, system_prompt, issue, model)
+            row = {
+                "id": issue["id"],
+                "repo": issue["repo"],
+                "number": issue["number"],
+                "url": issue["url"],
+                "title": issue["title"],
+                "model": model,
+                "classified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            }
+            if "error" in pred:
+                row["error"] = pred["error"]
+                async with lock:
+                    errors += 1
+            else:
+                row.update({
+                    "label": pred.get("label"),
+                    "confidence": pred.get("confidence"),
+                    "evidence": pred.get("evidence"),
+                    "reasoning": pred.get("reasoning"),
+                })
+                async with lock:
+                    counts[(pred.get("label") or "?").lower()] += 1
+            async with lock:
+                new_rows.append(row)
+                completed += 1
+                if completed % 50 == 0 or completed == len(todo):
+                    rate = completed / (time.monotonic() - t0)
+                    eta = (len(todo) - completed) / rate if rate else 0
+                    print(f"  [{completed}/{len(todo)}] rate={rate:.1f}/s eta={eta:.0f}s errors={errors}", file=sys.stderr)
+
+    await asyncio.gather(*[task(i) for i in todo])
+
+    # Merge: keep existing rows, append new (skip rows with error so re-runs retry).
+    successful = [r for r in new_rows if "error" not in r]
+    failed = [r for r in new_rows if "error" in r]
+    merged = existing + successful
+
+    write_predictions_local(repo, merged)
+    if failed:
+        print(f"  {len(failed)} failures dropped from final file (will retry on next run)", file=sys.stderr)
+
+    manifest[repo] = {
+        "count": len(merged),
+        "delta": len(successful),
+        "last_classified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "model": model,
+    }
+
+    if push:
+        try:
+            push_predictions(api, repo_id, repo, merged, manifest)
+            print(f"  [hf] pushed predictions/{repo.split('/', 1)[1]}.jsonl ({len(merged)} rows)", file=sys.stderr)
+        except Exception as e:
+            print(f"  [hf] push failed: {e}", file=sys.stderr)
+            return {"repo": repo, "raw": len(raw_issues), "delta": len(successful), "errors": errors, "push_error": str(e)}
+
+    return {"repo": repo, "raw": len(raw_issues), "delta": len(successful), "errors": errors}
+
+
+async def run_corpus(
+    model: str,
+    concurrency: int,
+    limit: int | None,
+    push: bool,
+    only_repo: str | None,
+) -> int:
+    load_env()
+    api = get_hf_api()
+    repo_id = hf_repo_id()
+    print(f"[hf] dataset: {repo_id}", file=sys.stderr)
+
+    manifest = fetch_manifest(api, repo_id)
+
+    targets = REPOS if only_repo is None else [only_repo]
+    if only_repo and only_repo not in REPOS:
+        print(f"WARNING: {only_repo} not in REPOS list, classifying anyway", file=sys.stderr)
+
+    stats = []
+    for repo in targets:
+        try:
+            s = await classify_repo(api, repo_id, repo, model, concurrency, limit, push, manifest)
+            stats.append(s)
+        except Exception as e:
+            print(f"[{repo}] failed: {e}", file=sys.stderr)
+            stats.append({"repo": repo, "error": str(e)})
+
+    print("\n=== summary ===", file=sys.stderr)
+    total_delta = 0
+    for s in stats:
+        if s.get("skipped"):
+            print(f"  {s['repo']}: skipped (no raw)", file=sys.stderr)
+        elif "error" in s:
+            print(f"  {s['repo']}: ERROR {s['error']}", file=sys.stderr)
+        else:
+            print(f"  {s['repo']}: +{s.get('delta', 0)} new (raw={s.get('raw', 0)}, errors={s.get('errors', 0)})", file=sys.stderr)
+            total_delta += s.get("delta", 0)
+    print(f"total newly classified: {total_delta}", file=sys.stderr)
+    return 0
+
+
+# -----------------------------------------------------------------------------
+# Validate mode (against v0 hand-labeled set)
 # -----------------------------------------------------------------------------
 
 
 def load_validation_set() -> list[tuple[dict[str, Any], dict[str, Any]]]:
-    """Returns list of (issue_dict, gold_label_dict)."""
-    if not (V0_DIR / "queue.jsonl").exists():
-        print("ERROR: incidents/tagged/v0/queue.jsonl not found", file=sys.stderr)
+    if not (V0_DIR / "queue.jsonl").exists() or not (V0_DIR / "tagged.jsonl").exists():
+        print("ERROR: missing v0/queue.jsonl or v0/tagged.jsonl", file=sys.stderr)
         sys.exit(2)
-    if not (V0_DIR / "tagged.jsonl").exists():
-        print("ERROR: incidents/tagged/v0/tagged.jsonl not found", file=sys.stderr)
-        sys.exit(2)
-
-    queue = {}
-    for line in (V0_DIR / "queue.jsonl").read_text().splitlines():
-        if line.strip():
-            d = json.loads(line)
-            queue[d["id"]] = d
-
-    tagged = []
-    for line in (V0_DIR / "tagged.jsonl").read_text().splitlines():
-        if line.strip():
-            tagged.append(json.loads(line))
-
-    pairs = []
-    for t in tagged:
-        if t["id"] in queue:
-            pairs.append((queue[t["id"]], t))
-    return pairs
+    queue = {json.loads(line)["id"]: json.loads(line) for line in (V0_DIR / "queue.jsonl").read_text().splitlines() if line.strip()}
+    tagged = [json.loads(line) for line in (V0_DIR / "tagged.jsonl").read_text().splitlines() if line.strip()]
+    return [(queue[t["id"]], t) for t in tagged if t["id"] in queue]
 
 
 def normalize_gold(gold: dict[str, Any]) -> str:
-    """Convert gold-tagged.jsonl entry to comparable label string."""
     if gold["status"] == "not-a-failure":
         return "n"
     if gold["status"] == "skip":
         return "skip"
-    labels = gold.get("labels") or []
-    return "+".join(sorted(labels))
+    return "+".join(sorted(gold.get("labels") or []))
 
 
 def normalize_pred(pred: dict[str, Any]) -> str:
@@ -335,34 +641,26 @@ def normalize_pred(pred: dict[str, Any]) -> str:
 
 async def run_validate(model: str, concurrency: int) -> int:
     load_env()
-    client = get_client()
+    client = get_openai_client()
     system_prompt = build_system_prompt()
-    pairs = load_validation_set()
-    pairs = [(i, g) for i, g in pairs if normalize_gold(g) != "skip"]
+    pairs = [(i, g) for i, g in load_validation_set() if normalize_gold(g) != "skip"]
 
     print(f"validation set: {len(pairs)} hand-labeled issues")
-    print(f"model: {model}, concurrency: {concurrency}")
-    print()
+    print(f"model: {model}, concurrency: {concurrency}\n")
 
     sem = asyncio.Semaphore(concurrency)
 
     async def task(issue, gold):
         async with sem:
-            t0 = time.monotonic()
             pred = await classify_one(client, system_prompt, issue, model)
-            elapsed = time.monotonic() - t0
-            return issue, gold, pred, elapsed
+            return issue, gold, pred
 
     results = await asyncio.gather(*[task(i, g) for i, g in pairs])
 
-    correct = 0
-    af_correct = 0
-    af_total = 0
-    n_correct = 0
-    n_total = 0
+    correct = af_correct = af_total = n_correct = n_total = 0
     disagreements: list[tuple[dict, dict, dict]] = []
 
-    for issue, gold, pred, _ in results:
+    for issue, gold, pred in results:
         if "error" in pred:
             print(f"  ERROR on {issue['id']}: {pred['error']}")
             continue
@@ -371,159 +669,28 @@ async def run_validate(model: str, concurrency: int) -> int:
         is_correct = gold_norm == pred_norm
         if gold_norm == "n":
             n_total += 1
-            if is_correct:
-                n_correct += 1
+            n_correct += is_correct
         else:
             af_total += 1
-            if is_correct:
-                af_correct += 1
-        if is_correct:
-            correct += 1
-        else:
+            af_correct += is_correct
+        correct += is_correct
+        if not is_correct:
             disagreements.append((issue, gold, pred))
 
     total = len(results)
     print(f"OVERALL AGREEMENT: {correct}/{total} = {100 * correct / total:.1f}%")
     print(f"  on AF-tagged:    {af_correct}/{af_total} = {(100 * af_correct / af_total) if af_total else 0:.1f}%")
-    print(f"  on not-a-failure:{n_correct}/{n_total} = {(100 * n_correct / n_total) if n_total else 0:.1f}%")
-    print()
+    print(f"  on not-a-failure:{n_correct}/{n_total} = {(100 * n_correct / n_total) if n_total else 0:.1f}%\n")
 
     if disagreements:
         print(f"DISAGREEMENTS ({len(disagreements)}):")
         for issue, gold, pred in disagreements:
-            gold_norm = normalize_gold(gold)
-            pred_norm = normalize_pred(pred)
             print(f"  {issue['id']}")
-            print(f"    title:    {issue['title'][:80]}")
-            print(f"    HUMAN:    {gold_norm}  (notes: {gold.get('notes', '')[:80]})")
-            print(f"    LLM:      {pred_norm}  ({pred.get('confidence')})  ev: {pred.get('evidence', '')[:80]}")
-            print()
+            print(f"    title:  {issue['title'][:80]}")
+            print(f"    HUMAN:  {normalize_gold(gold)}  notes: {gold.get('notes', '')[:80]}")
+            print(f"    LLM:    {normalize_pred(pred)}  ({pred.get('confidence')})  ev: {pred.get('evidence', '')[:80]}\n")
 
-    cost_per_call = 0.0006
-    print(f"approx cost: ${total * cost_per_call:.3f} ({total} calls)")
-    return 0
-
-
-# -----------------------------------------------------------------------------
-# Full mode — classify everything in the HF corpus
-# -----------------------------------------------------------------------------
-
-
-def load_full_corpus() -> list[dict[str, Any]]:
-    """Download or read all `full-*.jsonl` files for each repo from HF cache.
-
-    Returns a flat list of issue dicts with id, repo, etc."""
-    try:
-        from huggingface_hub import HfApi, hf_hub_download
-    except ImportError:
-        print("ERROR: huggingface_hub not installed.", file=sys.stderr)
-        sys.exit(2)
-
-    repo_id = (os.environ.get("MYCELIUM_HF_REPO") or DEFAULT_HF_REPO).strip()
-    if not os.environ.get("HF_TOKEN"):
-        print("ERROR: HF_TOKEN not set in env or .env", file=sys.stderr)
-        sys.exit(2)
-
-    print(f"[hf] reading {repo_id}", file=sys.stderr)
-    api = HfApi()
-    cache = REPO_ROOT / ".cache" / "hf-dl"
-    cache.mkdir(parents=True, exist_ok=True)
-
-    issues: list[dict[str, Any]] = []
-    for repo in REPOS:
-        _, name = repo.split("/", 1)
-        tree = list(api.list_repo_tree(repo_id, path_in_repo=f"github-issues/{name}", repo_type="dataset"))
-        full_files = sorted([f for f in tree if "full-" in f.path and f.path.endswith(".jsonl")])
-        if not full_files:
-            print(f"  [{repo}] no full-*.jsonl, skipping", file=sys.stderr)
-            continue
-        target = full_files[-1]
-        local = hf_hub_download(repo_id, target.path, repo_type="dataset", local_dir=str(cache))
-        with open(local) as fh:
-            for line in fh:
-                if not line.strip():
-                    continue
-                d = json.loads(line)
-                if "pull_request" in d:
-                    continue
-                issues.append({
-                    "id": f"{repo}#{d['number']}",
-                    "repo": repo,
-                    "number": d["number"],
-                    "url": d.get("html_url", ""),
-                    "title": d.get("title", ""),
-                    "body": d.get("body") or "",
-                    "state": d.get("state", "?"),
-                    "labels": [lbl["name"] for lbl in d.get("labels", [])],
-                })
-        print(f"  [{repo}] {len([i for i in issues if i['repo'] == repo])} issues loaded", file=sys.stderr)
-
-    return issues
-
-
-async def run_full(model: str, concurrency: int, limit: int | None) -> int:
-    load_env()
-    client = get_client()
-    system_prompt = build_system_prompt()
-    issues = load_full_corpus()
-
-    done = load_already_classified()
-    todo = [i for i in issues if i["id"] not in done]
-    if limit:
-        todo = todo[:limit]
-
-    print(f"corpus:           {len(issues)} issues")
-    print(f"already done:     {len(done)}")
-    print(f"to classify now:  {len(todo)}")
-    print(f"model:            {model}, concurrency: {concurrency}")
-    print(f"approx cost:      ${len(todo) * 0.0006:.2f}")
-    print()
-    if not todo:
-        print("nothing to do.")
-        return 0
-
-    sem = asyncio.Semaphore(concurrency)
-    completed = 0
-    errors = 0
-    counts: Counter[str] = Counter()
-    t_start = time.monotonic()
-    lock = asyncio.Lock()
-
-    async def task(issue: dict[str, Any]) -> None:
-        nonlocal completed, errors
-        async with sem:
-            pred = await classify_one(client, system_prompt, issue, model)
-            entry = {"id": issue["id"], "repo": issue["repo"], "number": issue["number"], "url": issue["url"], "title": issue["title"]}
-            if "error" in pred:
-                async with lock:
-                    errors += 1
-                entry["error"] = pred["error"]
-            else:
-                entry.update({
-                    "label": pred.get("label"),
-                    "confidence": pred.get("confidence"),
-                    "evidence": pred.get("evidence"),
-                    "reasoning": pred.get("reasoning"),
-                })
-                async with lock:
-                    counts[normalize_pred(pred)] += 1
-            async with lock:
-                append_prediction(entry)
-                completed += 1
-                if completed % 50 == 0 or completed == len(todo):
-                    rate = completed / (time.monotonic() - t_start)
-                    eta = (len(todo) - completed) / rate if rate else 0
-                    print(f"  [{completed}/{len(todo)}] rate={rate:.1f}/s eta={eta:.0f}s errors={errors}", file=sys.stderr)
-
-    await asyncio.gather(*[task(i) for i in todo])
-
-    elapsed = time.monotonic() - t_start
-    print()
-    print(f"done in {elapsed:.0f}s, errors={errors}")
-    print()
-    print("label distribution (this run):")
-    for k, v in counts.most_common():
-        print(f"  {k:20s} {v}")
+    print(f"approx cost: ${total * 0.0006:.3f} ({total} calls)")
     return 0
 
 
@@ -534,20 +701,28 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    pv = sub.add_parser("validate", help="Test the classifier against the 50 hand-labeled issues.")
+    pv = sub.add_parser("validate", help="Validate against the v0 hand-labeled set.")
     pv.add_argument("--model", default=DEFAULT_MODEL)
     pv.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
 
-    pf = sub.add_parser("full", help="Classify the full HF corpus. Resumable.")
-    pf.add_argument("--model", default=DEFAULT_MODEL)
-    pf.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
-    pf.add_argument("--limit", type=int, default=None, help="Cap the number of issues classified this run.")
+    pr = sub.add_parser("run", help="Classify any unclassified issues, push to HF.")
+    pr.add_argument("--model", default=DEFAULT_MODEL)
+    pr.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
+    pr.add_argument("--limit", type=int, default=None, help="Cap classifications per repo (smoke test).")
+    pr.add_argument("--repo", default=None, help="Only classify this one repo (e.g. langchain-ai/langchain).")
+    pr.add_argument("--no-push", action="store_true", help="Skip HF upload (local-only run).")
 
     args = parser.parse_args()
     if args.cmd == "validate":
         return asyncio.run(run_validate(args.model, args.concurrency))
-    if args.cmd == "full":
-        return asyncio.run(run_full(args.model, args.concurrency, args.limit))
+    if args.cmd == "run":
+        return asyncio.run(run_corpus(
+            model=args.model,
+            concurrency=args.concurrency,
+            limit=args.limit,
+            push=not args.no_push,
+            only_repo=args.repo,
+        ))
     parser.print_help()
     return 1
 
