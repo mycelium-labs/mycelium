@@ -14,6 +14,16 @@ Template:
 
 ---
 
+## 2026-04-26 — deterministic pre-filter cuts LLM cost ~30%
+
+- did: added a regex pre-filter in `classify_corpus.py` that catches obvious 'n's (feature requests, docs, install errors, vendor pitches, "how do I…", typos, `[Roadmap]`, OS-specific) before the LLM sees them.
+- did: built `validate-prefilter` subcommand that runs the rules against v0's 50 hand-tagged issues. Hard contract: zero false negatives on AF-tagged. Currently catches 12/43 'n' (27.9%) with 0/7 false negatives.
+- did: smoke-tested run on 20 fresh smolagents issues — 9 caught by rules (45%), 11 to LLM, 11/11 succeeded. Confirms the OpenAI key works fine; the earlier 1.5h failure was a transient quota window.
+- found: prefiltered rows go to HF with `model: "prefilter:<rule>"`, full provenance preserved. Same predictions schema, just attributed to a rule instead of an LLM.
+- next: green-light a real GH Actions run with `max_issues=500` to verify end-to-end, then scale up.
+
+---
+
 ## 2026-04-26 — classification pipeline goes HF-native + auto-runs daily
 
 - did: rewrote `classify_corpus.py` to read raw issues from HF and write predictions to `predictions/<repo>.jsonl` (append-only, idempotent by issue id). One file per repo on HF instead of a flat local jsonl.
