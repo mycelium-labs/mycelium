@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
-"""Turn raw classifier predictions into a human-reviewable bulk pack.
+"""Turn HF predictions into a human-reviewable bulk pack.
 
-After running `classify_corpus.py full`, you have predictions on ~15.8k issues.
-Most are "n". This script:
+Reads `predictions/<repo>.jsonl` from the Mycelium HF dataset, filters to
+high/medium-confidence AF-* tags, dedupes against v0 hand-tags, and produces:
 
-1. Filters to predictions with label != "n" AND confidence in {high, medium}.
-2. Joins them with the original issue title/body/url from the HF cache.
-3. De-duplicates against incidents/tagged/v0/tagged.jsonl (no need to re-tag what
-   you already hand-labeled).
-4. Writes:
-       incidents/tagged/v1/proposed.jsonl   structured, ready for ingest_proposed.py
-       incidents/tagged/v1/proposed.md      human-readable review file
+    incidents/tagged/v1/proposed.jsonl   structured, ready for ingest_proposed.py
+    incidents/tagged/v1/proposed.md      human-readable review file
 
 Workflow:
-    python scripts/classify_corpus.py full
+    python scripts/classify_corpus.py run        # populates HF predictions/
     python scripts/build_review_pack.py
     # review proposed.md, edit proposed.jsonl if you want to override anything
     python scripts/ingest_proposed.py --version v1
+
+Auth:
+    HF_TOKEN, MYCELIUM_HF_REPO  (same env as scrape / classify scripts)
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -31,9 +30,69 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TAXONOMY_DIR = REPO_ROOT / "incidents" / "tagged"
 V0_DIR = TAXONOMY_DIR / "v0"
 V1_DIR = TAXONOMY_DIR / "v1"
-PREDICTIONS = V1_DIR / "predictions.jsonl"
 PROPOSED_JSONL = V1_DIR / "proposed.jsonl"
 PROPOSED_MD = V1_DIR / "proposed.md"
+LOCAL_PRED_CACHE = REPO_ROOT / ".cache" / "predictions" / "_hf"
+
+DEFAULT_HF_REPO = "ndileep/mycelium-agent-failures"
+REPOS = [
+    "langchain-ai/langchain",
+    "langchain-ai/langgraph",
+    "microsoft/autogen",
+    "crewAIInc/crewAI",
+    "openai/openai-agents-python",
+    "huggingface/smolagents",
+    "All-Hands-AI/OpenHands",
+    "cline/cline",
+    "browserbase/stagehand",
+    "livekit/agents",
+]
+
+
+def load_env() -> None:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(REPO_ROOT / ".env")
+    except ImportError:
+        pass
+
+
+def load_predictions_from_hf() -> list[dict[str, Any]]:
+    try:
+        from huggingface_hub import HfApi, get_token, hf_hub_download
+        from huggingface_hub.utils import EntryNotFoundError
+    except ImportError:
+        print("ERROR: huggingface_hub not installed", file=sys.stderr)
+        sys.exit(2)
+
+    token = os.environ.get("HF_TOKEN") or get_token()
+    if not token:
+        print("ERROR: no HF token. Set HF_TOKEN or run `huggingface-cli login`.", file=sys.stderr)
+        sys.exit(2)
+    repo_id = (os.environ.get("MYCELIUM_HF_REPO") or DEFAULT_HF_REPO).strip()
+    api = HfApi(token=token)
+    LOCAL_PRED_CACHE.mkdir(parents=True, exist_ok=True)
+
+    rows: list[dict[str, Any]] = []
+    for repo in REPOS:
+        _, name = repo.split("/", 1)
+        try:
+            local = hf_hub_download(
+                repo_id,
+                f"predictions/{name}.jsonl",
+                repo_type="dataset",
+                local_dir=str(LOCAL_PRED_CACHE),
+            )
+        except EntryNotFoundError:
+            print(f"  [{name}] no predictions yet, skipping", file=sys.stderr)
+            continue
+        with open(local) as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+        print(f"  [{name}] loaded {sum(1 for r in rows if r.get('repo') == repo)} rows", file=sys.stderr)
+    return rows
 
 
 def already_tagged_ids() -> set[str]:
@@ -56,12 +115,13 @@ def normalize_label(raw: str) -> list[str]:
 
 
 def main() -> int:
-    if not PREDICTIONS.exists():
-        print(f"ERROR: {PREDICTIONS} not found.", file=sys.stderr)
-        print("Run: python scripts/classify_corpus.py full", file=sys.stderr)
+    load_env()
+    print(f"[hf] pulling predictions from {os.environ.get('MYCELIUM_HF_REPO') or DEFAULT_HF_REPO}", file=sys.stderr)
+    preds = load_predictions_from_hf()
+    if not preds:
+        print("ERROR: no predictions found on HF. Run `python scripts/classify_corpus.py run` first.", file=sys.stderr)
         return 2
 
-    preds = [json.loads(line) for line in PREDICTIONS.read_text().splitlines() if line.strip()]
     skip_ids = already_tagged_ids()
 
     af_preds: list[dict[str, Any]] = []
@@ -121,7 +181,7 @@ def main() -> int:
     md_lines = [
         "# v1 Bulk-Classified Review Pack",
         "",
-        f"LLM-proposed AF-* tags from {len(preds):,} classified issues.",
+        f"LLM-proposed AF-* tags from {len(preds):,} classified issues (HF predictions/).",
         f"Filtered to confidence ∈ {{high, medium}}, deduped against v0 hand-tags.",
         "",
         "## Summary",
@@ -157,17 +217,18 @@ def main() -> int:
             continue
         md_lines.append(f"| {k} | {v:,} |")
 
-    md_lines += [
-        "",
-        "## AF-tag distribution by repo (high+medium only, in review pack)",
-        "",
-        "| Repo | " + " | ".join(sorted({lbl for c in repo_label_dist.values() for lbl in c})) + " |",
-        "|---|" + "|".join(["--:"] * len({lbl for c in repo_label_dist.values() for lbl in c})) + "|",
-    ]
-    all_labels = sorted({lbl for c in repo_label_dist.values() for lbl in c})
-    for repo in sorted(repo_label_dist):
-        cells = [str(repo_label_dist[repo].get(lbl, 0)) for lbl in all_labels]
-        md_lines.append(f"| {repo} | " + " | ".join(cells) + " |")
+    if repo_label_dist:
+        all_labels = sorted({lbl for c in repo_label_dist.values() for lbl in c})
+        md_lines += [
+            "",
+            "## AF-tag distribution by repo (high+medium only, in review pack)",
+            "",
+            "| Repo | " + " | ".join(all_labels) + " |",
+            "|---|" + "|".join(["--:"] * len(all_labels)) + "|",
+        ]
+        for repo in sorted(repo_label_dist):
+            cells = [str(repo_label_dist[repo].get(lbl, 0)) for lbl in all_labels]
+            md_lines.append(f"| {repo} | " + " | ".join(cells) + " |")
 
     md_lines += [
         "",

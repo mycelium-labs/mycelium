@@ -254,11 +254,25 @@ Primary use: building and maintaining the Mycelium failure-mode taxonomy
 github-issues/{repo-name}/YYYY-MM-DD.jsonl       # daily incremental (since yesterday)
 github-issues/{repo-name}/full-YYYY-MM-DD.jsonl  # full historical backfill
 manifest.json                                    # per-repo scrape state
+
+predictions/{repo-name}.jsonl                    # AF-* classifications, append-only
+predictions/manifest.json                        # per-repo classifier state
 ```
 
-Each line in a `.jsonl` file is the raw GitHub API response for a single
-issue. No transformation at ingest time; tagging against AF-* happens
-downstream in the Mycelium repo.
+Each line in `github-issues/.../*.jsonl` is the raw GitHub API response for a
+single issue. No transformation at ingest time.
+
+Each line in `predictions/{repo-name}.jsonl` is one classification:
+
+    {id, repo, number, url, title,
+     label,         # "n" | "AF-XXX" | "AF-XXX+AF-YYY"
+     confidence,    # high | medium | low
+     evidence, reasoning,
+     model, classified_at}
+
+The classifier (`scripts/classify_corpus.py`) is idempotent and append-only
+keyed by issue id, so the daily GitHub Actions cron only spends tokens on
+genuinely new issues.
 """
 
 

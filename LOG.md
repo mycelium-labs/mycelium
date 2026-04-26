@@ -14,6 +14,16 @@ Template:
 
 ---
 
+## 2026-04-26 — classification pipeline goes HF-native + auto-runs daily
+
+- did: rewrote `classify_corpus.py` to read raw issues from HF and write predictions to `predictions/<repo>.jsonl` (append-only, idempotent by issue id). One file per repo on HF instead of a flat local jsonl.
+- did: added `.github/workflows/classify-issues.yml` — fires on `workflow_run` after `scrape-issues.yml` succeeds, so freshly-scraped issues get classified within minutes. Manual `workflow_dispatch` for backfills with `--limit` / `--repo` knobs.
+- did: updated `build_review_pack.py` to pull predictions from HF; updated the dataset card to document the new `predictions/` folder.
+- now: HF dataset is the single source of truth in both directions (raw + predictions). Local-only smoke test classified 3 smolagents issues correctly, including one AF-007 hit. Pipeline committed but not run end-to-end yet — needs `OPENAI_API_KEY` as a GH secret + tier-2 unlock to do the 15.8k backfill.
+- next: add GH secret + bump OpenAI to tier 2 → manually trigger the workflow once for the full backfill → review pack from `build_review_pack.py`.
+
+---
+
 ## 2026-04-26 — v0 corpus complete, top-2 modes are AF-006 and AF-002
 
 - did: hand-tagged 7 issues (1 AF-002, 6 not-a-failure). Got bored — most GitHub issues aren't agent failures. Switched to AI-proposed-human-reviewed for the remaining 43.
