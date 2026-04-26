@@ -1,21 +1,24 @@
 name: Classify issues → HF predictions
 
 # Runs after scrape-issues.yml succeeds (so freshly-scraped issues get
-# classified within minutes). Also runs on its own daily cron at 09:00 UTC
-# so any backlog from rate-limited prior runs gets caught up. Manually
-# triggerable for backfills.
+# classified within minutes) AND every 90 minutes on its own cron so the
+# Tier-1-rate-limited LLM phase can chip away at the backlog continuously.
+# Manually triggerable for backfills.
 #
-# Pipeline is idempotent: re-running won't re-classify what's already in
-# predictions/<repo>.jsonl on HF. The --max-issues cap keeps a single run
-# under the 90-minute job timeout when there's a large backlog.
+# The concurrency group below means cron fires that land during an active
+# 90-min run just queue (with cancel-in-progress: false), giving back-to-
+# back execution. Pipeline is idempotent — already-classified issues are
+# skipped on every run.
 
 on:
   workflow_run:
     workflows: ["Scrape GitHub issues → HF dataset"]
     types: [completed]
   schedule:
-    # Daily catch-up at 09:00 UTC (~2h after the scrape cron).
-    - cron: "0 9 * * *"
+    # Every 90 minutes (UTC). Two crons interleaved to land at :00 and :30.
+    # 16 fires per day total: 00:00, 01:30, 03:00, 04:30, ..., 22:30.
+    - cron: "0 0,3,6,9,12,15,18,21 * * *"
+    - cron: "30 1,4,7,10,13,16,19,22 * * *"
   workflow_dispatch:
     inputs:
       max_issues:
