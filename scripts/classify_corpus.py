@@ -502,15 +502,27 @@ async def classify_repo(
     sem = asyncio.Semaphore(concurrency)
     new_rows: list[dict[str, Any]] = []
     errors = 0
-    error_samples: list[str] = []  # collect a few error strings for debugging
+    error_samples: list[str] = []
     counts: Counter[str] = Counter()
     completed = 0
+    successes = 0
     t0 = time.monotonic()
     lock = asyncio.Lock()
+    abort_event = asyncio.Event()
+
+    # Fail-fast guardrail: if every one of the first FAIL_FAST_THRESHOLD
+    # calls errors out (zero successes), abort the whole run instead of
+    # grinding through hundreds of retries. Caught us once when a free-tier
+    # quota was exhausted and the workflow burned 90 minutes on 429s.
+    FAIL_FAST_THRESHOLD = 15
 
     async def task(issue: dict[str, Any]) -> None:
-        nonlocal completed, errors
+        nonlocal completed, errors, successes
+        if abort_event.is_set():
+            return
         async with sem:
+            if abort_event.is_set():
+                return
             pred = await classify_one(client, system_prompt, issue, model)
             row = {
                 "id": issue["id"],
@@ -525,8 +537,23 @@ async def classify_repo(
                 row["error"] = pred["error"]
                 async with lock:
                     errors += 1
+                    if not error_samples:
+                        # Surface the *first* error immediately so a stuck run
+                        # is debuggable from the live log, not just at the end.
+                        print(f"  first error: {pred['error']}", file=sys.stderr)
                     if len(error_samples) < 3:
                         error_samples.append(pred["error"])
+                    if errors >= FAIL_FAST_THRESHOLD and successes == 0:
+                        if not abort_event.is_set():
+                            print(
+                                f"  ABORT: {errors} consecutive failures with zero successes.\n"
+                                f"  This usually means an OpenAI quota was hit (RPD/TPM) or the\n"
+                                f"  API key is wrong. Check https://platform.openai.com/account/limits\n"
+                                f"  before re-running. Pipeline is idempotent — already-classified\n"
+                                f"  issues will be skipped.",
+                                file=sys.stderr,
+                            )
+                        abort_event.set()
             else:
                 row.update({
                     "label": pred.get("label"),
@@ -535,6 +562,7 @@ async def classify_repo(
                     "reasoning": pred.get("reasoning"),
                 })
                 async with lock:
+                    successes += 1
                     counts[(pred.get("label") or "?").lower()] += 1
             async with lock:
                 new_rows.append(row)
@@ -542,9 +570,11 @@ async def classify_repo(
                 if completed % 50 == 0 or completed == len(todo):
                     rate = completed / (time.monotonic() - t0)
                     eta = (len(todo) - completed) / rate if rate else 0
-                    print(f"  [{completed}/{len(todo)}] rate={rate:.1f}/s eta={eta:.0f}s errors={errors}", file=sys.stderr)
+                    print(f"  [{completed}/{len(todo)}] rate={rate:.1f}/s eta={eta:.0f}s ok={successes} errors={errors}", file=sys.stderr)
 
     await asyncio.gather(*[task(i) for i in todo])
+    if abort_event.is_set():
+        print(f"  aborted after {completed} attempts, {errors} errors, {successes} successes", file=sys.stderr)
 
     successful = [r for r in new_rows if "error" not in r]
     failed = [r for r in new_rows if "error" in r]
@@ -555,12 +585,10 @@ async def classify_repo(
         for sample in error_samples:
             print(f"    sample error: {sample}", file=sys.stderr)
 
-    # If nothing succeeded this run, skip both the local write *and* the HF
-    # push. Pushing an empty/unchanged file just clutters HF history and
-    # confused the user when a rate-limited run produced "0 rows".
     if not successful:
         print(f"  no successful classifications this run — skipping HF push", file=sys.stderr)
-        return {"repo": repo, "raw": len(raw_issues), "delta": 0, "errors": errors}
+        return {"repo": repo, "raw": len(raw_issues), "delta": 0, "errors": errors,
+                "aborted": abort_event.is_set()}
 
     write_predictions_local(repo, merged)
 
@@ -608,7 +636,6 @@ async def run_corpus(
             print(f"\n=== {repo} === skipped: --max-issues budget exhausted", file=sys.stderr)
             stats.append({"repo": repo, "skipped": True, "reason": "budget"})
             continue
-        # Per-repo cap is min(--limit, remaining global budget).
         per_repo_limit = limit
         if remaining_budget is not None:
             per_repo_limit = remaining_budget if per_repo_limit is None else min(per_repo_limit, remaining_budget)
@@ -617,6 +644,12 @@ async def run_corpus(
             stats.append(s)
             if remaining_budget is not None:
                 remaining_budget -= s.get("delta", 0)
+            # If a repo aborted (quota exhausted), bail on the rest of the run.
+            if s.get("aborted"):
+                print(f"\n=== aborting remaining repos: {repo} aborted on quota ===", file=sys.stderr)
+                for skipped in targets[targets.index(repo) + 1:]:
+                    stats.append({"repo": skipped, "skipped": True, "reason": "abort"})
+                break
         except Exception as e:
             print(f"[{repo}] failed: {e}", file=sys.stderr)
             stats.append({"repo": repo, "error": str(e)})
