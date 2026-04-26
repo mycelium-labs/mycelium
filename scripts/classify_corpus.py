@@ -622,8 +622,10 @@ async def classify_repo(
     counts: Counter[str] = Counter()
     completed = 0
     successes = 0
+    last_checkpoint = 0
     t0 = time.monotonic()
     lock = asyncio.Lock()
+    checkpoint_lock = asyncio.Lock()
     abort_event = asyncio.Event()
 
     # Fail-fast guardrail: if every one of the first FAIL_FAST_THRESHOLD
@@ -632,8 +634,40 @@ async def classify_repo(
     # quota was exhausted and the workflow burned 90 minutes on 429s.
     FAIL_FAST_THRESHOLD = 15
 
+    # Checkpoint every CHECKPOINT_INTERVAL successful classifications. At
+    # Tier-1's 3 RPM, no single repo can finish within a 90-min CI run, so
+    # without checkpointing every timeout would discard hours of LLM work.
+    # Pushes are idempotent on issue id — restart-safe.
+    CHECKPOINT_INTERVAL = 50
+
+    async def maybe_checkpoint() -> None:
+        """Snapshot current state and push to HF. Serialized via checkpoint_lock."""
+        if not push:
+            return
+        async with checkpoint_lock:
+            async with lock:
+                snapshot_rows = [r for r in new_rows if "error" not in r]
+                snap_successes = successes
+            if not snapshot_rows:
+                return
+            snapshot_merged = existing + prefilter_rows + snapshot_rows
+            manifest[repo] = {
+                "count": len(snapshot_merged),
+                "delta": len(prefilter_rows) + len(snapshot_rows),
+                "last_classified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "model": model,
+                "in_progress": True,
+            }
+            print(f"  [checkpoint] pushing {len(snapshot_merged)} rows "
+                  f"({len(prefilter_rows)} prefilter + {len(snapshot_rows)} LLM, "
+                  f"{snap_successes} LLM successes so far)", file=sys.stderr, flush=True)
+            try:
+                await asyncio.to_thread(push_predictions, api, repo_id, repo, snapshot_merged, manifest)
+            except Exception as e:
+                print(f"  [checkpoint] push failed (will retry next checkpoint): {e}", file=sys.stderr)
+
     async def task(issue: dict[str, Any]) -> None:
-        nonlocal completed, errors, successes
+        nonlocal completed, errors, successes, last_checkpoint
         if abort_event.is_set():
             return
         async with sem:
@@ -687,6 +721,14 @@ async def classify_repo(
                     rate = completed / (time.monotonic() - t0)
                     eta = (len(todo) - completed) / rate if rate else 0
                     print(f"  [{completed}/{len(todo)}] rate={rate:.2f}/s eta={eta/60:.0f}min ok={successes} errors={errors}", file=sys.stderr, flush=True)
+                should_checkpoint = (
+                    successes > 0
+                    and successes - last_checkpoint >= CHECKPOINT_INTERVAL
+                )
+                if should_checkpoint:
+                    last_checkpoint = successes
+            if should_checkpoint:
+                await maybe_checkpoint()
 
     await asyncio.gather(*[task(i) for i in todo])
     if abort_event.is_set():
