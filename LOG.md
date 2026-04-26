@@ -14,6 +14,16 @@ Template:
 
 ---
 
+## 2026-04-26 — v0 corpus complete, top-2 modes are AF-006 and AF-002
+
+- did: hand-tagged 7 issues (1 AF-002, 6 not-a-failure). Got bored — most GitHub issues aren't agent failures. Switched to AI-proposed-human-reviewed for the remaining 43.
+- did: sharpened AF-007 spec — silent false completion only; loud crashes are out of scope (Sentry territory). Disambiguator: "if the user can see it failed, it's not AF-007."
+- did: shipped `scripts/ingest_proposed.py` + `incidents/tagged/v0/proposed.{md,jsonl}`. Claude classified 43 issues; 6 got AF tags, 37 not-a-failure.
+- found: combined corpus distribution = AF-006 ×5, AF-002 ×2, AF-009 ×1. The top-2 v1 failure modes pick themselves: **context corruption + observability**. AF-001/003/004/005/008 had zero hits in this sample.
+- found: best individual finds — crewAI #5057 (memory injection persisting across sessions, CVE-shaped), cline #7462 (mode confusion at >100k tokens, reproducible), stagehand #914 + langchain #36703 (agent-level LLM calls bypass observability — same pattern across two vendors).
+- now: corpus has 8 AF-tagged + 42 explicitly-labeled negatives. Issue #3 closes after the user reviews proposed.md and runs the ingest.
+- next: review proposed.md, ingest, close #3, decide v1 scope on #4 (probably AF-006 + AF-002 given the data).
+
 ## 2026-04-25 — tagging tool shipped, full corpus on HF (15.8k issues)
 
 - did: full backfill green — 15,792 issues across 10 repos on HF (95 MB). langchain undercount (663 vs ~9.4k expected) noted as a follow-up but not blocking.
