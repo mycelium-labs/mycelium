@@ -683,10 +683,10 @@ async def classify_repo(
             async with lock:
                 new_rows.append(row)
                 completed += 1
-                if completed % 50 == 0 or completed == len(todo):
+                if completed <= 5 or completed % 25 == 0 or completed == len(todo):
                     rate = completed / (time.monotonic() - t0)
                     eta = (len(todo) - completed) / rate if rate else 0
-                    print(f"  [{completed}/{len(todo)}] rate={rate:.1f}/s eta={eta:.0f}s ok={successes} errors={errors}", file=sys.stderr)
+                    print(f"  [{completed}/{len(todo)}] rate={rate:.2f}/s eta={eta/60:.0f}min ok={successes} errors={errors}", file=sys.stderr, flush=True)
 
     await asyncio.gather(*[task(i) for i in todo])
     if abort_event.is_set():
