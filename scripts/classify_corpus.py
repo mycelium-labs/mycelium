@@ -502,6 +502,7 @@ async def classify_repo(
     sem = asyncio.Semaphore(concurrency)
     new_rows: list[dict[str, Any]] = []
     errors = 0
+    error_samples: list[str] = []  # collect a few error strings for debugging
     counts: Counter[str] = Counter()
     completed = 0
     t0 = time.monotonic()
@@ -524,6 +525,8 @@ async def classify_repo(
                 row["error"] = pred["error"]
                 async with lock:
                     errors += 1
+                    if len(error_samples) < 3:
+                        error_samples.append(pred["error"])
             else:
                 row.update({
                     "label": pred.get("label"),
@@ -543,14 +546,23 @@ async def classify_repo(
 
     await asyncio.gather(*[task(i) for i in todo])
 
-    # Merge: keep existing rows, append new (skip rows with error so re-runs retry).
     successful = [r for r in new_rows if "error" not in r]
     failed = [r for r in new_rows if "error" in r]
     merged = existing + successful
 
-    write_predictions_local(repo, merged)
     if failed:
         print(f"  {len(failed)} failures dropped from final file (will retry on next run)", file=sys.stderr)
+        for sample in error_samples:
+            print(f"    sample error: {sample}", file=sys.stderr)
+
+    # If nothing succeeded this run, skip both the local write *and* the HF
+    # push. Pushing an empty/unchanged file just clutters HF history and
+    # confused the user when a rate-limited run produced "0 rows".
+    if not successful:
+        print(f"  no successful classifications this run — skipping HF push", file=sys.stderr)
+        return {"repo": repo, "raw": len(raw_issues), "delta": 0, "errors": errors}
+
+    write_predictions_local(repo, merged)
 
     manifest[repo] = {
         "count": len(merged),
@@ -562,7 +574,7 @@ async def classify_repo(
     if push:
         try:
             push_predictions(api, repo_id, repo, merged, manifest)
-            print(f"  [hf] pushed predictions/{repo.split('/', 1)[1]}.jsonl ({len(merged)} rows)", file=sys.stderr)
+            print(f"  [hf] pushed predictions/{repo.split('/', 1)[1]}.jsonl ({len(merged)} rows, +{len(successful)} new)", file=sys.stderr)
         except Exception as e:
             print(f"  [hf] push failed: {e}", file=sys.stderr)
             return {"repo": repo, "raw": len(raw_issues), "delta": len(successful), "errors": errors, "push_error": str(e)}
