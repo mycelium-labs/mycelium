@@ -15,10 +15,11 @@ on:
     workflows: ["Scrape GitHub issues → HF dataset"]
     types: [completed]
   schedule:
-    # Every 90 minutes (UTC). Two crons interleaved to land at :00 and :30.
-    # 16 fires per day total: 00:00, 01:30, 03:00, 04:30, ..., 22:30.
-    - cron: "0 0,3,6,9,12,15,18,21 * * *"
-    - cron: "30 1,4,7,10,13,16,19,22 * * *"
+    # Every 6 hours (UTC) until we sort out the OpenAI key/IP-allowlist issue
+    # surfacing as APIConnectionError from the GH Actions runner. Once that's
+    # fixed, bump this back to 90-min intervals (every 1.5h) for continuous
+    # backlog drain — see git blame for the multi-cron setup.
+    - cron: "0 */6 * * *"
   workflow_dispatch:
     inputs:
       max_issues:
