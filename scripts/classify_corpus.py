@@ -183,6 +183,68 @@ CLASSIFY_SCHEMA = {
 }
 
 
+# -----------------------------------------------------------------------------
+# Deterministic pre-filter
+#
+# Most agent-framework GitHub issues are not behavioral failures — they're
+# feature requests, docs PRs, install errors, vendor pitches, etc. We can
+# regex-reject the most obvious ones and skip the LLM entirely.
+#
+# Design contract: ZERO false negatives against the v0 hand-tagged set. False
+# positives (passing an `n` through to the LLM) are fine — the LLM handles
+# them. Run `python scripts/classify_corpus.py validate-prefilter` to verify.
+# -----------------------------------------------------------------------------
+
+PREFILTER_RULES: list[tuple[str, "re.Pattern", str]] = [
+    ("feature_prefix",
+     re.compile(r"^\s*\[?(ENH|FR|FEAT|FEATURE|RFE)\]?\s*[:\-]", re.IGNORECASE),
+     "feature request"),
+    ("feature_explicit",
+     re.compile(r"\bfeature\s+request\b|^\s*new\s+feature\s*[:\-]", re.IGNORECASE),
+     "feature request"),
+    ("tool_idea",
+     re.compile(r"^\s*tool\s+idea\s*[:\-]", re.IGNORECASE),
+     "tool idea / vendor pitch"),
+    ("integration_pitch",
+     re.compile(r"\[?integration\s*(proposal|idea)\]?|^\s*integration\s*[:\-]", re.IGNORECASE),
+     "integration / vendor pitch"),
+    ("docs_prefix",
+     re.compile(r"^\s*\[?docs?\]?\s*[:\-]|^\s*documentation\s*[:\-]", re.IGNORECASE),
+     "docs change"),
+    ("typo_fix",
+     re.compile(r"^\s*fix\s*[:\-]?\s*typo\b|\bfix\s+typo\b|\btypo\s+in\b", re.IGNORECASE),
+     "typo fix"),
+    ("roadmap",
+     re.compile(r"^\s*\[(roadmap|epic)\]|^\s*(roadmap|epic)\s*[:\-]", re.IGNORECASE),
+     "roadmap / epic"),
+    ("how_to",
+     re.compile(r"^\s*how\s+(to|do|can|does|did|should)\b", re.IGNORECASE),
+     "usage question"),
+    ("install_env",
+     re.compile(r"\bpip\s+install\b|\bnpm\s+install\b|\binstallation\b|\bcannot\s+install\b|\bvsix\b|\bchocolatey\b|\bbrew\s+install\b", re.IGNORECASE),
+     "install / env issue"),
+    ("os_specific",
+     re.compile(r"\[\s*(windows|mac\s?os|macos|linux)\s+specific\s*\]", re.IGNORECASE),
+     "OS-specific issue"),
+]
+
+
+def apply_prefilter(issue: dict[str, Any]) -> tuple[str, str] | None:
+    """Return (rule_name, human_category) if a rule fires, else None.
+
+    Only inspects the title — body inspection is reserved for the LLM. This
+    keeps false-negative risk low: titles are short and pattern-matchable;
+    bodies are where the real failure mechanism shows up.
+    """
+    title = (issue.get("title") or "").strip()
+    if len(title) < 5:
+        return ("spam_short", "spam / empty title")
+    for rule_name, pattern, category in PREFILTER_RULES:
+        if pattern.search(title):
+            return (rule_name, category)
+    return None
+
+
 def build_user_message(issue: dict[str, Any]) -> str:
     body = (issue.get("body") or "").strip()
     if len(body) > BODY_TRUNCATE_CHARS:
@@ -476,6 +538,7 @@ async def classify_repo(
     limit: int | None,
     push: bool,
     manifest: dict[str, Any],
+    prefilter_only: bool = False,
 ) -> dict[str, Any]:
     """Classify all unclassified issues in a single repo. Returns stats."""
     print(f"\n=== {repo} ===", file=sys.stderr)
@@ -497,6 +560,59 @@ async def classify_repo(
     if not todo:
         return {"repo": repo, "raw": len(raw_issues), "delta": 0, "errors": 0}
 
+    # Deterministic pre-filter: catch the obvious 'n's without spending tokens.
+    prefilter_rows: list[dict[str, Any]] = []
+    llm_todo: list[dict[str, Any]] = []
+    prefilter_breakdown: Counter[str] = Counter()
+    prefilter_ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for issue in todo:
+        hit = apply_prefilter(issue)
+        if hit:
+            rule_name, category = hit
+            prefilter_breakdown[rule_name] += 1
+            prefilter_rows.append({
+                "id": issue["id"],
+                "repo": issue["repo"],
+                "number": issue["number"],
+                "url": issue["url"],
+                "title": issue["title"],
+                "model": f"prefilter:{rule_name}",
+                "classified_at": prefilter_ts,
+                "label": "n",
+                "confidence": "high",
+                "evidence": f"prefilter: {category}",
+                "reasoning": f"matched deterministic rule '{rule_name}' on title",
+            })
+        else:
+            llm_todo.append(issue)
+
+    print(f"  prefilter: caught {len(prefilter_rows)} / {len(todo)} ({100 * len(prefilter_rows) / max(len(todo), 1):.0f}%) → LLM sees {len(llm_todo)}", file=sys.stderr)
+    for rule, n in prefilter_breakdown.most_common():
+        print(f"    - {rule}: {n}", file=sys.stderr)
+
+    if not llm_todo or prefilter_only:
+        if prefilter_only and llm_todo:
+            print(f"  --prefilter-only: skipping {len(llm_todo)} LLM-bound issues (will run later)", file=sys.stderr)
+        if not prefilter_rows:
+            return {"repo": repo, "raw": len(raw_issues), "delta": 0, "errors": 0}
+        merged = existing + prefilter_rows
+        write_predictions_local(repo, merged)
+        manifest[repo] = {
+            "count": len(merged),
+            "delta": len(prefilter_rows),
+            "last_classified_at": prefilter_ts,
+            "model": "prefilter" if prefilter_only else model,
+        }
+        if push:
+            try:
+                push_predictions(api, repo_id, repo, merged, manifest)
+                print(f"  [hf] pushed predictions/{repo.split('/', 1)[1]}.jsonl ({len(merged)} rows, +{len(prefilter_rows)} prefilter)", file=sys.stderr)
+            except Exception as e:
+                print(f"  [hf] push failed: {e}", file=sys.stderr)
+                return {"repo": repo, "raw": len(raw_issues), "delta": len(prefilter_rows), "errors": 0, "push_error": str(e)}
+        return {"repo": repo, "raw": len(raw_issues), "delta": len(prefilter_rows), "errors": 0}
+
+    todo = llm_todo  # only what's left actually goes to OpenAI
     client = get_openai_client()
     system_prompt = build_system_prompt()
     sem = asyncio.Semaphore(concurrency)
@@ -576,12 +692,13 @@ async def classify_repo(
     if abort_event.is_set():
         print(f"  aborted after {completed} attempts, {errors} errors, {successes} successes", file=sys.stderr)
 
-    successful = [r for r in new_rows if "error" not in r]
+    llm_successful = [r for r in new_rows if "error" not in r]
     failed = [r for r in new_rows if "error" in r]
+    successful = prefilter_rows + llm_successful  # both count as "delta this run"
     merged = existing + successful
 
     if failed:
-        print(f"  {len(failed)} failures dropped from final file (will retry on next run)", file=sys.stderr)
+        print(f"  {len(failed)} LLM failures dropped (will retry on next run)", file=sys.stderr)
         for sample in error_samples:
             print(f"    sample error: {sample}", file=sys.stderr)
 
@@ -602,7 +719,11 @@ async def classify_repo(
     if push:
         try:
             push_predictions(api, repo_id, repo, merged, manifest)
-            print(f"  [hf] pushed predictions/{repo.split('/', 1)[1]}.jsonl ({len(merged)} rows, +{len(successful)} new)", file=sys.stderr)
+            print(
+                f"  [hf] pushed predictions/{repo.split('/', 1)[1]}.jsonl "
+                f"({len(merged)} rows, +{len(prefilter_rows)} prefilter, +{len(llm_successful)} LLM)",
+                file=sys.stderr,
+            )
         except Exception as e:
             print(f"  [hf] push failed: {e}", file=sys.stderr)
             return {"repo": repo, "raw": len(raw_issues), "delta": len(successful), "errors": errors, "push_error": str(e)}
@@ -617,6 +738,7 @@ async def run_corpus(
     max_issues: int | None,
     push: bool,
     only_repo: str | None,
+    prefilter_only: bool = False,
 ) -> int:
     load_env()
     api = get_hf_api()
@@ -640,7 +762,7 @@ async def run_corpus(
         if remaining_budget is not None:
             per_repo_limit = remaining_budget if per_repo_limit is None else min(per_repo_limit, remaining_budget)
         try:
-            s = await classify_repo(api, repo_id, repo, model, concurrency, per_repo_limit, push, manifest)
+            s = await classify_repo(api, repo_id, repo, model, concurrency, per_repo_limit, push, manifest, prefilter_only=prefilter_only)
             stats.append(s)
             if remaining_budget is not None:
                 remaining_budget -= s.get("delta", 0)
@@ -697,6 +819,63 @@ def normalize_pred(pred: dict[str, Any]) -> str:
         return "n"
     parts = sorted([p.strip() for p in label.split("+") if p.strip()])
     return "+".join(parts) if parts else "n"
+
+
+def run_validate_prefilter() -> int:
+    """Validate pre-filter against v0 hand-tagged set.
+
+    Hard contract: zero false negatives on AF-tagged. If any AF-tagged issue
+    matches a pre-filter rule, the rule is wrong and must be tightened.
+    """
+    pairs = load_validation_set()
+    af_caught: list[tuple[dict[str, Any], str, str]] = []  # FALSE NEGATIVES
+    n_caught: list[tuple[dict[str, Any], str, str]] = []   # true negatives
+    af_missed: list[dict[str, Any]] = []
+    n_missed: list[dict[str, Any]] = []
+
+    for issue, gold in pairs:
+        gold_norm = normalize_gold(gold)
+        if gold_norm == "skip":
+            continue
+        hit = apply_prefilter(issue)
+        is_af = gold_norm != "n"
+        if hit and is_af:
+            af_caught.append((issue, hit[0], hit[1]))
+        elif hit and not is_af:
+            n_caught.append((issue, hit[0], hit[1]))
+        elif not hit and is_af:
+            af_missed.append(issue)
+        else:
+            n_missed.append(issue)
+
+    af_total = len(af_caught) + len(af_missed)
+    n_total = len(n_caught) + len(n_missed)
+
+    print(f"validation set: {af_total} AF-tagged + {n_total} not-a-failure = {af_total + n_total}\n")
+    print(f"PREFILTER RECALL ON 'n':   {len(n_caught)}/{n_total} = {100 * len(n_caught) / max(n_total, 1):.1f}%")
+    print(f"  → these would skip the LLM, saving ${len(n_caught) * 0.0028:.3f} per run with Haiku\n")
+
+    if af_caught:
+        print(f"FALSE NEGATIVES ({len(af_caught)}) — pre-filter wrongly dropped real AF issues:")
+        for issue, rule, cat in af_caught:
+            print(f"  ✗ {issue['id']} [{rule}]")
+            print(f"      title: {issue['title'][:90]}")
+        print("\nFIX one or more rules before shipping. Pre-filter is supposed to have 0 false negatives.")
+        return 1
+    print("FALSE NEGATIVES on AF-tagged: 0  ✓ (contract held)\n")
+
+    if n_caught:
+        print(f"TRUE NEGATIVES ({len(n_caught)}) — pre-filter correctly dropped these:")
+        by_rule: dict[str, list[dict]] = {}
+        for issue, rule, cat in n_caught:
+            by_rule.setdefault(rule, []).append(issue)
+        for rule, items in sorted(by_rule.items(), key=lambda kv: -len(kv[1])):
+            print(f"  [{rule}] x{len(items)}")
+            for issue in items[:2]:
+                print(f"      {issue['title'][:90]}")
+            if len(items) > 2:
+                print(f"      (+{len(items) - 2} more)")
+    return 0
 
 
 async def run_validate(model: str, concurrency: int) -> int:
@@ -761,7 +940,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    pv = sub.add_parser("validate", help="Validate against the v0 hand-labeled set.")
+    pp = sub.add_parser("validate-prefilter",
+                         help="Run the deterministic pre-filter against v0 and report recall + false negatives.")
+
+    pv = sub.add_parser("validate", help="Validate the LLM classifier against the v0 hand-labeled set.")
     pv.add_argument("--model", default=DEFAULT_MODEL)
     pv.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
 
@@ -774,8 +956,13 @@ def main() -> int:
                     help="Cap total classifications across all repos this run. Useful in CI to stay under job timeout.")
     pr.add_argument("--repo", default=None, help="Only classify this one repo (e.g. langchain-ai/langchain).")
     pr.add_argument("--no-push", action="store_true", help="Skip HF upload (local-only run).")
+    pr.add_argument("--prefilter-only", action="store_true",
+                    help="Run only the deterministic pre-filter; skip the LLM phase. "
+                         "Use as a fast first pass before spending tokens.")
 
     args = parser.parse_args()
+    if args.cmd == "validate-prefilter":
+        return run_validate_prefilter()
     if args.cmd == "validate":
         return asyncio.run(run_validate(args.model, args.concurrency))
     if args.cmd == "run":
@@ -786,6 +973,7 @@ def main() -> int:
             max_issues=args.max_issues,
             push=not args.no_push,
             only_repo=args.repo,
+            prefilter_only=args.prefilter_only,
         ))
     parser.print_help()
     return 1
