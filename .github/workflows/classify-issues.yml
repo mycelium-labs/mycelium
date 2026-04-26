@@ -1,22 +1,39 @@
 name: Classify issues → HF predictions
 
 # Runs after scrape-issues.yml succeeds (so freshly-scraped issues get
-# classified within minutes), and is also manually triggerable for backfills.
+# classified within minutes). Also runs on its own daily cron at 09:00 UTC
+# so any backlog from rate-limited prior runs gets caught up. Manually
+# triggerable for backfills.
+#
+# Pipeline is idempotent: re-running won't re-classify what's already in
+# predictions/<repo>.jsonl on HF. The --max-issues cap keeps a single run
+# under the 90-minute job timeout when there's a large backlog.
 
 on:
   workflow_run:
     workflows: ["Scrape GitHub issues → HF dataset"]
     types: [completed]
+  schedule:
+    # Daily catch-up at 09:00 UTC (~2h after the scrape cron).
+    - cron: "0 9 * * *"
   workflow_dispatch:
     inputs:
+      max_issues:
+        description: "Cap total classifications this run (default 5000)."
+        type: string
+        default: "5000"
       limit:
-        description: "Cap classifications per repo (smoke test). Leave empty for full."
+        description: "Per-repo cap (smoke test). Leave empty for none."
         type: string
         default: ""
       repo:
         description: "Restrict to one repo (e.g. langchain-ai/langchain). Leave empty for all."
         type: string
         default: ""
+      concurrency:
+        description: "Concurrent in-flight LLM requests (default 3 for tier 1)."
+        type: string
+        default: "3"
 
 concurrency:
   group: classify-issues
@@ -51,12 +68,15 @@ jobs:
           MYCELIUM_HF_REPO: ${{ secrets.MYCELIUM_HF_REPO }}
         run: |
           set -euo pipefail
-          ARGS=()
+          # Defaults (used for cron + workflow_run triggers, where inputs.* are empty).
+          MAX_ISSUES="${{ inputs.max_issues || '5000' }}"
+          CONCURRENCY="${{ inputs.concurrency || '3' }}"
+          ARGS=(--max-issues "$MAX_ISSUES" --concurrency "$CONCURRENCY")
           if [[ -n "${{ inputs.limit }}" ]]; then
             ARGS+=(--limit "${{ inputs.limit }}")
           fi
           if [[ -n "${{ inputs.repo }}" ]]; then
             ARGS+=(--repo "${{ inputs.repo }}")
           fi
-          echo "=== classify run ${ARGS[@]:-} ==="
-          python scripts/classify_corpus.py run "${ARGS[@]:-}"
+          echo "=== classify run ${ARGS[*]} ==="
+          python scripts/classify_corpus.py run "${ARGS[@]}"
