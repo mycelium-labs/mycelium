@@ -58,7 +58,9 @@ LOCAL_PRED_CACHE = REPO_ROOT / ".cache" / "predictions"
 
 DEFAULT_HF_REPO = "ndileep/mycelium-agent-failures"
 DEFAULT_MODEL = "gpt-4o-mini"
-DEFAULT_CONCURRENCY = 20
+# Default tuned for OpenAI Tier 1 (no payment method). Bump higher locally if
+# you've upgraded — `--concurrency 20` will fly through ~15k issues in minutes.
+DEFAULT_CONCURRENCY = 3
 BODY_TRUNCATE_CHARS = 4000
 
 REPOS = [
@@ -572,6 +574,7 @@ async def run_corpus(
     model: str,
     concurrency: int,
     limit: int | None,
+    max_issues: int | None,
     push: bool,
     only_repo: str | None,
 ) -> int:
@@ -587,10 +590,21 @@ async def run_corpus(
         print(f"WARNING: {only_repo} not in REPOS list, classifying anyway", file=sys.stderr)
 
     stats = []
+    remaining_budget = max_issues
     for repo in targets:
+        if remaining_budget is not None and remaining_budget <= 0:
+            print(f"\n=== {repo} === skipped: --max-issues budget exhausted", file=sys.stderr)
+            stats.append({"repo": repo, "skipped": True, "reason": "budget"})
+            continue
+        # Per-repo cap is min(--limit, remaining global budget).
+        per_repo_limit = limit
+        if remaining_budget is not None:
+            per_repo_limit = remaining_budget if per_repo_limit is None else min(per_repo_limit, remaining_budget)
         try:
-            s = await classify_repo(api, repo_id, repo, model, concurrency, limit, push, manifest)
+            s = await classify_repo(api, repo_id, repo, model, concurrency, per_repo_limit, push, manifest)
             stats.append(s)
+            if remaining_budget is not None:
+                remaining_budget -= s.get("delta", 0)
         except Exception as e:
             print(f"[{repo}] failed: {e}", file=sys.stderr)
             stats.append({"repo": repo, "error": str(e)})
@@ -599,7 +613,8 @@ async def run_corpus(
     total_delta = 0
     for s in stats:
         if s.get("skipped"):
-            print(f"  {s['repo']}: skipped (no raw)", file=sys.stderr)
+            reason = s.get("reason", "no raw")
+            print(f"  {s['repo']}: skipped ({reason})", file=sys.stderr)
         elif "error" in s:
             print(f"  {s['repo']}: ERROR {s['error']}", file=sys.stderr)
         else:
@@ -707,8 +722,11 @@ def main() -> int:
 
     pr = sub.add_parser("run", help="Classify any unclassified issues, push to HF.")
     pr.add_argument("--model", default=DEFAULT_MODEL)
-    pr.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
+    pr.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
+                    help=f"Concurrent in-flight requests (default {DEFAULT_CONCURRENCY}, tuned for tier 1 limits).")
     pr.add_argument("--limit", type=int, default=None, help="Cap classifications per repo (smoke test).")
+    pr.add_argument("--max-issues", type=int, default=None,
+                    help="Cap total classifications across all repos this run. Useful in CI to stay under job timeout.")
     pr.add_argument("--repo", default=None, help="Only classify this one repo (e.g. langchain-ai/langchain).")
     pr.add_argument("--no-push", action="store_true", help="Skip HF upload (local-only run).")
 
@@ -720,6 +738,7 @@ def main() -> int:
             model=args.model,
             concurrency=args.concurrency,
             limit=args.limit,
+            max_issues=args.max_issues,
             push=not args.no_push,
             only_repo=args.repo,
         ))
