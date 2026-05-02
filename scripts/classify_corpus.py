@@ -70,7 +70,7 @@ DEFAULT_HF_REPO = "ndileep/mycelium-agent-failures"
 DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
 # Anthropic: used only when ANTHROPIC_API_KEY is set and Groq is not (unless LLM_BACKEND).
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
-DEFAULT_CONCURRENCY = 16  # Groq allows high RPM; lower with --concurrency if you hit 429s
+DEFAULT_CONCURRENCY = 4  # Groq free/on-demand TPM is tight; raise with --concurrency on paid tier
 BODY_TRUNCATE_CHARS = 4000
 
 REPOS = [
@@ -344,13 +344,16 @@ async def classify_one(
             )
             if not is_retryable or attempt == max_retries - 1:
                 break
-            wait = 2 ** attempt
-            m = re.search(r"try again in (\d+(?:\.\d+)?)\s*(s|ms)", err_text)
+            wait = float(min(2 ** attempt, 60))
+            # Groq: "try again in 140ms" (no space before ms)
+            m = re.search(r"try again in (\d+(?:\.\d+)?)\s*(ms|s)\b", err_text)
             if m:
                 val = float(m.group(1))
                 wait = val / 1000 if m.group(2) == "ms" else val
-                wait += 0.5
-            await asyncio.sleep(min(wait, 60))
+                wait += 0.15
+            if backend == "groq" and ("429" in err_text or "rate limit" in err_text):
+                wait = max(wait, 1.0)
+            await asyncio.sleep(min(wait, 120))
     return {"error": f"{type(last_err).__name__}: {last_err}"}
 
 
@@ -396,6 +399,21 @@ def default_model_for_backend(backend: str) -> str:
     if backend == "groq":
         return os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL).strip() or DEFAULT_GROQ_MODEL
     return os.environ.get("ANTHROPIC_MODEL", DEFAULT_ANTHROPIC_MODEL).strip() or DEFAULT_ANTHROPIC_MODEL
+
+
+def cap_concurrency_for_backend(backend: str, concurrency: int) -> int:
+    """Groq enforces TPM; too many parallel large prompts → 429 even with per-request retry."""
+    if backend != "groq":
+        return concurrency
+    cap = max(1, int(os.environ.get("GROQ_MAX_CONCURRENCY", "4")))
+    if concurrency > cap:
+        print(
+            f"[llm] Groq TPM: capping concurrency {concurrency} → {cap} "
+            f"(env GROQ_MAX_CONCURRENCY or --concurrency; paid tier can use 8–16+)",
+            file=sys.stderr,
+        )
+        return cap
+    return concurrency
 
 
 def get_llm_client() -> tuple[Any, str]:
@@ -872,7 +890,8 @@ async def run_corpus(
     load_env()
     client, backend = get_llm_client()
     model_eff = model or default_model_for_backend(backend)
-    print(f"[llm] backend={backend} model={model_eff}", file=sys.stderr)
+    concurrency = cap_concurrency_for_backend(backend, concurrency)
+    print(f"[llm] backend={backend} model={model_eff} concurrency={concurrency}", file=sys.stderr)
     api = get_hf_api()
     repo_id = hf_repo_id()
     print(f"[hf] dataset: {repo_id}", file=sys.stderr)
@@ -1016,6 +1035,7 @@ async def run_validate(model: str | None, concurrency: int) -> int:
     load_env()
     client, backend = get_llm_client()
     model_eff = model or default_model_for_backend(backend)
+    concurrency = cap_concurrency_for_backend(backend, concurrency)
     system_prompt = build_system_prompt()
     pairs = [(i, g) for i, g in load_validation_set() if normalize_gold(g) != "skip"]
 

@@ -14,6 +14,11 @@ Template:
 
 ---
 
+## 2026-05-02 — Groq TPM: default concurrency 4 + cap
+
+- did: `--concurrency` default **4**; Groq runs capped by **`GROQ_MAX_CONCURRENCY`** (default 4) to avoid free-tier TPM 429s; set **`GROQ_MAX_CONCURRENCY=16`** on paid tier if needed.
+- did: longer backoff on Groq 429 (parse `try again in …ms`, min 1s); CI workflow default concurrency **4**.
+
 ## 2026-05-02 — `.env.example` for classify / HF secrets
 
 - did: added `.env.example` (placeholders only); copy to `.env` locally — never commit real keys.
