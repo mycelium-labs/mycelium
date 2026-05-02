@@ -28,12 +28,13 @@ Commands:
     python scripts/classify_corpus.py run --repo langchain-ai/langchain
 
 Auth:
-    OPENAI_API_KEY     classifier (.env or env var)
+    ANTHROPIC_API_KEY  classifier (.env or env var). Optional ANTHROPIC_MODEL
+                       (default: claude-haiku-4-5 API alias).
     HF_TOKEN           Hugging Face read+write
     MYCELIUM_HF_REPO   dataset slug, e.g. "ndileep/mycelium-agent-failures"
 
-Cost (gpt-4o-mini): ~$0.0006/issue. Full ~15.8k corpus ≈ $10. Daily increments
-of a few dozen new issues are pennies.
+Cost (Claude Haiku): rough order ~$0.0003–0.001/issue depending on body length.
+Full ~15.8k corpus is single-digit dollars at Haiku pricing.
 """
 
 from __future__ import annotations
@@ -57,10 +58,10 @@ HF_CACHE = REPO_ROOT / ".cache" / "hf-dl"
 LOCAL_PRED_CACHE = REPO_ROOT / ".cache" / "predictions"
 
 DEFAULT_HF_REPO = "ndileep/mycelium-agent-failures"
-DEFAULT_MODEL = "gpt-4o-mini"
-# Default tuned for OpenAI Tier 1 (no payment method). Bump higher locally if
-# you've upgraded — `--concurrency 20` will fly through ~15k issues in minutes.
-DEFAULT_CONCURRENCY = 3
+# Haiku 4.5 alias — pin via ANTHROPIC_MODEL if you need a dated snapshot ID.
+DEFAULT_MODEL = "claude-haiku-4-5"
+# Anthropic rate limits are typically higher than OpenAI Tier 1; tune down if 429s.
+DEFAULT_CONCURRENCY = 8
 BODY_TRUNCATE_CHARS = 4000
 
 REPOS = [
@@ -157,32 +158,6 @@ CRITICAL DECISION RULES:
 """
 
 
-CLASSIFY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "label": {
-            "type": "string",
-            "description": "Either 'n' (not a failure) or one or more AF-* tags joined by '+', e.g. 'AF-006' or 'AF-009+AF-006'",
-        },
-        "confidence": {
-            "type": "string",
-            "enum": ["high", "medium", "low"],
-            "description": "Confidence in the classification. For 'n' labels, set to 'high' unless ambiguous.",
-        },
-        "evidence": {
-            "type": "string",
-            "description": "One-line direct quote or specific code reference supporting the label. For 'n' labels, the rejection category.",
-        },
-        "reasoning": {
-            "type": "string",
-            "description": "One-sentence explanation of why this label fits.",
-        },
-    },
-    "required": ["label", "confidence", "evidence", "reasoning"],
-    "additionalProperties": False,
-}
-
-
 # -----------------------------------------------------------------------------
 # Deterministic pre-filter
 #
@@ -263,33 +238,58 @@ BODY:
 
 
 # -----------------------------------------------------------------------------
-# OpenAI call w/ exponential backoff
+# Anthropic (Claude) call w/ exponential backoff
 # -----------------------------------------------------------------------------
+
+
+def _strip_json_fences(text: str) -> str:
+    t = text.strip()
+    if t.startswith("```"):
+        lines = t.split("\n")
+        lines = lines[1:]
+        while lines and lines[-1].strip() in ("```", ""):
+            lines.pop()
+        t = "\n".join(lines).strip()
+    return t
+
+
+def _parse_classification_json(text: str) -> dict[str, Any]:
+    raw = _strip_json_fences(text)
+    data = json.loads(raw)
+    for k in ("label", "confidence", "evidence", "reasoning"):
+        if k not in data:
+            raise ValueError(f"missing key {k!r} in {data!r}")
+    return data
 
 
 async def classify_one(client, system_prompt: str, issue: dict[str, Any], model: str, max_retries: int = 6) -> dict[str, Any]:
     user_msg = build_user_message(issue)
+    instruction = (
+        "\n\nRespond with ONLY a single JSON object (no markdown code fences), "
+        'with keys exactly: "label", "confidence", "evidence", "reasoning". '
+        "Follow the schema described in the system prompt. No text before or after the JSON."
+    )
     last_err: Exception | None = None
     for attempt in range(max_retries):
         try:
-            resp = await client.chat.completions.create(
+            message = await client.messages.create(
                 model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_msg},
-                ],
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "af_classification",
-                        "strict": True,
-                        "schema": CLASSIFY_SCHEMA,
-                    },
-                },
+                max_tokens=2048,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_msg + instruction}],
                 temperature=0.0,
             )
-            content = resp.choices[0].message.content
-            return json.loads(content) if content else {"error": "empty response"}
+            if not message.content:
+                return {"error": "empty response"}
+            block = message.content[0]
+            if getattr(block, "type", None) != "text":
+                return {"error": f"unexpected block type: {getattr(block, 'type', block)}"}
+            return _parse_classification_json(block.text)
+        except (json.JSONDecodeError, ValueError) as e:
+            last_err = e
+            if attempt == max_retries - 1:
+                break
+            await asyncio.sleep(min(2 ** attempt, 10))
         except Exception as e:
             last_err = e
             err_text = str(e).lower()
@@ -298,7 +298,9 @@ async def classify_one(client, system_prompt: str, issue: dict[str, Any], model:
                 or "429" in err_text
                 or "timeout" in err_text
                 or "connection" in err_text
-                or "5" in str(getattr(e, "status_code", ""))[:1]
+                or "overloaded" in err_text
+                or "529" in err_text
+                or str(getattr(e, "status_code", "")) in ("429", "503", "529")
             )
             if not is_retryable or attempt == max_retries - 1:
                 break
@@ -325,13 +327,18 @@ def load_env() -> None:
         pass
 
 
-def get_openai_client():
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("ERROR: OPENAI_API_KEY not set.", file=sys.stderr)
-        print("  Put it in .env at repo root:  echo 'OPENAI_API_KEY=sk-...' >> .env", file=sys.stderr)
+def get_anthropic_client():
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        print("ERROR: ANTHROPIC_API_KEY not set.", file=sys.stderr)
+        print("  Put it in .env at repo root:  ANTHROPIC_API_KEY=sk-ant-...", file=sys.stderr)
         sys.exit(2)
-    from openai import AsyncOpenAI
-    return AsyncOpenAI()
+    try:
+        from anthropic import AsyncAnthropic
+    except ImportError:
+        print("ERROR: anthropic not installed. Run: uv pip install anthropic", file=sys.stderr)
+        sys.exit(2)
+    return AsyncAnthropic(api_key=key)
 
 
 def get_hf_api():
@@ -612,8 +619,8 @@ async def classify_repo(
                 return {"repo": repo, "raw": len(raw_issues), "delta": len(prefilter_rows), "errors": 0, "push_error": str(e)}
         return {"repo": repo, "raw": len(raw_issues), "delta": len(prefilter_rows), "errors": 0}
 
-    todo = llm_todo  # only what's left actually goes to OpenAI
-    client = get_openai_client()
+    todo = llm_todo  # remainder goes to Claude
+    client = get_anthropic_client()
     system_prompt = build_system_prompt()
     sem = asyncio.Semaphore(concurrency)
     new_rows: list[dict[str, Any]] = []
@@ -697,8 +704,8 @@ async def classify_repo(
                         if not abort_event.is_set():
                             print(
                                 f"  ABORT: {errors} consecutive failures with zero successes.\n"
-                                f"  This usually means an OpenAI quota was hit (RPD/TPM) or the\n"
-                                f"  API key is wrong. Check https://platform.openai.com/account/limits\n"
+                                f"  This usually means an Anthropic quota/rate limit was hit or the\n"
+                                f"  API key is wrong. Check https://console.anthropic.com/settings/keys\n"
                                 f"  before re-running. Pipeline is idempotent — already-classified\n"
                                 f"  issues will be skipped.",
                                 file=sys.stderr,
@@ -922,7 +929,7 @@ def run_validate_prefilter() -> int:
 
 async def run_validate(model: str, concurrency: int) -> int:
     load_env()
-    client = get_openai_client()
+    client = get_anthropic_client()
     system_prompt = build_system_prompt()
     pairs = [(i, g) for i, g in load_validation_set() if normalize_gold(g) != "skip"]
 
@@ -971,7 +978,7 @@ async def run_validate(model: str, concurrency: int) -> int:
             print(f"    HUMAN:  {normalize_gold(gold)}  notes: {gold.get('notes', '')[:80]}")
             print(f"    LLM:    {normalize_pred(pred)}  ({pred.get('confidence')})  ev: {pred.get('evidence', '')[:80]}\n")
 
-    print(f"approx cost: ${total * 0.0006:.3f} ({total} calls)")
+    print(f"approx cost: ~${total * 0.0008:.3f} ({total} Haiku calls; rough estimate)")
     return 0
 
 
@@ -992,7 +999,7 @@ def main() -> int:
     pr = sub.add_parser("run", help="Classify any unclassified issues, push to HF.")
     pr.add_argument("--model", default=DEFAULT_MODEL)
     pr.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
-                    help=f"Concurrent in-flight requests (default {DEFAULT_CONCURRENCY}, tuned for tier 1 limits).")
+                    help=f"Concurrent Anthropic requests (default {DEFAULT_CONCURRENCY}; lower if you hit 429s).")
     pr.add_argument("--limit", type=int, default=None, help="Cap classifications per repo (smoke test).")
     pr.add_argument("--max-issues", type=int, default=None,
                     help="Cap total classifications across all repos this run. Useful in CI to stay under job timeout.")
