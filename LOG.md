@@ -14,6 +14,11 @@ Template:
 
 ---
 
+## 2026-05-02 — Operator wrap
+
+- did: operator considers current classify/backlog stretch done for now.
+- next: spot-check **`run`** stderr for **`to classify: 0`** on all **`REPOS`**; **`LLM_BACKEND=groq`** when Anthropic bulk is no longer needed.
+
 ## 2026-05-02 — Full `classify_corpus` run (Anthropic)
 
 - did: **`LLM_BACKEND=anthropic`** full **`run`**: **openai-agents** + **smolagents** finished on HF; **OpenHands** is the large remaining leg; **cline / stagehand / livekit** follow in **`REPOS`** order.
