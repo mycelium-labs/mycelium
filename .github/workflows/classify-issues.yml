@@ -1,0 +1,76 @@
+name: Classify issues → HF predictions
+
+# Runs after scrape succeeds, on a schedule, or manually. Uses Claude Haiku on
+# Anthropic (not OpenAI — GH runners hit APIConnectionError with OpenAI for
+# this org). Pipeline is idempotent; checkpoints land on HF every 50 successes.
+
+on:
+  workflow_run:
+    workflows: ["Scrape GitHub issues → HF dataset"]
+    types: [completed]
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+    inputs:
+      max_issues:
+        description: "Cap total classifications this run (default 5000)."
+        type: string
+        default: "5000"
+      limit:
+        description: "Per-repo cap (smoke test). Leave empty for none."
+        type: string
+        default: ""
+      repo:
+        description: "Restrict to one repo. Leave empty for all."
+        type: string
+        default: ""
+      model:
+        description: "Anthropic model id (default claude-haiku-4-5)."
+        type: string
+        default: "claude-haiku-4-5"
+      concurrency:
+        description: "Concurrent Anthropic requests."
+        type: string
+        default: "8"
+
+concurrency:
+  group: classify-issues
+  cancel-in-progress: false
+
+jobs:
+  classify:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install huggingface_hub anthropic python-dotenv
+
+      - name: Classify new issues
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MYCELIUM_HF_REPO: ${{ secrets.MYCELIUM_HF_REPO }}
+        run: |
+          set -euo pipefail
+          MAX_ISSUES="${{ inputs.max_issues || '5000' }}"
+          CONCURRENCY="${{ inputs.concurrency || '8' }}"
+          MODEL="${{ inputs.model || 'claude-haiku-4-5' }}"
+          ARGS=(--model "$MODEL" --max-issues "$MAX_ISSUES" --concurrency "$CONCURRENCY")
+          if [[ -n "${{ inputs.limit }}" ]]; then
+            ARGS+=(--limit "${{ inputs.limit }}")
+          fi
+          if [[ -n "${{ inputs.repo }}" ]]; then
+            ARGS+=(--repo "${{ inputs.repo }}")
+          fi
+          echo "=== classify ${ARGS[*]} ==="
+          python scripts/classify_corpus.py run "${ARGS[@]}"

@@ -14,6 +14,13 @@ Template:
 
 ---
 
+## 2026-05-02 — classifier on Claude Haiku + CI restored
+
+- did: replaced OpenAI with Anthropic `AsyncAnthropic` in `classify_corpus.py` (`messages.create`, JSON reply parsed from text). Default model `claude-haiku-4-5`, default concurrency 8.
+- did: restored `.github/workflows/classify-issues.yml` with `ANTHROPIC_API_KEY`, `pip install anthropic`, scrape-trigger + 4h cron + dispatch inputs (`model`, `concurrency`, etc.).
+- now: install deps with `uv pip install anthropic`; add `ANTHROPIC_API_KEY` to repo secrets; run `python scripts/classify_corpus.py run --no-push --limit 5` to smoke-test.
+- next: `gh workflow run "Classify issues → HF predictions"` with small `limit` or full backfill when ready.
+
 ## 2026-04-26 (late) — phase 1 prefilter shipped, OpenAI dead-end on CI, switching to Anthropic
 
 - did: built deterministic regex prefilter in `classify_corpus.py` (feature requests, docs, install errors, vendor pitches, how-to, typos, `[Roadmap]`, OS-specific). 11 rules, all title-only.
