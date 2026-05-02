@@ -237,16 +237,47 @@ tags:
 
 # Mycelium — Agent Failure Corpus
 
-Raw agent-failure reports ingested from public sources by Mycelium Labs.
-Primary use: building and maintaining the Mycelium failure-mode taxonomy
-(AF-001 … AF-009).
+Private Hugging Face dataset for **Mycelium Labs internal research only**
+(building and maintaining the AF-* agent failure-mode taxonomy). **Do not
+redistribute** this snapshot or bulk exports without explicit permission.
 
-**Status: private, pre-release. Do not redistribute.**
+## Intended use
 
-## Sources
+Taxonomy work, classifier development, and qualitative review — not a
+general-purpose open corpus release. For collaboration, contact Mycelium Labs.
 
-- GitHub issues from major agent frameworks (raw `/issues` API payload).
-- More sources land here as the pipeline grows (AIID, AIAAIC, benchmarks, press).
+## Public sources ingested (GitHub)
+
+Raw issue payloads come from the public GitHub REST API
+(`GET /repos/{owner}/{repo}/issues`, `state=all`). Pull requests are excluded
+at ingest. The **10** upstream repositories tracked (see `scripts/repos.txt`
+in the [Mycelium](https://github.com/mycelium-labs/mycelium) repo) are:
+
+| Upstream repo | Folder under `github-issues/` |
+|---------------|--------------------------------|
+| `langchain-ai/langchain` | `langchain` |
+| `langchain-ai/langgraph` | `langgraph` |
+| `microsoft/autogen` | `autogen` |
+| `crewAIInc/crewAI` | `crewAI` |
+| `openai/openai-agents-python` | `openai-agents-python` |
+| `huggingface/smolagents` | `smolagents` |
+| `All-Hands-AI/OpenHands` | `OpenHands` |
+| `cline/cline` | `cline` |
+| `browserbase/stagehand` | `stagehand` |
+| `livekit/agents` | `agents` |
+
+Additional public sources (incident DBs, benchmarks, press) may be documented
+here when added to the pipeline.
+
+## Licensing stance
+
+- **GitHub content:** Issues are public on GitHub under each repository’s
+  license and [GitHub’s terms](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service).
+  This dataset is a **snapshot for research**; it does not grant rights beyond
+  what applies to the underlying GitHub data.
+- **Compilation:** Layout, `predictions/` labels, and manifests are **Mycelium
+  Labs research artifacts**. No license to republish the compiled dataset is
+  implied.
 
 ## Structure
 
@@ -271,8 +302,16 @@ Each line in `predictions/{repo-name}.jsonl` is one classification:
      model, classified_at}
 
 The classifier (`scripts/classify_corpus.py`) is idempotent and append-only
-keyed by issue id, so the daily GitHub Actions cron only spends tokens on
-genuinely new issues.
+keyed by issue id, so scheduled runs only spend tokens on new issue IDs.
+
+## Update cadence
+
+| Stage | When | Where |
+|-------|------|--------|
+| **Scrape** | Daily **07:00 UTC** (`cron: 0 7 * * *`) | Workflow `scrape-issues.yml`; manual `workflow_dispatch` or local `scrape_github_issues.py` |
+| **Classify** | Every **4 hours** (`cron: 0 */4 * * *`), Groq by default | Workflow `classify-issues.yml` after scrape or on schedule |
+
+Scripts and repo list live in **github.com/mycelium-labs/mycelium**.
 """
 
 
