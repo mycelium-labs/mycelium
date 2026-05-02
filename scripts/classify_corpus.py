@@ -31,14 +31,18 @@ Commands:
     # Restrict to a single repo (handy for debugging).
     python scripts/classify_corpus.py run --repo langchain-ai/langchain
 
-Auth:
-    ANTHROPIC_API_KEY  classifier (.env or env var). Optional ANTHROPIC_MODEL
-                       (default: claude-haiku-4-5 API alias).
+Auth (classifier — use one provider):
+    GROQ_API_KEY       recommended: Groq OpenAI-compatible API, fast / cheap Llama
+                       (https://console.groq.com). Default model: see GROQ_MODEL.
+    ANTHROPIC_API_KEY  optional fallback if Groq is not set
+    LLM_BACKEND        force `groq` or `anthropic` when both keys are present
+    GROQ_MODEL         default: llama-3.1-8b-instant
+    ANTHROPIC_MODEL    default: claude-haiku-4-5
     HF_TOKEN           Hugging Face read+write
     MYCELIUM_HF_REPO   dataset slug, e.g. "ndileep/mycelium-agent-failures"
 
-Cost (Claude Haiku): rough order ~$0.0003–0.001/issue depending on body length.
-Full ~15.8k corpus is single-digit dollars at Haiku pricing.
+Cost: Groq Llama 8B is roughly an order of magnitude cheaper than Claude Haiku
+for this workload; exact spend depends on Groq pricing and prompt length.
 """
 
 from __future__ import annotations
@@ -62,10 +66,11 @@ HF_CACHE = REPO_ROOT / ".cache" / "hf-dl"
 LOCAL_PRED_CACHE = REPO_ROOT / ".cache" / "predictions"
 
 DEFAULT_HF_REPO = "ndileep/mycelium-agent-failures"
-# Haiku 4.5 alias — pin via ANTHROPIC_MODEL if you need a dated snapshot ID.
-DEFAULT_MODEL = "claude-haiku-4-5"
-# Anthropic rate limits are typically higher than OpenAI Tier 1; tune down if 429s.
-DEFAULT_CONCURRENCY = 8
+# Groq: OpenAI-compatible endpoint, Llama (cheap). Override with GROQ_MODEL.
+DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
+# Anthropic: used only when ANTHROPIC_API_KEY is set and Groq is not (unless LLM_BACKEND).
+DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
+DEFAULT_CONCURRENCY = 16  # Groq allows high RPM; lower with --concurrency if you hit 429s
 BODY_TRUNCATE_CHARS = 4000
 
 REPOS = [
@@ -266,16 +271,42 @@ def _parse_classification_json(text: str) -> dict[str, Any]:
     return data
 
 
-async def classify_one(client, system_prompt: str, issue: dict[str, Any], model: str, max_retries: int = 6) -> dict[str, Any]:
+async def classify_one(
+    client: Any,
+    system_prompt: str,
+    issue: dict[str, Any],
+    model: str,
+    backend: str,
+    max_retries: int = 6,
+) -> dict[str, Any]:
     user_msg = build_user_message(issue)
     instruction = (
         "\n\nRespond with ONLY a single JSON object (no markdown code fences), "
         'with keys exactly: "label", "confidence", "evidence", "reasoning". '
         "Follow the schema described in the system prompt. No text before or after the JSON."
     )
+    groq_json_mode = True  # prefer json_object on Groq; disable if API rejects it
     last_err: Exception | None = None
+
     for attempt in range(max_retries):
         try:
+            if backend == "groq":
+                kwargs: dict[str, Any] = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_msg + instruction},
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": 2048,
+                }
+                if groq_json_mode:
+                    kwargs["response_format"] = {"type": "json_object"}
+                resp = await client.chat.completions.create(**kwargs)
+                content = (resp.choices[0].message.content or "").strip()
+                if not content:
+                    return {"error": "empty response"}
+                return _parse_classification_json(content)
             message = await client.messages.create(
                 model=model,
                 max_tokens=2048,
@@ -297,6 +328,11 @@ async def classify_one(client, system_prompt: str, issue: dict[str, Any], model:
         except Exception as e:
             last_err = e
             err_text = str(e).lower()
+            if backend == "groq" and groq_json_mode and any(
+                x in err_text for x in ("json_object", "response_format", "unsupported", "json mode")
+            ):
+                groq_json_mode = False
+                continue
             is_retryable = (
                 "rate limit" in err_text
                 or "429" in err_text
@@ -331,18 +367,59 @@ def load_env() -> None:
         pass
 
 
-def get_anthropic_client():
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        print("ERROR: ANTHROPIC_API_KEY not set.", file=sys.stderr)
-        print("  Put it in .env at repo root:  ANTHROPIC_API_KEY=sk-ant-...", file=sys.stderr)
-        sys.exit(2)
+def resolve_backend() -> str:
+    """Prefer Groq when configured (cheaper)."""
+    load_env()
+    forced = (os.environ.get("LLM_BACKEND") or "").strip().lower()
+    g = bool(os.environ.get("GROQ_API_KEY", "").strip())
+    a = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+    if forced == "groq":
+        if not g:
+            print("ERROR: LLM_BACKEND=groq but GROQ_API_KEY is not set.", file=sys.stderr)
+            sys.exit(2)
+        return "groq"
+    if forced == "anthropic":
+        if not a:
+            print("ERROR: LLM_BACKEND=anthropic but ANTHROPIC_API_KEY is not set.", file=sys.stderr)
+            sys.exit(2)
+        return "anthropic"
+    if g:
+        return "groq"
+    if a:
+        return "anthropic"
+    print("ERROR: Set GROQ_API_KEY (https://console.groq.com) and/or ANTHROPIC_API_KEY", file=sys.stderr)
+    print("  Optional: LLM_BACKEND=groq|anthropic when both are set (default: groq).", file=sys.stderr)
+    sys.exit(2)
+
+
+def default_model_for_backend(backend: str) -> str:
+    if backend == "groq":
+        return os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL).strip() or DEFAULT_GROQ_MODEL
+    return os.environ.get("ANTHROPIC_MODEL", DEFAULT_ANTHROPIC_MODEL).strip() or DEFAULT_ANTHROPIC_MODEL
+
+
+def get_llm_client() -> tuple[Any, str]:
+    """Return (async client, backend name)."""
+    backend = resolve_backend()
+    if backend == "groq":
+        key = os.environ.get("GROQ_API_KEY", "").strip()
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            print("ERROR: openai not installed. Run: uv pip install openai", file=sys.stderr)
+            sys.exit(2)
+        client = AsyncOpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=key,
+        )
+        return client, "groq"
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     try:
         from anthropic import AsyncAnthropic
     except ImportError:
         print("ERROR: anthropic not installed. Run: uv pip install anthropic", file=sys.stderr)
         sys.exit(2)
-    return AsyncAnthropic(api_key=key)
+    return AsyncAnthropic(api_key=key), "anthropic"
 
 
 def get_hf_api():
@@ -544,6 +621,8 @@ async def classify_repo(
     api,
     repo_id: str,
     repo: str,
+    client: Any,
+    backend: str,
     model: str,
     concurrency: int,
     limit: int | None,
@@ -623,8 +702,7 @@ async def classify_repo(
                 return {"repo": repo, "raw": len(raw_issues), "delta": len(prefilter_rows), "errors": 0, "push_error": str(e)}
         return {"repo": repo, "raw": len(raw_issues), "delta": len(prefilter_rows), "errors": 0}
 
-    todo = llm_todo  # remainder goes to Claude
-    client = get_anthropic_client()
+    todo = llm_todo  # remainder goes to LLM (Groq or Anthropic)
     system_prompt = build_system_prompt()
     sem = asyncio.Semaphore(concurrency)
     new_rows: list[dict[str, Any]] = []
@@ -684,7 +762,7 @@ async def classify_repo(
         async with sem:
             if abort_event.is_set():
                 return
-            pred = await classify_one(client, system_prompt, issue, model)
+            pred = await classify_one(client, system_prompt, issue, model, backend)
             row = {
                 "id": issue["id"],
                 "repo": issue["repo"],
@@ -708,10 +786,8 @@ async def classify_repo(
                         if not abort_event.is_set():
                             print(
                                 f"  ABORT: {errors} consecutive failures with zero successes.\n"
-                                f"  This usually means an Anthropic quota/rate limit was hit or the\n"
-                                f"  API key is wrong. Check https://console.anthropic.com/settings/keys\n"
-                                f"  before re-running. Pipeline is idempotent — already-classified\n"
-                                f"  issues will be skipped.",
+                                f"  Check API keys and quotas (Groq: console.groq.com; Anthropic: console.anthropic.com).\n"
+                                f"  Pipeline is idempotent — already-classified issues will be skipped.\n",
                                 file=sys.stderr,
                             )
                         abort_event.set()
@@ -785,7 +861,7 @@ async def classify_repo(
 
 
 async def run_corpus(
-    model: str,
+    model: str | None,
     concurrency: int,
     limit: int | None,
     max_issues: int | None,
@@ -794,6 +870,9 @@ async def run_corpus(
     prefilter_only: bool = False,
 ) -> int:
     load_env()
+    client, backend = get_llm_client()
+    model_eff = model or default_model_for_backend(backend)
+    print(f"[llm] backend={backend} model={model_eff}", file=sys.stderr)
     api = get_hf_api()
     repo_id = hf_repo_id()
     print(f"[hf] dataset: {repo_id}", file=sys.stderr)
@@ -815,7 +894,9 @@ async def run_corpus(
         if remaining_budget is not None:
             per_repo_limit = remaining_budget if per_repo_limit is None else min(per_repo_limit, remaining_budget)
         try:
-            s = await classify_repo(api, repo_id, repo, model, concurrency, per_repo_limit, push, manifest, prefilter_only=prefilter_only)
+            s = await classify_repo(
+                api, repo_id, repo, client, backend, model_eff, concurrency, per_repo_limit, push, manifest, prefilter_only=prefilter_only
+            )
             stats.append(s)
             if remaining_budget is not None:
                 remaining_budget -= s.get("delta", 0)
@@ -906,7 +987,7 @@ def run_validate_prefilter() -> int:
 
     print(f"validation set: {af_total} AF-tagged + {n_total} not-a-failure = {af_total + n_total}\n")
     print(f"PREFILTER RECALL ON 'n':   {len(n_caught)}/{n_total} = {100 * len(n_caught) / max(n_total, 1):.1f}%")
-    print(f"  → these would skip the LLM, saving ${len(n_caught) * 0.0028:.3f} per run with Haiku\n")
+    print(f"  → these would skip the LLM, saving API spend on obvious 'n' rows\n")
 
     if af_caught:
         print(f"FALSE NEGATIVES ({len(af_caught)}) — pre-filter wrongly dropped real AF issues:")
@@ -931,20 +1012,21 @@ def run_validate_prefilter() -> int:
     return 0
 
 
-async def run_validate(model: str, concurrency: int) -> int:
+async def run_validate(model: str | None, concurrency: int) -> int:
     load_env()
-    client = get_anthropic_client()
+    client, backend = get_llm_client()
+    model_eff = model or default_model_for_backend(backend)
     system_prompt = build_system_prompt()
     pairs = [(i, g) for i, g in load_validation_set() if normalize_gold(g) != "skip"]
 
     print(f"validation set: {len(pairs)} v0 regression pairs")
-    print(f"model: {model}, concurrency: {concurrency}\n")
+    print(f"backend: {backend}, model: {model_eff}, concurrency: {concurrency}\n")
 
     sem = asyncio.Semaphore(concurrency)
 
     async def task(issue, gold):
         async with sem:
-            pred = await classify_one(client, system_prompt, issue, model)
+            pred = await classify_one(client, system_prompt, issue, model_eff, backend)
             return issue, gold, pred
 
     results = await asyncio.gather(*[task(i, g) for i, g in pairs])
@@ -982,7 +1064,7 @@ async def run_validate(model: str, concurrency: int) -> int:
             print(f"    HUMAN:  {normalize_gold(gold)}  notes: {gold.get('notes', '')[:80]}")
             print(f"    LLM:    {normalize_pred(pred)}  ({pred.get('confidence')})  ev: {pred.get('evidence', '')[:80]}\n")
 
-    print(f"approx cost: ~${total * 0.0008:.3f} ({total} Haiku calls; rough estimate)")
+    print(f"completed {total} classification calls (see provider dashboard for spend)")
     return 0
 
 
@@ -997,13 +1079,13 @@ def main() -> int:
                          help="Run the deterministic pre-filter against v0 and report recall + false negatives.")
 
     pv = sub.add_parser("validate", help="Optional: compare LLM to frozen v0 regression labels (incidents/tagged/v0/).")
-    pv.add_argument("--model", default=DEFAULT_MODEL)
+    pv.add_argument("--model", default=None, help="Override model (default: GROQ_MODEL or llama-3.1-8b-instant on Groq; ANTHROPIC_MODEL or claude-haiku-4-5 on Anthropic).")
     pv.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
 
     pr = sub.add_parser("run", help="Classify any unclassified issues, push to HF.")
-    pr.add_argument("--model", default=DEFAULT_MODEL)
+    pr.add_argument("--model", default=None, help="Override model id (same defaults as validate).")
     pr.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
-                    help=f"Concurrent Anthropic requests (default {DEFAULT_CONCURRENCY}; lower if you hit 429s).")
+                    help=f"Concurrent LLM requests (default {DEFAULT_CONCURRENCY}; lower on 429s).")
     pr.add_argument("--limit", type=int, default=None, help="Cap classifications per repo (smoke test).")
     pr.add_argument("--max-issues", type=int, default=None,
                     help="Cap total classifications across all repos this run. Useful in CI to stay under job timeout.")
