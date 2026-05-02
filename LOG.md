@@ -14,6 +14,13 @@ Template:
 
 ---
 
+## 2026-05-02 — Groq Llama default for classify (Anthropic optional)
+
+- did: classifier supports **Groq** (`openai` SDK, base `api.groq.com`) with default `llama-3.1-8b-instant`; **Anthropic** still works via `ANTHROPIC_API_KEY`. If both keys exist, **Groq wins** unless `LLM_BACKEND=anthropic`.
+- did: workflow installs `openai` + `anthropic`; added secrets slot `GROQ_API_KEY`, optional dispatch `llm_backend`.
+- now: set `GROQ_API_KEY` in `.env` / GH secrets; `uv pip install openai`.
+- next: smoke `python scripts/classify_corpus.py run --no-push --limit 5` and confirm `[llm] backend=groq` in stderr.
+
 ## 2026-05-02 — HF predictions as sole catalog (LLM-only)
 
 - did: documented in `classify_corpus.py` that the failure-mode catalog is only Hugging Face `predictions/` (prefilter + Claude); no separate human merge step.

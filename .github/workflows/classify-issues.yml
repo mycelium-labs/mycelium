@@ -1,8 +1,8 @@
 name: Classify issues → HF predictions
 
-# Runs after scrape succeeds, on a schedule, or manually. Uses Claude Haiku on
-# Anthropic (not OpenAI — GH runners hit APIConnectionError with OpenAI for
-# this org). Pipeline is idempotent; checkpoints land on HF every 50 successes.
+# Default: Groq (Llama) — cheap and fast. Set GROQ_API_KEY. Optional ANTHROPIC_API_KEY
+# + LLM_BACKEND=anthropic to use Claude instead. Pipeline is idempotent; checkpoints
+# every 50 LLM successes on HF.
 
 on:
   workflow_run:
@@ -25,13 +25,17 @@ on:
         type: string
         default: ""
       model:
-        description: "Anthropic model id (default claude-haiku-4-5)."
+        description: "Model id (default from script: llama-3.1-8b-instant on Groq)."
         type: string
-        default: "claude-haiku-4-5"
+        default: ""
       concurrency:
-        description: "Concurrent Anthropic requests."
+        description: "Concurrent LLM requests."
         type: string
-        default: "8"
+        default: "16"
+      llm_backend:
+        description: "groq or anthropic (empty = auto: groq if GROQ_API_KEY set)."
+        type: string
+        default: ""
 
 concurrency:
   group: classify-issues
@@ -53,19 +57,23 @@ jobs:
           cache: pip
 
       - name: Install deps
-        run: pip install huggingface_hub anthropic python-dotenv
+        run: pip install huggingface_hub openai anthropic python-dotenv
 
       - name: Classify new issues
         env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLM_BACKEND: ${{ inputs.llm_backend }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           MYCELIUM_HF_REPO: ${{ secrets.MYCELIUM_HF_REPO }}
         run: |
           set -euo pipefail
           MAX_ISSUES="${{ inputs.max_issues || '5000' }}"
-          CONCURRENCY="${{ inputs.concurrency || '8' }}"
-          MODEL="${{ inputs.model || 'claude-haiku-4-5' }}"
-          ARGS=(--model "$MODEL" --max-issues "$MAX_ISSUES" --concurrency "$CONCURRENCY")
+          CONCURRENCY="${{ inputs.concurrency || '16' }}"
+          ARGS=(--max-issues "$MAX_ISSUES" --concurrency "$CONCURRENCY")
+          if [[ -n "${{ inputs.model }}" ]]; then
+            ARGS+=(--model "${{ inputs.model }}")
+          fi
           if [[ -n "${{ inputs.limit }}" ]]; then
             ARGS+=(--limit "${{ inputs.limit }}")
           fi
