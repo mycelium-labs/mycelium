@@ -299,6 +299,23 @@ def _parse_classification_json(text: str) -> dict[str, Any]:
     return data
 
 
+def _parse_try_again_seconds(err_text: str) -> float | None:
+    """Parse Groq/OpenAI-style 'try again in …' hints from error strings.
+
+    Handles: 140ms, 19.57s, 9m15.3792s (TPM/TPD long waits).
+    """
+    t = err_text.lower()
+    m = re.search(r"try again in (\d+)\s*m\s*(\d+(?:\.\d+)?)\s*s\b", t)
+    if m:
+        return int(m.group(1)) * 60.0 + float(m.group(2))
+    m = re.search(r"try again in (\d+(?:\.\d+)?)\s*(ms|s)\b", t, re.IGNORECASE)
+    if not m:
+        return None
+    val = float(m.group(1))
+    unit = (m.group(2) or "s").lower()
+    return val / 1000.0 if unit == "ms" else val
+
+
 async def classify_one(
     client: Any,
     system_prompt: str,
@@ -373,17 +390,14 @@ async def classify_one(
             if not is_retryable or attempt == max_retries - 1:
                 break
             wait = float(min(2 ** attempt, 60))
-            # Groq: "try again in 140ms" or "19.57s" (TPM — often 10–20s to clear)
-            m = re.search(r"try again in (\d+(?:\.\d+)?)\s*(ms|s)\b", err_text, re.IGNORECASE)
-            if m:
-                val = float(m.group(1))
-                unit = (m.group(2) or "s").lower()
-                wait = val / 1000 if unit == "ms" else val
-                wait += 0.25
+            parsed = _parse_try_again_seconds(err_text)
+            if parsed is not None:
+                wait = parsed + 0.25
             if backend == "groq" and ("429" in err_text or "rate limit" in err_text):
-                # Prefer API hint; never undershoot TPM resets (min ~2s if hint missing)
+                # Prefer API hint; if missing, don't spam tiny sleeps on TPM/TPD
                 wait = max(wait, 2.0)
-            cap = 180.0 if backend == "groq" else 120.0
+            # Groq can ask for multi-minute waits (TPM or TPD rolling reset)
+            cap = 1200.0 if backend == "groq" else 120.0
             await asyncio.sleep(min(wait, cap))
     return {"error": f"{type(last_err).__name__}: {last_err}"}
 

@@ -14,6 +14,10 @@ Template:
 
 ---
 
+## 2026-05-02 — Groq 429: parse minutes in retry hint
+
+- did: `_parse_try_again_seconds()` parses **`9m15.3792s`**-style hints (TPD/TPM); Groq backoff sleep cap raised **180s → 1200s** so multi-minute waits are not truncated.
+
 ## 2026-05-02 — Groq TPM: pace starts + default cap 2
 
 - did: `DEFAULT_CONCURRENCY` and `GROQ_MAX_CONCURRENCY` default **2**; **`pace_groq_request_start()`** (env **`GROQ_MIN_START_INTERVAL`**, default 0.5s) spaces request starts; 429 backoff min **2s**, sleep cap **180s**, **`max_retries` 12**; CI workflow default concurrency **2**.
