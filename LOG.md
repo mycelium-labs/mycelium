@@ -14,6 +14,10 @@ Template:
 
 ---
 
+## 2026-05-02 — Groq TPM: pace starts + default cap 2
+
+- did: `DEFAULT_CONCURRENCY` and `GROQ_MAX_CONCURRENCY` default **2**; **`pace_groq_request_start()`** (env **`GROQ_MIN_START_INTERVAL`**, default 0.5s) spaces request starts; 429 backoff min **2s**, sleep cap **180s**, **`max_retries` 12**; CI workflow default concurrency **2**.
+
 ## 2026-05-02 — Groq TPM: default concurrency 4 + cap
 
 - did: `--concurrency` default **4**; Groq runs capped by **`GROQ_MAX_CONCURRENCY`** (default 4) to avoid free-tier TPM 429s; set **`GROQ_MAX_CONCURRENCY=16`** on paid tier if needed.
