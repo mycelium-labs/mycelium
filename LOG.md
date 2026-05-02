@@ -14,6 +14,11 @@ Template:
 
 ---
 
+## 2026-05-02 — Anthropic for bulk, Groq for daily
+
+- did: `.env.example` notes **LLM_BACKEND=anthropic** for local backlog finish; **CI remains Groq** for cheap incremental runs (new issues per scrape/cron).
+- now: daily automation can stay Groq; operator switches to Anthropic when Same-day TPD/TPM blocks large batches.
+
 ## 2026-05-02 — Groq 429: parse minutes in retry hint
 
 - did: `_parse_try_again_seconds()` parses **`9m15.3792s`**-style hints (TPD/TPM); Groq backoff sleep cap raised **180s → 1200s** so multi-minute waits are not truncated.
