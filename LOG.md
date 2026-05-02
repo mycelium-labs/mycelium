@@ -14,6 +14,13 @@ Template:
 
 ---
 
+## 2026-05-02 — HF predictions as sole catalog (LLM-only)
+
+- did: documented in `classify_corpus.py` that the failure-mode catalog is only Hugging Face `predictions/` (prefilter + Claude); no separate human merge step.
+- did: `build_review_pack.py` no longer dedupes against git `tagged.jsonl`; export is a read-only convenience; optional `ingest_proposed` / `tag_next` marked **legacy** in docstrings (v0 only for `validate` regression).
+- now: `python scripts/classify_corpus.py run` is the one pipeline; `ingest_proposed` prints a one-line note that HF is canonical.
+- next: run a full or capped `classify_corpus.py run` when ready; use `build_review_pack.py` only to skim AF exports.
+
 ## 2026-05-02 — classifier on Claude Haiku + CI restored
 
 - did: replaced OpenAI with Anthropic `AsyncAnthropic` in `classify_corpus.py` (`messages.create`, JSON reply parsed from text). Default model `claude-haiku-4-5`, default concurrency 8.

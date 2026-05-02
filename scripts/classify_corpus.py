@@ -11,9 +11,13 @@ Each line in `predictions/<repo>.jsonl` is one issue's classification, keyed
 by `id` (e.g. "langchain-ai/langchain#34906"). Append-only and idempotent:
 re-running won't re-classify what's already there.
 
+**Failure-mode catalog:** the dataset on Hugging Face (`predictions/*.jsonl`) is
+the product catalog — prefilter rows (`model: prefilter:*`) plus LLM rows
+(`label`, `evidence`, etc.). There is no separate human-curated merge step.
+
 Commands:
 
-    # Validate the classifier against the v0 hand-labeled set. No writes.
+    # Optional: compare classifier + prefilter to the frozen v0 regression pairs.
     python scripts/classify_corpus.py validate
 
     # Classify everything that hasn't been classified yet (default mode).
@@ -841,13 +845,13 @@ async def run_corpus(
 
 
 # -----------------------------------------------------------------------------
-# Validate mode (against v0 hand-labeled set)
+# Validate mode (optional regression: frozen v0 queue + labels on disk)
 # -----------------------------------------------------------------------------
 
 
 def load_validation_set() -> list[tuple[dict[str, Any], dict[str, Any]]]:
     if not (V0_DIR / "queue.jsonl").exists() or not (V0_DIR / "tagged.jsonl").exists():
-        print("ERROR: missing v0/queue.jsonl or v0/tagged.jsonl", file=sys.stderr)
+        print("ERROR: missing v0/queue.jsonl or v0/tagged.jsonl (only needed for validate / validate-prefilter).", file=sys.stderr)
         sys.exit(2)
     queue = {json.loads(line)["id"]: json.loads(line) for line in (V0_DIR / "queue.jsonl").read_text().splitlines() if line.strip()}
     tagged = [json.loads(line) for line in (V0_DIR / "tagged.jsonl").read_text().splitlines() if line.strip()]
@@ -871,7 +875,7 @@ def normalize_pred(pred: dict[str, Any]) -> str:
 
 
 def run_validate_prefilter() -> int:
-    """Validate pre-filter against v0 hand-tagged set.
+    """Validate pre-filter against the frozen v0 regression set (queue + labels).
 
     Hard contract: zero false negatives on AF-tagged. If any AF-tagged issue
     matches a pre-filter rule, the rule is wrong and must be tightened.
@@ -933,7 +937,7 @@ async def run_validate(model: str, concurrency: int) -> int:
     system_prompt = build_system_prompt()
     pairs = [(i, g) for i, g in load_validation_set() if normalize_gold(g) != "skip"]
 
-    print(f"validation set: {len(pairs)} hand-labeled issues")
+    print(f"validation set: {len(pairs)} v0 regression pairs")
     print(f"model: {model}, concurrency: {concurrency}\n")
 
     sem = asyncio.Semaphore(concurrency)
@@ -992,7 +996,7 @@ def main() -> int:
     pp = sub.add_parser("validate-prefilter",
                          help="Run the deterministic pre-filter against v0 and report recall + false negatives.")
 
-    pv = sub.add_parser("validate", help="Validate the LLM classifier against the v0 hand-labeled set.")
+    pv = sub.add_parser("validate", help="Optional: compare LLM to frozen v0 regression labels (incidents/tagged/v0/).")
     pv.add_argument("--model", default=DEFAULT_MODEL)
     pv.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
 
