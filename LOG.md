@@ -14,6 +14,10 @@ Template:
 
 ---
 
+## 2026-05-02 — `.env.example` for classify / HF secrets
+
+- did: added `.env.example` (placeholders only); copy to `.env` locally — never commit real keys.
+
 ## 2026-05-02 — CI: scheduled HF runs force Groq
 
 - did: `classify-issues.yml` exports `LLM_BACKEND=groq` for `schedule` and `workflow_run`; only `workflow_dispatch` with non-empty `llm_backend` can pick Anthropic.
