@@ -14,6 +14,11 @@ Template:
 
 ---
 
+## 2026-05-02 — Full `classify_corpus` run (Anthropic)
+
+- did: **`LLM_BACKEND=anthropic`** full **`run`**: **openai-agents** + **smolagents** finished on HF; **OpenHands** is the large remaining leg; **cline / stagehand / livekit** follow in **`REPOS`** order.
+- next: after backlog, **`LLM_BACKEND=groq`** for daily runs; optional **`--concurrency 8`** for Anthropic bulk if quotas allow.
+
 ## 2026-05-02 — Anthropic for bulk, Groq for daily
 
 - did: `.env.example` notes **LLM_BACKEND=anthropic** for local backlog finish; **CI remains Groq** for cheap incremental runs (new issues per scrape/cron).
