@@ -14,6 +14,10 @@ Template:
 
 ---
 
+## 2026-05-03 — HF dataset README (#2)
+
+- did: expanded **`_DATASET_CARD`** in **`scripts/scrape_github_issues.py`** (sources table, licensing, intended use, scrape/classify cadence); uploaded **`README.md`** to **`ndileep/mycelium-agent-failures`**; closed **[#2](https://github.com/mycelium-labs/mycelium/issues/2)**.
+
 ## 2026-05-03 — Closed GH #1 (scrape CI DoD)
 
 - did: closed **[mycelium-labs/mycelium#1](https://github.com/mycelium-labs/mycelium/issues/1)**; HF **`github-issues/`** has **10** folders; scrape workflow green on schedule + successful dispatch rescrapes documented in closing comment.
