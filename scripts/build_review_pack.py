@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
-"""Turn HF predictions into a human-reviewable bulk pack.
+"""Export a readable report of high/medium AF-* hits from HF predictions.
 
-Reads `predictions/<repo>.jsonl` from the Mycelium HF dataset, filters to
-high/medium-confidence AF-* tags, dedupes against v0 hand-tags, and produces:
+The **catalog of record** is the Hugging Face dataset (`predictions/<repo>.jsonl`)
+produced by `classify_corpus.py run`. This script only materializes a filtered
+view under `incidents/tagged/v1/` for skimming (markdown + jsonl) — not a
+second “approved” store and not merged back into anything by default.
 
-    incidents/tagged/v1/proposed.jsonl   structured, ready for ingest_proposed.py
-    incidents/tagged/v1/proposed.md      human-readable review file
-
-Workflow:
-    python scripts/classify_corpus.py run        # populates HF predictions/
-    python scripts/build_review_pack.py
-    # review proposed.md, edit proposed.jsonl if you want to override anything
-    python scripts/ingest_proposed.py --version v1
+    python scripts/classify_corpus.py run   # populate HF
+    python scripts/build_review_pack.py     # optional: proposed.md + proposed.jsonl
 
 Auth:
     HF_TOKEN, MYCELIUM_HF_REPO  (same env as scrape / classify scripts)
@@ -28,7 +24,6 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TAXONOMY_DIR = REPO_ROOT / "incidents" / "tagged"
-V0_DIR = TAXONOMY_DIR / "v0"
 V1_DIR = TAXONOMY_DIR / "v1"
 PROPOSED_JSONL = V1_DIR / "proposed.jsonl"
 PROPOSED_MD = V1_DIR / "proposed.md"
@@ -95,20 +90,6 @@ def load_predictions_from_hf() -> list[dict[str, Any]]:
     return rows
 
 
-def already_tagged_ids() -> set[str]:
-    p = V0_DIR / "tagged.jsonl"
-    if not p.exists():
-        return set()
-    out = set()
-    for line in p.read_text().splitlines():
-        if line.strip():
-            try:
-                out.add(json.loads(line)["id"])
-            except (json.JSONDecodeError, KeyError):
-                pass
-    return out
-
-
 def normalize_label(raw: str) -> list[str]:
     parts = [p.strip() for p in (raw or "").split("+") if p.strip()]
     return [p for p in parts if p.startswith("AF-")]
@@ -121,8 +102,6 @@ def main() -> int:
     if not preds:
         print("ERROR: no predictions found on HF. Run `python scripts/classify_corpus.py run` first.", file=sys.stderr)
         return 2
-
-    skip_ids = already_tagged_ids()
 
     af_preds: list[dict[str, Any]] = []
     label_dist: Counter[str] = Counter()
@@ -140,8 +119,6 @@ def main() -> int:
         for lbl in labels:
             label_dist[lbl] += 1
             repo_label_dist[p["repo"]][lbl] += 1
-        if p["id"] in skip_ids:
-            continue
         if p.get("confidence") not in ("high", "medium"):
             continue
         af_preds.append(p)
@@ -182,7 +159,7 @@ def main() -> int:
         "# v1 Bulk-Classified Review Pack",
         "",
         f"LLM-proposed AF-* tags from {len(preds):,} classified issues (HF predictions/).",
-        f"Filtered to confidence ∈ {{high, medium}}, deduped against v0 hand-tags.",
+        f"Filtered to confidence ∈ {{high, medium}} (HF is the source of truth).",
         "",
         "## Summary",
         "",
@@ -194,8 +171,7 @@ def main() -> int:
         f"| Predicted AF-* (any confidence) | {sum(v for k, v in label_dist.items() if k != 'n'):,} |",
         f"| AF-* high-confidence | {high_count:,} |",
         f"| AF-* medium-confidence | {med_count:,} |",
-        f"| Already in v0 (excluded from review) | {sum(1 for p in preds if p['id'] in skip_ids):,} |",
-        f"| **Proposals to review** | **{len(af_preds):,}** |",
+        f"| **AF proposals in this export** | **{len(af_preds):,}** |",
         "",
         "## Confidence distribution (full corpus)",
         "",
@@ -232,12 +208,10 @@ def main() -> int:
 
     md_lines += [
         "",
-        "## How to review",
+        "## Notes",
         "",
-        "1. Skim each AF section below.",
-        "2. To override a verdict, edit `incidents/tagged/v1/proposed.jsonl`",
-        "   directly (or tell Claude which `idx` to flip).",
-        "3. Ingest:  `python scripts/ingest_proposed.py --version v1`",
+        "Authoritative labels live on Hugging Face (`predictions/<repo>.jsonl`).",
+        "This folder is a convenience export for reading and sharing — not a second database.",
         "",
     ]
 

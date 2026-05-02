@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
-"""Hand-tag GitHub issues against the Mycelium failure-mode taxonomy.
+"""LEGACY interactive tagging — builds `incidents/tagged/v0/` for regression tests.
 
-Workflow:
-    # 1. Build a stratified random sample from the HF corpus (~5/repo, 50 total).
-    #    Run this once. It commits incidents/tagged/v0/queue.jsonl.
+The live failure-mode catalog is **only** Hugging Face `predictions/<repo>.jsonl`
+from `python scripts/classify_corpus.py run` (prefilter + Claude).
+
+Keep using this script **only** if you need to extend the frozen v0 pair used by
+`classify_corpus.py validate` / `validate-prefilter`. It is not the product
+database.
+
+Workflow (optional, for v0 fixture maintenance):
     python scripts/tag_next.py build-queue
-
-    # 2. Tag the next un-tagged issue. Repeat until done.
     python scripts/tag_next.py
-
-    # 3. See progress.
     python scripts/tag_next.py status
 
-Outputs (both committed to git — this IS the moat):
-    incidents/tagged/v0/queue.jsonl    deterministic sample (built once)
-    incidents/tagged/v0/tagged.jsonl   your tags, appended one per call
+Outputs:
+    incidents/tagged/v0/queue.jsonl  … sample for pairing with tagged.jsonl
+    incidents/tagged/v0/tagged.jsonl … labels used by validate commands only
 
-Auth needed only for `build-queue`:
-    HF_TOKEN           Hugging Face read token
-    MYCELIUM_HF_REPO   Dataset repo slug (defaults to ndileep/mycelium-agent-failures)
+Auth (build-queue only): HF_TOKEN, MYCELIUM_HF_REPO
 """
 
 from __future__ import annotations

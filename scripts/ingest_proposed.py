@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
-"""Append AI-proposed tags from `proposed.jsonl` into `tagged.jsonl`.
+"""LEGACY: Append rows from `proposed.jsonl` into git `tagged.jsonl`.
 
-Idempotent: skips any issue id that's already tagged. Run as many times as you
-like; only new entries get appended.
+The failure-mode **catalog of record** is Hugging Face `predictions/*.jsonl`
+from `scripts/classify_corpus.py run`. Use this script only if you still want a
+duplicate trail in git for offline grep — not required for the product.
 
-Workflow:
-    # 1. Review incidents/tagged/v{0,1}/proposed.md (and edit proposed.jsonl
-    #    if you want to override any verdicts).
-    # 2. Ingest:
-    python scripts/ingest_proposed.py            # v0 (default)
+Idempotent: skips issue ids already in tagged.jsonl.
+
+Workflow (optional):
     python scripts/ingest_proposed.py --version v1
-
-    # 3. Sanity check:
-    python scripts/tag_next.py status
 """
 
 from __future__ import annotations
@@ -42,6 +38,11 @@ def load_existing_ids(tagged: Path) -> set[str]:
 
 
 def main() -> int:
+    print(
+        "NOTE: Catalog of record is HF predictions/ (`classify_corpus.py run`). "
+        "This only mirrors into git if you want it.\n",
+        file=sys.stderr,
+    )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", default="v0", help="catalog version (subdir under incidents/tagged/, default v0)")
     parser.add_argument("--tagged-by", default="claude-proposed-human-reviewed", help="who/what produced the tags")
