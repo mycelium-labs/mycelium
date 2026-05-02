@@ -34,6 +34,8 @@ Commands:
 Auth (classifier — use one provider):
     GROQ_API_KEY       recommended: Groq OpenAI-compatible API, fast / cheap Llama
                        (https://console.groq.com). Default model: see GROQ_MODEL.
+    GROQ_MAX_CONCURRENCY   cap parallel Groq calls (default 2 on on-demand TPM).
+    GROQ_MIN_START_INTERVAL   seconds between starting Groq requests (default 0.5).
     ANTHROPIC_API_KEY  optional fallback if Groq is not set
     LLM_BACKEND        force `groq` or `anthropic` when both keys are present
     GROQ_MODEL         default: llama-3.1-8b-instant
@@ -70,8 +72,34 @@ DEFAULT_HF_REPO = "ndileep/mycelium-agent-failures"
 DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
 # Anthropic: used only when ANTHROPIC_API_KEY is set and Groq is not (unless LLM_BACKEND).
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
-DEFAULT_CONCURRENCY = 4  # Groq free/on-demand TPM is tight; raise with --concurrency on paid tier
+DEFAULT_CONCURRENCY = 2  # Groq on-demand TPM (~6k) overloads easily; raise on Dev/paid tier
 BODY_TRUNCATE_CHARS = 4000
+
+# Groq: stagger request starts so bursts stay under TPM (parallelism × instant tokens).
+_groq_pace_lock: asyncio.Lock | None = None
+_groq_next_start_monotonic: float = 0.0
+
+
+def _groq_min_start_interval_sec() -> float:
+    raw = (os.environ.get("GROQ_MIN_START_INTERVAL") or "").strip()
+    if raw:
+        return max(0.0, float(raw))
+    return 0.5
+
+
+async def pace_groq_request_start() -> None:
+    """Space out Groq request *starts* to avoid stacking in the same TPM window."""
+    global _groq_pace_lock, _groq_next_start_monotonic
+    gap = _groq_min_start_interval_sec()
+    if gap <= 0:
+        return
+    if _groq_pace_lock is None:
+        _groq_pace_lock = asyncio.Lock()
+    async with _groq_pace_lock:
+        now = time.monotonic()
+        if now < _groq_next_start_monotonic:
+            await asyncio.sleep(_groq_next_start_monotonic - now)
+        _groq_next_start_monotonic = time.monotonic() + gap
 
 REPOS = [
     "langchain-ai/langchain",
@@ -277,7 +305,7 @@ async def classify_one(
     issue: dict[str, Any],
     model: str,
     backend: str,
-    max_retries: int = 6,
+    max_retries: int = 12,
 ) -> dict[str, Any]:
     user_msg = build_user_message(issue)
     instruction = (
@@ -345,15 +373,18 @@ async def classify_one(
             if not is_retryable or attempt == max_retries - 1:
                 break
             wait = float(min(2 ** attempt, 60))
-            # Groq: "try again in 140ms" (no space before ms)
-            m = re.search(r"try again in (\d+(?:\.\d+)?)\s*(ms|s)\b", err_text)
+            # Groq: "try again in 140ms" or "19.57s" (TPM — often 10–20s to clear)
+            m = re.search(r"try again in (\d+(?:\.\d+)?)\s*(ms|s)\b", err_text, re.IGNORECASE)
             if m:
                 val = float(m.group(1))
-                wait = val / 1000 if m.group(2) == "ms" else val
-                wait += 0.15
+                unit = (m.group(2) or "s").lower()
+                wait = val / 1000 if unit == "ms" else val
+                wait += 0.25
             if backend == "groq" and ("429" in err_text or "rate limit" in err_text):
-                wait = max(wait, 1.0)
-            await asyncio.sleep(min(wait, 120))
+                # Prefer API hint; never undershoot TPM resets (min ~2s if hint missing)
+                wait = max(wait, 2.0)
+            cap = 180.0 if backend == "groq" else 120.0
+            await asyncio.sleep(min(wait, cap))
     return {"error": f"{type(last_err).__name__}: {last_err}"}
 
 
@@ -405,11 +436,11 @@ def cap_concurrency_for_backend(backend: str, concurrency: int) -> int:
     """Groq enforces TPM; too many parallel large prompts → 429 even with per-request retry."""
     if backend != "groq":
         return concurrency
-    cap = max(1, int(os.environ.get("GROQ_MAX_CONCURRENCY", "4")))
+    cap = max(1, int(os.environ.get("GROQ_MAX_CONCURRENCY", "2")))
     if concurrency > cap:
         print(
             f"[llm] Groq TPM: capping concurrency {concurrency} → {cap} "
-            f"(env GROQ_MAX_CONCURRENCY or --concurrency; paid tier can use 8–16+)",
+            f"(raise GROQ_MAX_CONCURRENCY on Dev/paid tier)",
             file=sys.stderr,
         )
         return cap
@@ -780,6 +811,8 @@ async def classify_repo(
         async with sem:
             if abort_event.is_set():
                 return
+            if backend == "groq":
+                await pace_groq_request_start()
             pred = await classify_one(client, system_prompt, issue, model, backend)
             row = {
                 "id": issue["id"],
@@ -1046,6 +1079,8 @@ async def run_validate(model: str | None, concurrency: int) -> int:
 
     async def task(issue, gold):
         async with sem:
+            if backend == "groq":
+                await pace_groq_request_start()
             pred = await classify_one(client, system_prompt, issue, model_eff, backend)
             return issue, gold, pred
 
@@ -1105,7 +1140,7 @@ def main() -> int:
     pr = sub.add_parser("run", help="Classify any unclassified issues, push to HF.")
     pr.add_argument("--model", default=None, help="Override model id (same defaults as validate).")
     pr.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
-                    help=f"Concurrent LLM requests (default {DEFAULT_CONCURRENCY}; lower on 429s).")
+                    help=f"Concurrent LLM requests (default {DEFAULT_CONCURRENCY}; Groq caps via GROQ_MAX_CONCURRENCY).")
     pr.add_argument("--limit", type=int, default=None, help="Cap classifications per repo (smoke test).")
     pr.add_argument("--max-issues", type=int, default=None,
                     help="Cap total classifications across all repos this run. Useful in CI to stay under job timeout.")

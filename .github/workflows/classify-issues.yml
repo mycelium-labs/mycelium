@@ -29,9 +29,9 @@ on:
         type: string
         default: ""
       concurrency:
-        description: "Concurrent LLM requests (≤4 recommended for Groq free-tier TPM)."
+        description: "Concurrent LLM requests (≤2 recommended for Groq on-demand TPM)."
         type: string
-        default: "4"
+        default: "2"
       llm_backend:
         description: "Manual only: groq (default) or anthropic. Cron/post-scrape always use groq."
         type: string
@@ -76,7 +76,7 @@ jobs:
           fi
           echo "LLM_BACKEND=$LLM_BACKEND (event=${{ github.event_name }})"
           MAX_ISSUES="${{ inputs.max_issues || '5000' }}"
-          CONCURRENCY="${{ inputs.concurrency || '4' }}"
+          CONCURRENCY="${{ inputs.concurrency || '2' }}"
           ARGS=(--max-issues "$MAX_ISSUES" --concurrency "$CONCURRENCY")
           if [[ -n "${{ inputs.model }}" ]]; then
             ARGS+=(--model "${{ inputs.model }}")
