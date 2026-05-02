@@ -1,8 +1,8 @@
 name: Classify issues → HF predictions
 
-# Default: Groq (Llama) — cheap and fast. Set GROQ_API_KEY. Optional ANTHROPIC_API_KEY
-# + LLM_BACKEND=anthropic to use Claude instead. Pipeline is idempotent; checkpoints
-# every 50 LLM successes on HF.
+# Scheduled + scrape-triggered runs always use Groq (LLM_BACKEND=groq) so HF updates
+# stay cheap. Manual workflow_dispatch may set llm_backend=anthropic to use Claude.
+# Needs secrets: GROQ_API_KEY, HF_TOKEN, MYCELIUM_HF_REPO.
 
 on:
   workflow_run:
@@ -33,7 +33,7 @@ on:
         type: string
         default: "16"
       llm_backend:
-        description: "groq or anthropic (empty = auto: groq if GROQ_API_KEY set)."
+        description: "Manual only: groq (default) or anthropic. Cron/post-scrape always use groq."
         type: string
         default: ""
 
@@ -63,11 +63,18 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          LLM_BACKEND: ${{ inputs.llm_backend }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           MYCELIUM_HF_REPO: ${{ secrets.MYCELIUM_HF_REPO }}
         run: |
           set -euo pipefail
+          # Cron + workflow_run + default manual: Groq. Manual override only when
+          # workflow_dispatch and llm_backend input is non-empty (e.g. anthropic).
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ -n "${{ inputs.llm_backend }}" ]]; then
+            export LLM_BACKEND="${{ inputs.llm_backend }}"
+          else
+            export LLM_BACKEND=groq
+          fi
+          echo "LLM_BACKEND=$LLM_BACKEND (event=${{ github.event_name }})"
           MAX_ISSUES="${{ inputs.max_issues || '5000' }}"
           CONCURRENCY="${{ inputs.concurrency || '16' }}"
           ARGS=(--max-issues "$MAX_ISSUES" --concurrency "$CONCURRENCY")

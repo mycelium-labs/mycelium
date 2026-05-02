@@ -14,6 +14,11 @@ Template:
 
 ---
 
+## 2026-05-02 — CI: scheduled HF runs force Groq
+
+- did: `classify-issues.yml` exports `LLM_BACKEND=groq` for `schedule` and `workflow_run`; only `workflow_dispatch` with non-empty `llm_backend` can pick Anthropic.
+- now: add `GROQ_API_KEY` to GitHub secrets for cron; your local `python scripts/classify_corpus.py run` keeps using whatever keys/`LLM_BACKEND` you have until you change them.
+
 ## 2026-05-02 — Groq Llama default for classify (Anthropic optional)
 
 - did: classifier supports **Groq** (`openai` SDK, base `api.groq.com`) with default `llama-3.1-8b-instant`; **Anthropic** still works via `ANTHROPIC_API_KEY`. If both keys exist, **Groq wins** unless `LLM_BACKEND=anthropic`.
