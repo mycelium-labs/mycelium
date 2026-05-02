@@ -14,6 +14,10 @@ Template:
 
 ---
 
+## 2026-05-03 — Closed GH #3 (hand-tag 50)
+
+- did: added **`research/tag-frequency-v0.md`** (distribution + gaps vs AF-*); updated **[#3](https://github.com/mycelium-labs/mycelium/issues/3)** body with checked DoD and **closed**.
+
 ## 2026-05-03 — HF dataset README (#2)
 
 - did: expanded **`_DATASET_CARD`** in **`scripts/scrape_github_issues.py`** (sources table, licensing, intended use, scrape/classify cadence); uploaded **`README.md`** to **`ndileep/mycelium-agent-failures`**; closed **[#2](https://github.com/mycelium-labs/mycelium/issues/2)**.
