@@ -130,3 +130,18 @@ HF settings UI once the corpus matures.
 3. Pick 50 random issues, read them, tag each against `incidents/tagged/AF-*.md`
    or mark "not a failure mode."
 4. Log the session in `LOG.md`.
+
+---
+
+## `analyze_af_frequency.py`
+
+Summarize **AF-001…AF-009** occurrence counts across all **`predictions/*.jsonl`**
+files on the Hugging Face dataset (same `REPOS` list as `classify_corpus.py`).
+Requires `HF_TOKEN` / `MYCELIUM_HF_REPO` (or defaults to `ndileep/mycelium-agent-failures`).
+
+```bash
+python scripts/analyze_af_frequency.py
+python scripts/analyze_af_frequency.py --markdown   # paste-friendly table
+```
+
+Used for roadmap decisions — see `research/v1-scope.md`.

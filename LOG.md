@@ -14,6 +14,11 @@ Template:
 
 ---
 
+## 2026-05-03 — v1 scope (#4): AF-006, AF-004, AF-002
+
+- did: **`scripts/analyze_af_frequency.py`** aggregates HF **`predictions/`** AF counts; **`research/v1-scope.md`** picks **AF-006 / AF-004 / AF-002** vs corpus + v0 hand-tag; **`research/failure_modes.md`** adds frequencies + v1 column.
+- did: closed **[#4](https://github.com/mycelium-labs/mycelium/issues/4)**.
+
 ## 2026-05-03 — Closed GH #3 (hand-tag 50)
 
 - did: added **`research/tag-frequency-v0.md`** (distribution + gaps vs AF-*); updated **[#3](https://github.com/mycelium-labs/mycelium/issues/3)** body with checked DoD and **closed**.
