@@ -14,6 +14,10 @@ Template:
 
 ---
 
+## 2026-05-03 — Closed GH #1 (scrape CI DoD)
+
+- did: closed **[mycelium-labs/mycelium#1](https://github.com/mycelium-labs/mycelium/issues/1)**; HF **`github-issues/`** has **10** folders; scrape workflow green on schedule + successful dispatch rescrapes documented in closing comment.
+
 ## 2026-05-02 — Operator wrap
 
 - did: operator considers current classify/backlog stretch done for now.
