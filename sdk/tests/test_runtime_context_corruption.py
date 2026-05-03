@@ -218,9 +218,7 @@ class TestRuntimeIntegration:
 
         # Check audit log for rate-limit detection
         audit = runtime.get_audit_log()
-        rate_limit_events = [
-            e for e in audit if "rate_limit" in str(e).lower()
-        ]
+        rate_limit_events = [e for e in audit if "rate_limit" in str(e).lower()]
         assert len(rate_limit_events) > 0
 
     @pytest.mark.asyncio

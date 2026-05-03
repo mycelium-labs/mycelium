@@ -170,9 +170,7 @@ class TestErrorHandling:
         assert is_rate_limit is False
 
     def test_custom_rate_limit_pattern(self):
-        policy = InvalidationPolicy(
-            rate_limit_patterns=[r"quota.*exceeded", r"too.*many"]
-        )
+        policy = InvalidationPolicy(rate_limit_patterns=[r"quota.*exceeded", r"too.*many"])
         cache = ContextCache(policy)
 
         error1 = Exception("quota exceeded for this user")

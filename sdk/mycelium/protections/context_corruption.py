@@ -23,12 +23,14 @@ from uuid import uuid4
 
 class Criticality(Enum):
     """Importance level of a context entry."""
+
     LOW = "low"
     HIGH = "high"
 
 
 class ContextSegmentation(Enum):
     """How to partition context to prevent cross-contamination."""
+
     ENTITY = "entity"
     SOURCE = "source"
     BOTH = "both"
@@ -36,6 +38,7 @@ class ContextSegmentation(Enum):
 
 class InvalidationReason(Enum):
     """Why a context entry was invalidated."""
+
     STALE = "stale"  # Exceeded TTL
     ERROR = "error"  # Source tool returned error
     REPEATED_READ = "repeated_read"  # HIGH criticality, read 2+ times
@@ -46,6 +49,7 @@ class InvalidationReason(Enum):
 @dataclass(frozen=True)
 class ContextEntryVersion:
     """Immutable version of a context entry. Can never be modified."""
+
     version_id: str
     value: Any
     source: str
@@ -59,6 +63,7 @@ class ContextEntryVersion:
 @dataclass
 class ContextEntryHistory:
     """Complete lineage of a context entry across all versions."""
+
     name: str
     source: str
     entity_id: str | None
@@ -87,6 +92,7 @@ class ContextEntryHistory:
 @dataclass
 class InvalidationPolicy:
     """Rules for when and how context expires."""
+
     default_ttl_steps: int = 5
     criticality_recheck_threshold: int = 2
     segmentation: ContextSegmentation = ContextSegmentation.BOTH
@@ -106,6 +112,7 @@ class InvalidationPolicy:
 @dataclass
 class AccessDecision:
     """Result of a context access attempt."""
+
     value: Any | None
     should_refetch: bool
     reason: str | None
@@ -179,9 +186,7 @@ class ContextCache:
 
         # Create or update history
         if key not in self._entries:
-            self._entries[key] = ContextEntryHistory(
-                name=name, source=source, entity_id=entity_id
-            )
+            self._entries[key] = ContextEntryHistory(name=name, source=source, entity_id=entity_id)
 
         self._entries[key].add_version(new_version)
 
@@ -349,19 +354,13 @@ class ContextCache:
         keys_to_remove = []
         for key, history in self._entries.items():
             current = history.current_version()
-            if current.source == source and (
-                entity_id is None or current.entity_id == entity_id
-            ):
+            if current.source == source and (entity_id is None or current.entity_id == entity_id):
                 keys_to_remove.append(key)
 
         # Invalidate them
         for key in keys_to_remove:
             history = self._entries[key]
-            reason = (
-                InvalidationReason.RATE_LIMITED
-                if is_rate_limit
-                else InvalidationReason.ERROR
-            )
+            reason = InvalidationReason.RATE_LIMITED if is_rate_limit else InvalidationReason.ERROR
             history.record_invalidation(reason)
 
             self._log_event(

@@ -61,9 +61,7 @@ class CrewAIContextProtection:
 
         self.runtime.register_tools([decorated])
 
-    async def call_tool_protected(
-        self, name: str, func: Callable, **kwargs
-    ) -> Any:
+    async def call_tool_protected(self, name: str, func: Callable, **kwargs) -> Any:
         """Call a tool through protection."""
         return await self.runtime.call_tool(name, func, **kwargs)
 
@@ -79,9 +77,7 @@ class CrewAIContextProtection:
 
         hits = len([e for e in audit if e["event_type"] == "get_hit"])
         misses = len(
-            [e for e in audit
-             if "get_" in e["event_type"]
-             and e["event_type"] != "get_hit"]
+            [e for e in audit if "get_" in e["event_type"] and e["event_type"] != "get_hit"]
         )
 
         return {
@@ -118,9 +114,7 @@ class CrewAIIntegration:
         """Register all tools with protection."""
         critical_tools = critical_tools or []
         for name, func in tools.items():
-            self.protection.register_tool(
-                name, func, critical=(name in critical_tools)
-            )
+            self.protection.register_tool(name, func, critical=(name in critical_tools))
 
     def register_agent(self, agent_name: str, agent: Any) -> None:
         """Register an agent for tracking."""
