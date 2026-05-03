@@ -13,6 +13,7 @@ Tests ContextCache under extreme load:
 
 import asyncio
 import time
+from typing import Any
 
 import psutil
 import pytest
@@ -26,19 +27,19 @@ from mycelium.protections import ContextSegmentation, tool
 
 # Mock tools for stress testing
 @tool(critical=False, invalidate_after_steps=10)
-async def fetch_data(entity_id: str, index: int) -> dict:
+async def fetch_data(entity_id: str, index: int) -> dict[str, Any]:
     """Fetch data for stress testing."""
     return {"entity_id": entity_id, "index": index, "data": f"data_{index}"}
 
 
 @tool(critical=True, entity_param="entity_id", invalidate_after_steps=5)
-async def get_entity_state(entity_id: str) -> dict:
+async def get_entity_state(entity_id: str) -> dict[str, Any]:
     """Get entity state (critical)."""
     return {"entity_id": entity_id, "state": "active", "timestamp": time.time()}
 
 
 @tool(critical=False, invalidate_after_steps=1)
-async def always_fresh() -> dict:
+async def always_fresh() -> dict[str, Any]:
     """Tool that's always fresh."""
     return {"timestamp": time.time()}
 
@@ -252,7 +253,7 @@ class TestCacheHitRate:
         runtime.register_tools([fetch_data])
 
         # Access same entity repeatedly
-        for step in range(100):
+        for _ in range(100):
             await runtime.call_tool("fetch_data", fetch_data, entity_id="entity_0", index=0)
             runtime.advance_step()
 
@@ -335,7 +336,7 @@ class TestCorrectnesUnderStress:
         runtime.register_tools([get_entity_state])
 
         async def entity_thread(entity_id: str):
-            for step in range(100):
+            for _ in range(100):
                 result = await runtime.call_tool(
                     "get_entity_state", get_entity_state, entity_id=entity_id
                 )

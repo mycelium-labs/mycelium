@@ -68,7 +68,7 @@ class ContextEntryHistory:
     source: str
     entity_id: str | None
     versions: list[ContextEntryVersion] = field(default_factory=list)
-    access_history: list[tuple[int, int]] = field(default_factory=list)  # (step, time)
+    access_history: list[tuple[int, float]] = field(default_factory=list)  # (step, time)
     invalidation_reasons: list[InvalidationReason] = field(default_factory=list)
 
     def current_version(self) -> ContextEntryVersion | None:

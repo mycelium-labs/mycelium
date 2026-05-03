@@ -47,7 +47,7 @@ class SmolagentsContextProtection:
     def register_tool(
         self,
         name: str,
-        func: Callable,
+        func: Callable[..., Any],
         critical: bool = False,
         invalidate_after_steps: int = 5,
         entity_param: str | None = None,
@@ -61,7 +61,7 @@ class SmolagentsContextProtection:
 
         self.runtime.register_tools([decorated])
 
-    async def call_tool_protected(self, name: str, func: Callable, **kwargs) -> Any:
+    async def call_tool_protected(self, name: str, func: Callable[..., Any], **kwargs: Any) -> Any:
         """Call a tool through protection."""
         return await self.runtime.call_tool(name, func, **kwargs)
 
@@ -88,7 +88,7 @@ class SmolagentsContextProtection:
             "actions": self.action_counter,
         }
 
-    def get_audit_log(self) -> list:
+    def get_audit_log(self) -> list[dict[str, Any]]:
         """Get complete audit trail."""
         return self.runtime.get_audit_log()
 
@@ -110,7 +110,7 @@ class SmolagentsIntegration:
 
     def register_tools(
         self,
-        tools: dict[str, Callable],
+        tools: dict[str, Callable[..., Any]],
         critical_tools: list[str] | None = None,
     ) -> None:
         """Register all tools with protection."""
