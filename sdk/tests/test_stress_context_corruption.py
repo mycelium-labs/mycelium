@@ -16,7 +16,7 @@ import time
 import psutil
 import pytest
 from typing import List
-from mycelium.protections import tool, Criticality, ContextSegmentation
+from mycelium.protections import tool, ContextSegmentation
 from mycelium.core.runtime_context_corruption import (
     AgentRuntimeWithContextProtection,
     InvalidationPolicy,
@@ -83,7 +83,8 @@ class TestConcurrentAccess:
 
         assert len(results) == 1000
         assert all(r is not None for r in results)
-        print(f"\n1000 concurrent calls completed in {elapsed:.2f}s ({1000/elapsed:.0f} ops/sec)")
+        throughput = 1000 / elapsed
+        print(f"\n1000 concurrent calls completed in {elapsed:.2f}s ({throughput:.0f} ops/sec)")
 
 
 class TestLargeContext:
@@ -118,9 +119,11 @@ class TestLargeContext:
         lookup_time = time.time() - start
         mem_after = process.memory_info().rss / 1024 / 1024  # MB
 
+        mem_delta = mem_after - mem_before
+        lookup_ms = lookup_time * 1000
         print(
             f"\n10K entries: {mem_before:.0f}MB → {mem_after:.0f}MB "
-            f"(+{mem_after - mem_before:.0f}MB), lookup time: {lookup_time*1000:.1f}ms for 100 accesses"
+            f"(+{mem_delta:.0f}MB), lookup time: {lookup_ms:.1f}ms per 100 accesses"
         )
 
     @pytest.mark.asyncio
@@ -167,16 +170,17 @@ class TestLongRunningAgent:
         for step in range(1000):
             # Call tools
             if step % 100 == 0:
-                result = await runtime.call_tool(
+                await runtime.call_tool(
                     "get_entity_state", get_entity_state, entity_id="entity_0"
                 )
-            result = await runtime.call_tool(
+            await runtime.call_tool(
                 "fetch_data", fetch_data, entity_id="entity_0", index=step
             )
             runtime.advance_step()
 
         elapsed = time.time() - start
-        print(f"\n1000 steps completed in {elapsed:.2f}s ({1000/elapsed:.0f} steps/sec)")
+        throughput = 1000 / elapsed
+        print(f"\n1000 steps completed in {elapsed:.2f}s ({throughput:.0f} steps/sec)")
 
 
 class TestRapidEntityChurn:
@@ -237,7 +241,7 @@ class TestMemoryPressure:
                 mem = process.memory_info().rss / 1024 / 1024
                 mem_samples.append(mem)
 
-        print(f"\nMemory growth over 5000 steps:")
+        print("\nMemory growth over 5000 steps:")
         for i, mem in enumerate(mem_samples):
             print(f"  Step {i*500}: {mem:.0f}MB")
 
@@ -273,7 +277,8 @@ class TestCacheHitRate:
         total_gets = len([e for e in audit if "get_" in e["event_type"]])
 
         hit_rate = hits / total_gets if total_gets > 0 else 0
-        print(f"\nSequential access: {hit_rate*100:.1f}% hit rate ({hits}/{total_gets})")
+        hit_pct = hit_rate * 100
+        print(f"\nSequential access: {hit_pct:.1f}% hit rate ({hits}/{total_gets})")
 
     @pytest.mark.asyncio
     async def test_hit_rate_random(self):
@@ -330,7 +335,8 @@ class TestInvalidationThroughput:
             )
         elapsed = time.time() - start
 
-        print(f"\nInvalidate 10K entries: {elapsed:.3f}s ({10_000/elapsed:.0f} ops/sec)")
+        throughput = 10_000 / elapsed
+        print(f"\nInvalidate 10K entries: {elapsed:.3f}s ({throughput:.0f} ops/sec)")
 
 
 class TestCorrectnesUnderStress:
