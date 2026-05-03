@@ -46,44 +46,55 @@ Complete proof that AF-006 is 100% prevented.
 
 ---
 
-## 📚 Full Scope
+## 📚 Full Scope: 9 Agent Failure Modes
 
-**Mycelium** is organized into multiple research and implementation areas:
+**Mycelium** documents and protects against 9 distinct failure modes observed in production AI agents:
 
-### 1. **AF-006 Context Corruption Protection** (Current Focus) ✅
-- Production Python SDK with framework integrations
-- Comprehensive test suite (600+ tests)
-- Real-world validation via comparison agents
-- **Status**: Complete, production-ready
+| # | Mode | Description | Frequency | Status |
+|---|------|-------------|-----------|--------|
+| **AF-001** | Hallucination Cascade | Agent confidently acts on fabricated facts | 36 | 📋 Documented |
+| **AF-002** | Observability Black Hole | Actions leave no trace; debugging impossible | 304 | 🔧 v1 SDK |
+| **AF-003** | Infinite Reasoning Loops | Same cycle repeats; no progress | 218 | 📋 Documented |
+| **AF-004** | Tool Misuse | Invalid inputs or outside scope | 575 | 🔧 v1 SDK |
+| **AF-005** | Goal Misalignment | Optimizes for proxy, not user intent | 177 | 📋 Documented |
+| **AF-006** | **Context Corruption** | **Stale/poisoned context → wrong picture** | **501** | **✅ Complete** |
+| **AF-007** | Premature Termination | Stops early; partial state as final | 415 | 📋 Documented |
+| **AF-008** | Cascading Permission | Narrow perms escalate beyond intent | 9 | 📋 Documented |
+| **AF-009** | Instruction Injection | Untrusted content hijacks instructions | 22 | 📋 Documented |
 
-### 2. **Incident Documentation** (`/incidents`)
-- Real failure modes from production agents (Cline, CrewAI, LangGraph)
-- Synthetic reproducers for testing
-- Analysis of root causes
+**Frequency** = observed occurrences in Hugging Face agent failure dataset (`ndileep/mycelium-agent-failures`).
 
-### 3. **Research** (`/research`)
-- Tag frequency analysis
-- Failure mode documentation
-- Scope definition for agent reliability
+### Repository Organization
 
-### 4. **Benchmarking** (`/benchmarks`)
-- Performance testing of protection mechanisms
-- Throughput measurements (68K-235K ops/sec)
-- Concurrent access validation
+1. **Incident Documentation** (`/incidents/tagged`)
+   - Real failure modes from production agents (Cline, CrewAI, LangGraph)
+   - Detailed analysis for all 9 AF modes
+   - Canonical specs in `AF-*.md` files
 
-### 5. **Examples & Integration** (`/examples`)
-- Working implementations for 5 frameworks:
-  - LangGraph
-  - CrewAI
-  - AutoGen
-  - OpenAI Agents SDK
-  - Smolagents
+2. **Research** (`/research`)
+   - `failure_modes.md` — Index of all 9 modes
+   - `v1-scope.md` — Implementation roadmap (AF-006, AF-004, AF-002)
+   - Tag frequency analysis and dataset correlation
 
-### 6. **Documentation** (Root level)
-- `LOG.md` — Session history and progress
-- `COMPLETION-STATUS.md` — Phase-by-phase completion tracking
-- `PHASE-4-5-SUMMARY.md` — Latest implementation summary
-- `DOGFOODING-RESULTS.md` — Real-world validation results
+3. **SDK Implementation** (`/sdk`)
+   - **AF-006**: Complete, production-ready ✅
+     - Core library (ContextCache, decorators, runtime)
+     - 5 framework integrations
+     - 600+ test cases
+     - Real-world comparison agent validation
+   - **AF-004**: Planned
+   - **AF-002**: Planned
+
+4. **Testing & Validation**
+   - Unit tests, integration tests, stress tests
+   - Benchmarking (`/benchmarks`)
+   - Performance validation (68K-235K ops/sec)
+   - Real incident reproducers
+
+5. **Examples & Documentation** (`/examples`)
+   - Working integrations for 5 frameworks
+   - Comprehensive proof documentation (5 proof files)
+   - Setup guides and checklists
 
 ---
 
@@ -338,20 +349,27 @@ python main.py
 
 ## 🎯 Project Status
 
-**AF-006 Context Corruption Protection**: ✅ **Complete & Production-Ready**
-- Core library fully implemented
-- 5 framework integrations tested
-- 600+ test cases all passing
+**AF-006 (Context Corruption)**: ✅ **Complete & Production-Ready**
+- Core library fully implemented and tested
+- 5 framework integrations (LangGraph, CrewAI, AutoGen, OpenAI Agents, Smolagents)
+- 600+ test cases (47 direct + 500+ property-based + 12 adversarial)
 - Real-world comparison agent validation
-- Comprehensive documentation
+- Comprehensive proof documentation (5 files)
 
-**Research & Documentation**: ✅ **Ongoing**
-- Incident collection and analysis
-- Framework integration patterns
-- Performance benchmarking
-- Failure mode documentation
+**AF-004 & AF-002**: 🔧 **Planned for v2 SDK**
+- AF-004 (Tool Misuse) — 575 occurrences
+- AF-002 (Observability Black Hole) — 304 occurrences
+- Design phase underway
+- Will follow AF-006 implementation pattern
+
+**All 9 Failure Modes**: 📋 **Documented**
+- Complete incident analysis for each mode
+- Real examples from production agents
+- Frequency data from Hugging Face dataset
 
 **Next Steps**:
-- Extend to other failure modes beyond AF-006
-- Optimize protection mechanisms
-- Community validation and feedback
+1. Deploy AF-006 to production users
+2. Implement AF-004 protection (v2 SDK)
+3. Implement AF-002 protection (v2 SDK)
+4. Extend to remaining failure modes
+5. Community validation and feedback
