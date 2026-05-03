@@ -220,12 +220,19 @@ Comparison agent showing practical AF-006 protection:
 ## 📊 Proof by the Numbers
 
 ```
-Total Test Cases           1,000+
-├─ Real Failures          507 cases  (documented AF-006 from ndileep/mycelium-agent-failures)
+Total Test Cases           1,100+
+├─ Real Failures Loaded   507 cases  (documented AF-006 from ndileep/mycelium-agent-failures)
+├─ Scenario Reproductions 30 cases   (actual failure scenarios: 10 stale + 10 cross-entity + 10 error)
 ├─ Direct Tests           47 cases
 ├─ Property-Based         500+ cases (hypothesis-generated)
 ├─ Adversarial           12 cases
 └─ Stress                100K+ operations
+
+Real Failure Scenario Reproduction (actual condition simulation)
+├─ Stale Data Prevention           10/10 (100%) ✅
+├─ Cross-Entity Prevention         10/10 (100%) ✅
+├─ Error Invalidation Prevention   10/10 (100%) ✅
+└─ Total Reproduced & Prevented    30/30 (100%) ✅
 
 Real Failure Coverage (507 documented failures across 10 frameworks)
 ├─ Stale Data            233 (46.0%) — blocked by TTL enforcement ✅
@@ -245,9 +252,9 @@ Synthetic Test Coverage
 └─ Error Invalidation     100% ✅
 
 Real-World Validation
-├─ Scenarios              4 synthetic + 507 real failures
+├─ Scenarios              4 synthetic + 30 reproduced + 507 real failures
 ├─ Hit Rate Change        67% → 33% (forced freshness)
-└─ Data Freshness         ⚠️ STALE → ✅ GUARANTEED (all 507 failure types)
+└─ Data Freshness         ⚠️ STALE → ✅ GUARANTEED (all failure types tested)
 ```
 
 ---
