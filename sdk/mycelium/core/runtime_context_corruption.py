@@ -41,7 +41,7 @@ class ToolCallContext:
     """Context for a single tool invocation."""
 
     tool_name: str
-    tool_func: Callable
+    tool_func: Callable[..., Any]
     tool_kwargs: dict[str, Any]
     metadata: ToolMetadata | None
     entity_id: str | None

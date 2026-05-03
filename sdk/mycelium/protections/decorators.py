@@ -93,7 +93,9 @@ def tool(  # type: ignore[reportMissingTypeArguments]
             return api.get("/users")
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(
+        func: Callable[..., Any],
+    ) -> Callable[..., Any]:
         import inspect
 
         # Validate inputs
