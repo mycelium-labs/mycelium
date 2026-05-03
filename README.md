@@ -38,6 +38,7 @@ Complete proof that AF-006 is 100% prevented.
 
 | File | Purpose | Count |
 |------|---------|-------|
+| **[AF006_FAILURE_CATALOG.md](https://github.com/mycelium-labs/agent-test-AF006/blob/main/AF006_FAILURE_CATALOG.md)** | **Real examples from all 507 failures with GitHub links** | **507 documented cases** |
 | **tests/test_af006_real_failures.py** | **Real documented failures (HF dataset)** | **507 cases** |
 | **tests/test_af006_scenario_reproduction.py** | **Failure scenario reproducers** | **30 cases (10 stale + 10 cross-entity + 10 error)** |
 | **tests/test_af006_framework_integration.py** | **Framework adapter tests** | **15 (5 frameworks × 3 scenarios)** |
