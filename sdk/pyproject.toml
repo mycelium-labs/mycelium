@@ -23,6 +23,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pre-commit",
+    "psutil",
 ]
 
 [tool.ruff]
