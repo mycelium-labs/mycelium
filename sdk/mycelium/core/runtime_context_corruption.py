@@ -86,7 +86,9 @@ class AgentRuntimeWithContextProtection:
         self.verbose = verbose
         self.current_step = 0
 
-    def register_tools(self, tools: list[Callable]) -> None:
+    def register_tools(  # type: ignore[reportMissingTypeArgument]
+        self, tools: list[Callable[..., Any]]
+    ) -> None:
         """Register @tool-decorated functions."""
         for tool in tools:
             if hasattr(tool, "_mycelium_tool_metadata"):
@@ -100,8 +102,8 @@ class AgentRuntimeWithContextProtection:
     async def call_tool(
         self,
         tool_name: str,
-        tool_func: Callable,
-        **tool_kwargs,
+        tool_func: Callable[..., Any],
+        **tool_kwargs: Any,
     ) -> Any:
         """
         Call a tool with context corruption protection.
@@ -156,7 +158,7 @@ class AgentRuntimeWithContextProtection:
             )
 
             ctx.cached_value = decision.value
-            ctx.reason = decision.reason
+            ctx.reason = decision.reason  # type: ignore[reportAssignmentType]
 
             if decision.should_refetch:
                 ctx.action = RefetchAction.REFETCH
@@ -237,7 +239,7 @@ class AgentRuntimeWithContextProtection:
         """Get complete audit trail of cache operations."""
         return self.cache.get_audit_log()
 
-    async def _call_tool_async(self, tool_func: Callable, kwargs: dict) -> Any:
+    async def _call_tool_async(self, tool_func: Callable[..., Any], kwargs: dict[str, Any]) -> Any:
         """Call tool function, handling both sync and async."""
         if inspect.iscoroutinefunction(tool_func):
             return await tool_func(**kwargs)
@@ -246,7 +248,7 @@ class AgentRuntimeWithContextProtection:
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, lambda: tool_func(**kwargs))
 
-    def _log_cache_decision(self, ctx: ToolCallContext, decision) -> None:
+    def _log_cache_decision(self, ctx: ToolCallContext, decision: Any) -> None:
         """Log cache decision for visibility."""
         status = "HIT" if ctx.action == RefetchAction.USE_CACHE else "MISS/REFETCH"
         print(
@@ -274,7 +276,7 @@ class AgentExecutor:
 
     def __init__(
         self,
-        agent_func: Callable,
+        agent_func: Callable[..., Any],
         runtime: AgentRuntimeWithContextProtection,
     ):
         self.agent_func = agent_func

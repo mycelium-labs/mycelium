@@ -32,7 +32,7 @@ class AutoGenContextProtection:
     def register_tool(
         self,
         name: str,
-        func: Callable,
+        func: Callable[..., Any],
         critical: bool = False,
         invalidate_after_steps: int = 5,
     ) -> None:
@@ -43,7 +43,7 @@ class AutoGenContextProtection:
         )(func)
         self.runtime.register_tools([decorated])
 
-    async def call_tool_protected(self, name: str, func: Callable, **kwargs) -> Any:
+    async def call_tool_protected(self, name: str, func: Callable[..., Any], **kwargs: Any) -> Any:
         """Call tool through protection."""
         return await self.runtime.call_tool(name, func, **kwargs)
 
@@ -68,7 +68,7 @@ class AutoGenContextProtection:
             "messages_processed": self.message_counter,
         }
 
-    def get_audit_log(self) -> list:
+    def get_audit_log(self) -> list[dict[str, Any]]:
         """Get complete audit trail."""
         return self.runtime.get_audit_log()
 
@@ -85,8 +85,8 @@ class AutoGenIntegration:
 
     def register_tools(
         self,
-        tools: dict[str, Callable],
-        critical_tools: list | None = None,
+        tools: dict[str, Callable[..., Any]],
+        critical_tools: list[str] | None = None,
     ) -> None:
         """Register tools for AutoGen agents."""
         critical_tools = critical_tools or []

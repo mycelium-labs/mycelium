@@ -11,6 +11,7 @@ Verifies:
 """
 
 import asyncio
+from typing import Any
 
 import pytest
 
@@ -23,17 +24,17 @@ from mycelium.protections import ContextSegmentation, ToolRegistry, tool
 
 # Mock tools for testing
 @tool(critical=True, entity_param="user_id", invalidate_after_steps=5)
-async def fetch_user(user_id: str) -> dict:
+async def fetch_user(user_id: str) -> dict[str, Any]:
     return {"id": user_id, "name": f"User {user_id}", "status": "active"}
 
 
 @tool(critical=False, invalidate_after_steps=10)
-async def search_docs(query: str) -> list[dict]:
+async def search_docs(query: str) -> list[dict[str, Any]]:
     return [{"id": f"doc_{i}", "title": f"Doc {i}"} for i in range(3)]
 
 
 @tool(critical=True, invalidate_after_steps=1)
-async def get_quota() -> dict:
+async def get_quota() -> dict[str, Any]:
     return {"requests_remaining": 1000}
 
 
@@ -186,7 +187,7 @@ class TestRuntimeIntegration:
 
     @pytest.mark.asyncio
     async def test_tool_error_invalidation(self):
-        async def failing_tool(user_id: str) -> dict:
+        async def failing_tool(user_id: str) -> dict[str, Any]:
             raise Exception("API connection failed")
 
         failing = tool(critical=False, entity_param="user_id")(failing_tool)
@@ -204,7 +205,7 @@ class TestRuntimeIntegration:
 
     @pytest.mark.asyncio
     async def test_rate_limit_error_detection(self):
-        async def rate_limited_tool() -> dict:
+        async def rate_limited_tool() -> dict[str, Any]:
             raise Exception("Rate limit exceeded (429)")
 
         tool_func = tool(critical=False)(rate_limited_tool)

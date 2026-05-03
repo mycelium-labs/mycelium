@@ -54,7 +54,7 @@ class LangGraphContextProtection:
     def register_tool(
         self,
         name: str,
-        func: Callable,
+        func: Callable[..., Any],
         critical: bool = False,
         invalidate_after_steps: int = 5,
         entity_param: str | None = None,
@@ -68,7 +68,7 @@ class LangGraphContextProtection:
 
         self.runtime.register_tools([decorated])
 
-    async def call_tool(self, name: str, func: Callable, **kwargs) -> Any:
+    async def call_tool(self, name: str, func: Callable[..., Any], **kwargs: Any) -> Any:
         """Call a tool through the protected runtime."""
         return await self.runtime.call_tool(name, func, **kwargs)
 
@@ -81,16 +81,16 @@ class LangGraphContextProtection:
         """Get current cache state."""
         return self.runtime.get_cache_snapshot()
 
-    def get_audit_log(self) -> list:
+    def get_audit_log(self) -> list[dict[str, Any]]:
         """Get complete audit trail."""
         return self.runtime.get_audit_log()
 
 
 def wrap_langgraph_node(
-    node_func: Callable,
+    node_func: Callable[..., Any],
     protection: LangGraphContextProtection,
-    tools_to_protect: dict[str, Callable] | None = None,
-) -> Callable:
+    tools_to_protect: dict[str, Callable[..., Any]] | None = None,
+) -> Callable[..., Any]:
     """Wrap a LangGraph node function to add context protection."""
     if tools_to_protect:
         for name, func in tools_to_protect.items():
@@ -123,7 +123,7 @@ class LangGraphIntegration:
         self.protection = LangGraphContextProtection(policy=policy, verbose=verbose)
 
     def register_tools(
-        self, tools: dict[str, Callable], critical_tools: list | None = None
+        self, tools: dict[str, Callable[..., Any]], critical_tools: list[str] | None = None
     ) -> None:
         """Register all tools with protection."""
         critical_tools = critical_tools or []
