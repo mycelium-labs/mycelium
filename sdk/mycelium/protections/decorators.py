@@ -10,9 +10,10 @@ Developers use these to declare:
 This metadata is read by the runtime to enforce context invalidation rules.
 """
 
-from typing import Optional, Callable, Any, Protocol
+from collections.abc import Callable
+from dataclasses import dataclass
 from functools import wraps
-from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -21,15 +22,15 @@ class ToolMetadata:
     func_name: str
     critical: bool = False
     invalidate_after_steps: int = 5
-    entity_param: Optional[str] = None
-    rate_limit_pattern: Optional[str] = None
+    entity_param: str | None = None
+    rate_limit_pattern: str | None = None
 
 
 def tool(
     critical: bool = False,
     invalidate_after_steps: int = 5,
-    entity_param: Optional[str] = None,
-    rate_limit_pattern: Optional[str] = None,
+    entity_param: str | None = None,
+    rate_limit_pattern: str | None = None,
 ) -> Callable:
     """
     Mark a tool function with context corruption protection rules.
@@ -212,13 +213,13 @@ class ToolRegistry:
         metadata = func._mycelium_tool_metadata
         self._tools[func.__name__] = metadata
 
-    def get(self, tool_name: str) -> Optional[ToolMetadata]:
+    def get(self, tool_name: str) -> ToolMetadata | None:
         """Get metadata for a tool by name."""
         return self._tools.get(tool_name)
 
     def extract_entity_id(
         self, tool_name: str, kwargs: dict[str, Any]
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Extract entity_id from tool call arguments.
 

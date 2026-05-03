@@ -11,12 +11,12 @@ Verifies:
 """
 
 import pytest
+
 from mycelium.protections.context_corruption import (
     ContextCache,
-    InvalidationPolicy,
     ContextSegmentation,
     Criticality,
-    InvalidationReason,
+    InvalidationPolicy,
 )
 
 

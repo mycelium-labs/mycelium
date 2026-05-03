@@ -17,9 +17,8 @@ import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional, Callable, Protocol
+from typing import Any
 from uuid import uuid4
-from datetime import datetime
 
 
 class Criticality(Enum):
@@ -50,7 +49,7 @@ class ContextEntryVersion:
     version_id: str
     value: Any
     source: str
-    entity_id: Optional[str]
+    entity_id: str | None
     created_at_step: int
     created_at_time: float
     criticality: Criticality
@@ -62,12 +61,12 @@ class ContextEntryHistory:
     """Complete lineage of a context entry across all versions."""
     name: str
     source: str
-    entity_id: Optional[str]
+    entity_id: str | None
     versions: list[ContextEntryVersion] = field(default_factory=list)
     access_history: list[tuple[int, int]] = field(default_factory=list)  # (step, time)
     invalidation_reasons: list[InvalidationReason] = field(default_factory=list)
 
-    def current_version(self) -> Optional[ContextEntryVersion]:
+    def current_version(self) -> ContextEntryVersion | None:
         """Get the latest version."""
         return self.versions[-1] if self.versions else None
 
@@ -107,10 +106,10 @@ class InvalidationPolicy:
 @dataclass
 class AccessDecision:
     """Result of a context access attempt."""
-    value: Optional[Any]
+    value: Any | None
     should_refetch: bool
-    reason: Optional[str]
-    current_version: Optional[ContextEntryVersion]
+    reason: str | None
+    current_version: ContextEntryVersion | None
     access_count: int
     age_steps: int
 
@@ -137,9 +136,9 @@ class ContextCache:
         name: str,
         value: Any,
         source: str,
-        entity_id: Optional[str] = None,
+        entity_id: str | None = None,
         criticality: Criticality = Criticality.LOW,
-        invalidate_after_steps: Optional[int] = None,
+        invalidate_after_steps: int | None = None,
     ) -> str:
         """
         Add a context entry with a new version.
@@ -205,7 +204,7 @@ class ContextCache:
         self,
         name: str,
         source: str,
-        entity_id: Optional[str] = None,
+        entity_id: str | None = None,
     ) -> AccessDecision:
         """
         Retrieve a context entry and determine if it needs refetching.
@@ -330,7 +329,7 @@ class ContextCache:
         self,
         source: str,
         error: Exception,
-        entity_id: Optional[str] = None,
+        entity_id: str | None = None,
     ) -> bool:
         """
         Invalidate all context from a tool that errored.
@@ -392,8 +391,8 @@ class ContextCache:
         return list(self._audit_log)
 
     def get_history(
-        self, name: str, source: str, entity_id: Optional[str] = None
-    ) -> Optional[ContextEntryHistory]:
+        self, name: str, source: str, entity_id: str | None = None
+    ) -> ContextEntryHistory | None:
         """Get complete version history for debugging/audit."""
         key = self._make_key(name, source, entity_id)
         return self._entries.get(key)
@@ -416,7 +415,7 @@ class ContextCache:
                 }
         return snapshot
 
-    def _make_key(self, name: str, source: str, entity_id: Optional[str]) -> str:
+    def _make_key(self, name: str, source: str, entity_id: str | None) -> str:
         """Generate cache key respecting segmentation policy."""
         if self.policy.segmentation == ContextSegmentation.ENTITY:
             return f"{entity_id or 'global'}:{name}"

@@ -10,15 +10,15 @@ Verifies:
 6. Rate-limit detection
 """
 
-import pytest
 import asyncio
 
-from mycelium.protections import tool, ToolRegistry, Criticality, ContextSegmentation
+import pytest
+
 from mycelium.core.runtime_context_corruption import (
     AgentRuntimeWithContextProtection,
     InvalidationPolicy,
-    RefetchAction,
 )
+from mycelium.protections import ContextSegmentation, ToolRegistry, tool
 
 
 # Mock tools for testing
@@ -158,7 +158,7 @@ class TestRuntimeIntegration:
         runtime.register_tools([fetch_user])
 
         # Fetch
-        result1 = await runtime.call_tool("fetch_user", fetch_user, user_id="alice")
+        await runtime.call_tool("fetch_user", fetch_user, user_id="alice")
 
         # Read again (access_count=2, critical=True, should trigger recheck)
         result2 = await runtime.call_tool("fetch_user", fetch_user, user_id="alice")

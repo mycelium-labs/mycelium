@@ -1,14 +1,14 @@
 """Protection modules (AF-* aligned)."""
 
 from .context_corruption import (
+    AccessDecision,
     ContextCache,
     ContextSegmentation,
     Criticality,
     InvalidationPolicy,
     InvalidationReason,
-    AccessDecision,
 )
-from .decorators import tool, protect, ToolRegistry, ToolMetadata
+from .decorators import ToolMetadata, ToolRegistry, protect, tool
 
 __all__ = [
     "ContextCache",

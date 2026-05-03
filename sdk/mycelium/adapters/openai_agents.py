@@ -15,14 +15,14 @@ Usage:
     result = await protection.call_tool_protected(...)
 """
 
-import asyncio
 from collections.abc import Callable
 from typing import Any
-from mycelium.protections import tool, ContextSegmentation
+
 from mycelium.core.runtime_context_corruption import (
     AgentRuntimeWithContextProtection,
     InvalidationPolicy,
 )
+from mycelium.protections import ContextSegmentation, tool
 
 
 class OpenAIAgentsContextProtection:
