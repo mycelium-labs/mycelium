@@ -16,7 +16,8 @@ Usage:
 """
 
 import asyncio
-from typing import Any, Callable, Optional, Dict, List
+from collections.abc import Callable
+from typing import Any
 from mycelium.protections import tool, ContextSegmentation
 from mycelium.core.runtime_context_corruption import (
     AgentRuntimeWithContextProtection,
@@ -29,7 +30,7 @@ class OpenAIAgentsContextProtection:
 
     def __init__(
         self,
-        policy: Optional[InvalidationPolicy] = None,
+        policy: InvalidationPolicy | None = None,
         verbose: bool = False,
     ):
         if policy is None:
@@ -49,7 +50,7 @@ class OpenAIAgentsContextProtection:
         func: Callable,
         critical: bool = False,
         invalidate_after_steps: int = 5,
-        entity_param: Optional[str] = None,
+        entity_param: str | None = None,
     ) -> None:
         """Register a tool for protection."""
         decorated = tool(
@@ -71,13 +72,15 @@ class OpenAIAgentsContextProtection:
         self.runtime.advance_step()
         self.call_counter += 1
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get cache stats for this agent."""
         snapshot = self.runtime.get_cache_snapshot()
         audit = self.runtime.get_audit_log()
 
         hits = len([e for e in audit if e["event_type"] == "get_hit"])
-        misses = len([e for e in audit if "get_" in e["event_type"] and e["event_type"] != "get_hit"])
+        misses = len(
+            [e for e in audit if "get_" in e["event_type"] and e["event_type"] != "get_hit"]
+        )
 
         return {
             "cache_entries": len(snapshot),
@@ -91,7 +94,7 @@ class OpenAIAgentsContextProtection:
         """Get complete audit trail."""
         return self.runtime.get_audit_log()
 
-    def get_cache_snapshot(self) -> Dict[str, Any]:
+    def get_cache_snapshot(self) -> dict[str, Any]:
         """Get current cache state."""
         return self.runtime.get_cache_snapshot()
 
@@ -101,7 +104,7 @@ class OpenAIAgentsIntegration:
 
     def __init__(
         self,
-        policy: Optional[InvalidationPolicy] = None,
+        policy: InvalidationPolicy | None = None,
         verbose: bool = False,
     ):
         """Initialize OpenAI Agents integration."""
@@ -109,8 +112,8 @@ class OpenAIAgentsIntegration:
 
     def register_tools(
         self,
-        tools: Dict[str, Callable],
-        critical_tools: Optional[List[str]] = None,
+        tools: dict[str, Callable],
+        critical_tools: list[str] | None = None,
     ) -> None:
         """Register all tools with protection."""
         critical_tools = critical_tools or []
@@ -123,6 +126,6 @@ class OpenAIAgentsIntegration:
         """Get the underlying protection instance."""
         return self.protection
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get agent statistics."""
         return self.protection.get_stats()

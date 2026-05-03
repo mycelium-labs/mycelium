@@ -1,6 +1,7 @@
 """AutoGen Integration for AF-006 Context Corruption Protection"""
 
-from typing import Any, Callable, Optional, Dict
+from collections.abc import Callable
+from typing import Any
 from mycelium.protections import tool, ContextSegmentation
 from mycelium.core.runtime_context_corruption import (
     AgentRuntimeWithContextProtection,
@@ -13,7 +14,7 @@ class AutoGenContextProtection:
 
     def __init__(
         self,
-        policy: Optional[InvalidationPolicy] = None,
+        policy: InvalidationPolicy | None = None,
         verbose: bool = False,
     ):
         if policy is None:
@@ -50,12 +51,14 @@ class AutoGenContextProtection:
         self.runtime.advance_step()
         self.message_counter += 1
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get AutoGen conversation stats."""
         snapshot = self.runtime.get_cache_snapshot()
         audit = self.runtime.get_audit_log()
         hits = len([e for e in audit if e["event_type"] == "get_hit"])
-        misses = len([e for e in audit if "get_" in e["event_type"] and e["event_type"] != "get_hit"])
+        misses = len(
+            [e for e in audit if "get_" in e["event_type"] and e["event_type"] != "get_hit"]
+        )
         return {
             "cache_entries": len(snapshot),
             "cache_hits": hits,
@@ -74,15 +77,15 @@ class AutoGenIntegration:
 
     def __init__(
         self,
-        policy: Optional[InvalidationPolicy] = None,
+        policy: InvalidationPolicy | None = None,
         verbose: bool = False,
     ):
         self.protection = AutoGenContextProtection(policy=policy, verbose=verbose)
 
     def register_tools(
         self,
-        tools: Dict[str, Callable],
-        critical_tools: Optional[list] = None,
+        tools: dict[str, Callable],
+        critical_tools: list | None = None,
     ) -> None:
         """Register tools for AutoGen agents."""
         critical_tools = critical_tools or []
