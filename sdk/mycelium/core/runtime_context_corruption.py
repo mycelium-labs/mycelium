@@ -14,17 +14,18 @@ The developer writes normal agent code. The runtime handles caching transparentl
 
 import asyncio
 import inspect
-from typing import Any, Callable, Optional, Protocol
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from mycelium.protections.context_corruption import (
     ContextCache,
-    InvalidationPolicy,
     ContextSegmentation,
     Criticality,
+    InvalidationPolicy,
 )
-from mycelium.protections.decorators import ToolRegistry, ToolMetadata
+from mycelium.protections.decorators import ToolMetadata, ToolRegistry
 
 
 class RefetchAction(Enum):
@@ -40,9 +41,9 @@ class ToolCallContext:
     tool_name: str
     tool_func: Callable
     tool_kwargs: dict[str, Any]
-    metadata: Optional[ToolMetadata]
-    entity_id: Optional[str]
-    cached_value: Optional[Any]
+    metadata: ToolMetadata | None
+    entity_id: str | None
+    cached_value: Any | None
     action: RefetchAction
     reason: str
 
@@ -67,7 +68,7 @@ class AgentRuntimeWithContextProtection:
 
     def __init__(
         self,
-        policy: Optional[InvalidationPolicy] = None,
+        policy: InvalidationPolicy | None = None,
         verbose: bool = False,
     ):
         if policy is None:
@@ -166,7 +167,7 @@ class AgentRuntimeWithContextProtection:
         # Step 4: Execute or return cache
         if ctx.action == RefetchAction.USE_CACHE:
             if self.verbose:
-                print(f"  → Using cached value")
+                print("  → Using cached value")
             return ctx.cached_value
 
         # Fresh fetch needed
@@ -188,7 +189,7 @@ class AgentRuntimeWithContextProtection:
                 )
 
                 if is_rate_limit and self.verbose:
-                    print(f"  → Rate-limit error detected")
+                    print("  → Rate-limit error detected")
 
             raise
 
@@ -245,7 +246,6 @@ class AgentRuntimeWithContextProtection:
 
     def _log_cache_decision(self, ctx: ToolCallContext, decision) -> None:
         """Log cache decision for visibility."""
-        action_str = ctx.action.value
         status = "HIT" if ctx.action == RefetchAction.USE_CACHE else "MISS/REFETCH"
         print(
             f"[CACHE {status}] {ctx.tool_name}(entity={ctx.entity_id}) "
@@ -319,8 +319,8 @@ async def example_protected_agent(runtime: AgentRuntimeWithContextProtection):
     """
     from examples.context_corruption_usage import (
         fetch_user_profile,
-        search_documents,
         get_api_quota,
+        search_documents,
     )
 
     runtime.register_tools([fetch_user_profile, search_documents, get_api_quota])

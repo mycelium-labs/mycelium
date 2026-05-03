@@ -13,14 +13,15 @@ Tests ContextCache under extreme load:
 
 import asyncio
 import time
+
 import psutil
 import pytest
-from typing import List
-from mycelium.protections import tool, ContextSegmentation
+
 from mycelium.core.runtime_context_corruption import (
     AgentRuntimeWithContextProtection,
     InvalidationPolicy,
 )
+from mycelium.protections import ContextSegmentation, tool
 
 
 # Mock tools for stress testing

@@ -13,13 +13,15 @@ Usage:
 """
 
 import asyncio
-from typing import Any, Callable, Optional, Dict
+from collections.abc import Callable
 from functools import wraps
-from mycelium.protections import tool, ContextSegmentation
+from typing import Any
+
 from mycelium.core.runtime_context_corruption import (
     AgentRuntimeWithContextProtection,
     InvalidationPolicy,
 )
+from mycelium.protections import ContextSegmentation, tool
 
 
 class LangGraphContextProtection:
@@ -35,7 +37,7 @@ class LangGraphContextProtection:
 
     def __init__(
         self,
-        policy: Optional[InvalidationPolicy] = None,
+        policy: InvalidationPolicy | None = None,
         verbose: bool = False,
     ):
         if policy is None:
@@ -55,7 +57,7 @@ class LangGraphContextProtection:
         func: Callable,
         critical: bool = False,
         invalidate_after_steps: int = 5,
-        entity_param: Optional[str] = None,
+        entity_param: str | None = None,
     ) -> None:
         """Register a tool with context protection rules."""
         decorated = tool(
@@ -75,7 +77,7 @@ class LangGraphContextProtection:
         self.runtime.advance_step()
         self.step_counter += 1
 
-    def get_cache_snapshot(self) -> Dict[str, Any]:
+    def get_cache_snapshot(self) -> dict[str, Any]:
         """Get current cache state."""
         return self.runtime.get_cache_snapshot()
 
@@ -87,7 +89,7 @@ class LangGraphContextProtection:
 def wrap_langgraph_node(
     node_func: Callable,
     protection: LangGraphContextProtection,
-    tools_to_protect: Optional[Dict[str, Callable]] = None,
+    tools_to_protect: dict[str, Callable] | None = None,
 ) -> Callable:
     """Wrap a LangGraph node function to add context protection."""
     if tools_to_protect:
@@ -95,7 +97,7 @@ def wrap_langgraph_node(
             protection.register_tool(name, func)
 
     @wraps(node_func)
-    async def wrapped_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    async def wrapped_node(state: dict[str, Any]) -> dict[str, Any]:
         if asyncio.iscoroutinefunction(node_func):
             result = await node_func(state)
         else:
@@ -113,7 +115,7 @@ class LangGraphIntegration:
     def __init__(
         self,
         graph: Any = None,
-        policy: Optional[InvalidationPolicy] = None,
+        policy: InvalidationPolicy | None = None,
         verbose: bool = False,
     ):
         """Initialize LangGraph integration."""
@@ -121,7 +123,7 @@ class LangGraphIntegration:
         self.protection = LangGraphContextProtection(policy=policy, verbose=verbose)
 
     def register_tools(
-        self, tools: Dict[str, Callable], critical_tools: Optional[list] = None
+        self, tools: dict[str, Callable], critical_tools: list | None = None
     ) -> None:
         """Register all tools with protection."""
         critical_tools = critical_tools or []
@@ -134,13 +136,17 @@ class LangGraphIntegration:
         """Get the underlying protection instance."""
         return self.protection
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         snapshot = self.protection.get_cache_snapshot()
         audit = self.protection.get_audit_log()
 
         hits = len([e for e in audit if e["event_type"] == "get_hit"])
-        misses = len([e for e in audit if "get_" in e["event_type"] and e["event_type"] != "get_hit"])
+        misses = len(
+            [e for e in audit
+             if "get_" in e["event_type"]
+             and e["event_type"] != "get_hit"]
+        )
 
         return {
             "cache_entries": len(snapshot),
