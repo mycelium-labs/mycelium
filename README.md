@@ -1,14 +1,16 @@
-# Mycelium: AF-006 Context Corruption Protection for AI Agents
+# Mycelium: Research & Implementation Repository
 
-**Mycelium** is a runtime protection library that prevents context corruption (AF-006) in AI agents. It provides TTL-based cache invalidation, entity segmentation, criticality re-verification, and audit trails to ensure agents use fresh, correct data.
+**Mycelium** is a comprehensive research and implementation repository for AI agent reliability, focusing on documenting failure modes, building protections, and validating solutions across real-world frameworks.
+
+**Current Focus**: Context Corruption (AF-006) protection with production-ready SDK and comprehensive proof.
 
 ---
 
 ## 📂 Repository Structure
 
-### Core Library: `/sdk`
+### Production Library: `/sdk`
 
-The production Python SDK for integrating AF-006 protection into your agents.
+The Python SDK for integrating AF-006 context corruption protection into your agents.
 
 | File | Purpose |
 |------|---------|
@@ -44,7 +46,48 @@ Complete proof that AF-006 is 100% prevented.
 
 ---
 
-## 🚀 Quick Start
+## 📚 Full Scope
+
+**Mycelium** is organized into multiple research and implementation areas:
+
+### 1. **AF-006 Context Corruption Protection** (Current Focus) ✅
+- Production Python SDK with framework integrations
+- Comprehensive test suite (600+ tests)
+- Real-world validation via comparison agents
+- **Status**: Complete, production-ready
+
+### 2. **Incident Documentation** (`/incidents`)
+- Real failure modes from production agents (Cline, CrewAI, LangGraph)
+- Synthetic reproducers for testing
+- Analysis of root causes
+
+### 3. **Research** (`/research`)
+- Tag frequency analysis
+- Failure mode documentation
+- Scope definition for agent reliability
+
+### 4. **Benchmarking** (`/benchmarks`)
+- Performance testing of protection mechanisms
+- Throughput measurements (68K-235K ops/sec)
+- Concurrent access validation
+
+### 5. **Examples & Integration** (`/examples`)
+- Working implementations for 5 frameworks:
+  - LangGraph
+  - CrewAI
+  - AutoGen
+  - OpenAI Agents SDK
+  - Smolagents
+
+### 6. **Documentation** (Root level)
+- `LOG.md` — Session history and progress
+- `COMPLETION-STATUS.md` — Phase-by-phase completion tracking
+- `PHASE-4-5-SUMMARY.md` — Latest implementation summary
+- `DOGFOODING-RESULTS.md` — Real-world validation results
+
+---
+
+## 🚀 Quick Start (AF-006 Protection)
 
 ### 1. **Understand the Problem** (2 min)
 Read: [sdk/README.md#core-concepts](sdk/README.md#core-concepts)
@@ -293,4 +336,22 @@ python main.py
 
 ---
 
-**Status**: AF-006 protection is **100% proven** with 600+ test cases, formal invariants, and real-world validation. ✅
+## 🎯 Project Status
+
+**AF-006 Context Corruption Protection**: ✅ **Complete & Production-Ready**
+- Core library fully implemented
+- 5 framework integrations tested
+- 600+ test cases all passing
+- Real-world comparison agent validation
+- Comprehensive documentation
+
+**Research & Documentation**: ✅ **Ongoing**
+- Incident collection and analysis
+- Framework integration patterns
+- Performance benchmarking
+- Failure mode documentation
+
+**Next Steps**:
+- Extend to other failure modes beyond AF-006
+- Optimize protection mechanisms
+- Community validation and feedback
