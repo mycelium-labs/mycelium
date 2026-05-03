@@ -14,6 +14,10 @@ Template:
 
 ---
 
+## 2026-05-03 — Minimal SDK package (`uv sync` / `pytest`)
+
+- did: **`sdk/pyproject.toml`** declares **httpx**, **pydantic**, **typing-extensions**; **`mycelium`** package submodules get **`__init__.py`** for clean imports; **`sdk/.python-version`** 3.12; **`uv.lock`** generated; **`sdk/README.md`** one-liner workflow.
+
 ## 2026-05-03 — v1 scope (#4): AF-006, AF-004, AF-002
 
 - did: **`scripts/analyze_af_frequency.py`** aggregates HF **`predictions/`** AF counts; **`research/v1-scope.md`** picks **AF-006 / AF-004 / AF-002** vs corpus + v0 hand-tag; **`research/failure_modes.md`** adds frequencies + v1 column.
