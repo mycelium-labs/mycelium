@@ -30,6 +30,7 @@ from mycelium.protections.decorators import ToolMetadata, ToolRegistry
 
 class RefetchAction(Enum):
     """What the runtime should do when a tool is called."""
+
     USE_CACHE = "use_cache"
     REFETCH = "refetch"
     NOT_CACHED = "not_cached"
@@ -38,6 +39,7 @@ class RefetchAction(Enum):
 @dataclass
 class ToolCallContext:
     """Context for a single tool invocation."""
+
     tool_name: str
     tool_func: Callable
     tool_kwargs: dict[str, Any]
@@ -355,7 +357,7 @@ async def example_protected_agent(runtime: AgentRuntimeWithContextProtection):
 
     # Step 5-8: Idle steps
     for i in range(4):
-        print(f"\n[STEP {5+i}] (idle)")
+        print(f"\n[STEP {5 + i}] (idle)")
         runtime.advance_step()
 
     # Step 9: Fetch user again (stale now, should refetch)

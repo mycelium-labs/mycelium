@@ -100,9 +100,7 @@ class TestLargeContext:
         # Fill cache with 10K entries (different entities)
         for i in range(10_000):
             entity_id = f"entity_{i}"
-            await runtime.call_tool(
-                "fetch_data", fetch_data, entity_id=entity_id, index=i
-            )
+            await runtime.call_tool("fetch_data", fetch_data, entity_id=entity_id, index=i)
 
         # Measure memory
         process = psutil.Process()
@@ -112,9 +110,7 @@ class TestLargeContext:
         start = time.time()
         for i in range(100):
             entity_id = f"entity_{i * 100}"
-            result = await runtime.call_tool(
-                "fetch_data", fetch_data, entity_id=entity_id, index=0
-            )
+            result = await runtime.call_tool("fetch_data", fetch_data, entity_id=entity_id, index=0)
             assert result is not None
 
         lookup_time = time.time() - start
@@ -140,9 +136,7 @@ class TestLargeContext:
         print("\nFilling cache with 100K entries...")
         for i in range(100_000):
             entity_id = f"entity_{i}"
-            await runtime.call_tool(
-                "get_entity_state", get_entity_state, entity_id=entity_id
-            )
+            await runtime.call_tool("get_entity_state", get_entity_state, entity_id=entity_id)
             if (i + 1) % 10_000 == 0:
                 print(f"  {i + 1:,} entries cached")
 
@@ -171,12 +165,8 @@ class TestLongRunningAgent:
         for step in range(1000):
             # Call tools
             if step % 100 == 0:
-                await runtime.call_tool(
-                    "get_entity_state", get_entity_state, entity_id="entity_0"
-                )
-            await runtime.call_tool(
-                "fetch_data", fetch_data, entity_id="entity_0", index=step
-            )
+                await runtime.call_tool("get_entity_state", get_entity_state, entity_id="entity_0")
+            await runtime.call_tool("fetch_data", fetch_data, entity_id="entity_0", index=step)
             runtime.advance_step()
 
         elapsed = time.time() - start
@@ -199,9 +189,7 @@ class TestRapidEntityChurn:
         # Create 1000 entities, each with state
         for i in range(1000):
             entity_id = f"entity_{i}"
-            await runtime.call_tool(
-                "get_entity_state", get_entity_state, entity_id=entity_id
-            )
+            await runtime.call_tool("get_entity_state", get_entity_state, entity_id=entity_id)
 
         # Access them randomly
         import random
@@ -232,9 +220,7 @@ class TestMemoryPressure:
         # 5000 steps, monitoring memory
         for step in range(5000):
             entity_id = f"entity_{step % 100}"
-            await runtime.call_tool(
-                "fetch_data", fetch_data, entity_id=entity_id, index=step
-            )
+            await runtime.call_tool("fetch_data", fetch_data, entity_id=entity_id, index=step)
             runtime.advance_step()
 
             # Sample memory every 500 steps
@@ -244,7 +230,7 @@ class TestMemoryPressure:
 
         print("\nMemory growth over 5000 steps:")
         for i, mem in enumerate(mem_samples):
-            print(f"  Step {i*500}: {mem:.0f}MB")
+            print(f"  Step {i * 500}: {mem:.0f}MB")
 
         # Check if memory growth is reasonable
         if len(mem_samples) > 1:
@@ -267,9 +253,7 @@ class TestCacheHitRate:
 
         # Access same entity repeatedly
         for step in range(100):
-            await runtime.call_tool(
-                "fetch_data", fetch_data, entity_id="entity_0", index=0
-            )
+            await runtime.call_tool("fetch_data", fetch_data, entity_id="entity_0", index=0)
             runtime.advance_step()
 
         # Count cache hits in audit log
@@ -294,9 +278,7 @@ class TestCacheHitRate:
         # Random entity access
         for step in range(100):
             entity_id = f"entity_{random.randint(0, 20)}"
-            await runtime.call_tool(
-                "fetch_data", fetch_data, entity_id=entity_id, index=step
-            )
+            await runtime.call_tool("fetch_data", fetch_data, entity_id=entity_id, index=step)
             runtime.advance_step()
 
         # Count cache hits
@@ -305,7 +287,7 @@ class TestCacheHitRate:
         total_gets = len([e for e in audit if "get_" in e["event_type"]])
 
         hit_rate = hits / total_gets if total_gets > 0 else 0
-        print(f"\nRandom access: {hit_rate*100:.1f}% hit rate ({hits}/{total_gets})")
+        print(f"\nRandom access: {hit_rate * 100:.1f}% hit rate ({hits}/{total_gets})")
 
 
 class TestInvalidationThroughput:

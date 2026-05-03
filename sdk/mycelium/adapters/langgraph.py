@@ -128,9 +128,7 @@ class LangGraphIntegration:
         """Register all tools with protection."""
         critical_tools = critical_tools or []
         for name, func in tools.items():
-            self.protection.register_tool(
-                name, func, critical=(name in critical_tools)
-            )
+            self.protection.register_tool(name, func, critical=(name in critical_tools))
 
     def get_protection(self) -> LangGraphContextProtection:
         """Get the underlying protection instance."""
@@ -143,9 +141,7 @@ class LangGraphIntegration:
 
         hits = len([e for e in audit if e["event_type"] == "get_hit"])
         misses = len(
-            [e for e in audit
-             if "get_" in e["event_type"]
-             and e["event_type"] != "get_hit"]
+            [e for e in audit if "get_" in e["event_type"] and e["event_type"] != "get_hit"]
         )
 
         return {

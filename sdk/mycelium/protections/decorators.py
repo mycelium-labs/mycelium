@@ -19,6 +19,7 @@ from typing import Any
 @dataclass
 class ToolMetadata:
     """Metadata attached to a tool function by @tool decorator."""
+
     func_name: str
     critical: bool = False
     invalidate_after_steps: int = 5
@@ -207,9 +208,7 @@ class ToolRegistry:
     def register(self, func: Callable) -> None:
         """Register a @tool-decorated function."""
         if not hasattr(func, "_mycelium_tool_metadata"):
-            raise ValueError(
-                f"Function {func.__name__} is not decorated with @tool"
-            )
+            raise ValueError(f"Function {func.__name__} is not decorated with @tool")
         metadata = func._mycelium_tool_metadata
         self._tools[func.__name__] = metadata
 
@@ -217,9 +216,7 @@ class ToolRegistry:
         """Get metadata for a tool by name."""
         return self._tools.get(tool_name)
 
-    def extract_entity_id(
-        self, tool_name: str, kwargs: dict[str, Any]
-    ) -> str | None:
+    def extract_entity_id(self, tool_name: str, kwargs: dict[str, Any]) -> str | None:
         """
         Extract entity_id from tool call arguments.
 

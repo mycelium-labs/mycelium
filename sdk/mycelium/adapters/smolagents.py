@@ -61,9 +61,7 @@ class SmolagentsContextProtection:
 
         self.runtime.register_tools([decorated])
 
-    async def call_tool_protected(
-        self, name: str, func: Callable, **kwargs
-    ) -> Any:
+    async def call_tool_protected(self, name: str, func: Callable, **kwargs) -> Any:
         """Call a tool through protection."""
         return await self.runtime.call_tool(name, func, **kwargs)
 
@@ -118,9 +116,7 @@ class SmolagentsIntegration:
         """Register all tools with protection."""
         critical_tools = critical_tools or []
         for name, func in tools.items():
-            self.protection.register_tool(
-                name, func, critical=(name in critical_tools)
-            )
+            self.protection.register_tool(name, func, critical=(name in critical_tools))
 
     def get_protection(self) -> SmolagentsContextProtection:
         """Get the underlying protection instance."""
