@@ -2,7 +2,7 @@
 
 ## What is AF-006?
 
-**Context Corruption** — the agent keeps using stale, misleading, or cross-contaminated cached tool results. Without explicit freshness rules, agents can look "healthy" (high cache hit rates) while making wrong decisions (stale customer preferences, revoked permissions, oversold inventory, etc.).
+**Context Corruption** - the agent keeps using stale, misleading, or cross-contaminated cached tool results. Without explicit freshness rules, agents can look "healthy" (high cache hit rates) while making wrong decisions (stale customer preferences, revoked permissions, oversold inventory, etc.).
 
 Seven manifestations:
 - Stale data (TTL expiry)
@@ -34,11 +34,11 @@ Loaded and validated all 507 documented AF-006 failures from the HuggingFace dat
 **Decision 2: Categorize by manifestation type, not framework**
 - *Why*: Framework distribution is secondary. The protection mechanism (TTL, entity segmentation, etc.) is what matters. A stale-data failure in Cline is the same root cause as stale-data in AutoGen.
 - *Implementation*: 
-  - 233 failures → Stale data (46.0%) — addressed by TTL enforcement
-  - 139 failures → Cross-entity leakage (27.4%) — addressed by entity segmentation
-  - 103 failures → Error invalidation (20.3%) — addressed by error invalidation rules
-  - 4 failures → Unbounded growth (0.8%) — addressed by cache eviction
-  - 3 failures → Race conditions (0.6%) — addressed by immutable versioning
+  - 233 failures → Stale data (46.0%) - addressed by TTL enforcement
+  - 139 failures → Cross-entity leakage (27.4%) - addressed by entity segmentation
+  - 103 failures → Error invalidation (20.3%) - addressed by error invalidation rules
+  - 4 failures → Unbounded growth (0.8%) - addressed by cache eviction
+  - 3 failures → Race conditions (0.6%) - addressed by immutable versioning
   - **Coverage: 482/507 (95.1%)** mapped to protection mechanisms
 
 **Decision 3: Store metadata with evidence and reasoning**
@@ -79,7 +79,7 @@ Each reproducer:
 
 **Decision 3: Verify both unprotected and protected behavior**
 - *Why*: We need to show "without SDK, you get wrong answers" AND "with SDK, you get right answers". Just testing protection success isn't enough.
-- *Implementation*: Each test runs the scenario twice — once with naive memoization (fails), once with Mycelium protection (succeeds).
+- *Implementation*: Each test runs the scenario twice - once with naive memoization (fails), once with Mycelium protection (succeeds).
 
 ### Test Implementation
 - **File**: `tests/test_af006_scenario_reproduction.py`
@@ -94,11 +94,11 @@ Each reproducer:
 ### What We Did
 Built adapter classes for all 5 major agent frameworks and tested protection works across each:
 
-1. **LangGraph** — graph-based agentic control flow
-2. **CrewAI** — multi-agent crews with role delegation
-3. **AutoGen** — group chat and code execution agents
-4. **OpenAI Agents** — native OpenAI agent runtime
-5. **Smolagents** — lightweight agents with tool routing
+1. **LangGraph** - graph-based agentic control flow
+2. **CrewAI** - multi-agent crews with role delegation
+3. **AutoGen** - group chat and code execution agents
+4. **OpenAI Agents** - native OpenAI agent runtime
+5. **Smolagents** - lightweight agents with tool routing
 
 For each framework, we:
 - Built an adapter that registers tools with `LangGraphContextProtection`
@@ -230,9 +230,9 @@ Measured the performance cost of AF-006 protection in two scenarios:
 
 ### Output
 - **Files**: 
-  - `benchmarks/benchmark_af006_overhead.py` — raw cache performance
-  - `benchmarks/benchmark_realistic_tool_latency.py` — realistic scenarios
-  - `BENCHMARK_ANALYSIS.md` — comprehensive analysis and recommendation
+  - `benchmarks/benchmark_af006_overhead.py` - raw cache performance
+  - `benchmarks/benchmark_realistic_tool_latency.py` - realistic scenarios
+  - `BENCHMARK_ANALYSIS.md` - comprehensive analysis and recommendation
 - **Key Document**: `BENCHMARK_ANALYSIS.md` explains what the numbers mean and when to apply them
 
 ---

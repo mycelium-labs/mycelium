@@ -24,7 +24,7 @@ from mycelium.core.runtime_context_corruption import (
 
 
 # ============================================================================
-# INCIDENT 1: cline #7462 — Context > 100k tokens causes state loss
+# INCIDENT 1: cline #7462 - Context > 100k tokens causes state loss
 # ============================================================================
 
 
@@ -52,7 +52,7 @@ async def incident_1_unprotected():
     cline #7462 unprotected: Agent loses track of mode in large context.
     """
     print("\n" + "=" * 70)
-    print("INCIDENT 1: cline #7462 — State loss with large context (UNPROTECTED)")
+    print("INCIDENT 1: cline #7462 - State loss with large context (UNPROTECTED)")
     print("=" * 70)
 
     print("\nStep 1: Check mode (Act mode is active)")
@@ -76,7 +76,7 @@ async def incident_1_protected():
     cline #7462 protected: Mycelium catches mode state loss.
     """
     print("\n" + "=" * 70)
-    print("INCIDENT 1: cline #7462 — State loss with large context (PROTECTED)")
+    print("INCIDENT 1: cline #7462 - State loss with large context (PROTECTED)")
     print("=" * 70)
 
     runtime = AgentRuntimeWithContextProtection(verbose=True)
@@ -107,7 +107,7 @@ async def incident_1_protected():
 
 
 # ============================================================================
-# INCIDENT 2: crewAI #5057 — Memory injection into system prompt
+# INCIDENT 2: crewAI #5057 - Memory injection into system prompt
 # ============================================================================
 
 
@@ -127,7 +127,7 @@ async def incident_2_unprotected():
     crewAI #5057 unprotected: Poisoned memory injected into system prompt.
     """
     print("\n" + "=" * 70)
-    print("INCIDENT 2: crewAI #5057 — Memory injection (UNPROTECTED)")
+    print("INCIDENT 2: crewAI #5057 - Memory injection (UNPROTECTED)")
     print("=" * 70)
 
     print("\nStep 1: Fetch agent memory")
@@ -145,7 +145,7 @@ async def incident_2_protected():
     crewAI #5057 protected: Mycelium invalidates poisoned memory.
     """
     print("\n" + "=" * 70)
-    print("INCIDENT 2: crewAI #5057 — Memory injection (PROTECTED)")
+    print("INCIDENT 2: crewAI #5057 - Memory injection (PROTECTED)")
     print("=" * 70)
 
     runtime = AgentRuntimeWithContextProtection(verbose=True)
@@ -171,7 +171,7 @@ async def incident_2_protected():
 
 
 # ============================================================================
-# INCIDENT 3: langgraph #6938 — Checkpoint schema validation
+# INCIDENT 3: langgraph #6938 - Checkpoint schema validation
 # ============================================================================
 
 
@@ -194,7 +194,7 @@ async def incident_3_protected():
     langgraph #6938 protected: Mycelium enforces checkpoint validation.
     """
     print("\n" + "=" * 70)
-    print("INCIDENT 3: langgraph #6938 — Checkpoint validation (PROTECTED)")
+    print("INCIDENT 3: langgraph #6938 - Checkpoint validation (PROTECTED)")
     print("=" * 70)
 
     runtime = AgentRuntimeWithContextProtection(verbose=True)
@@ -218,7 +218,7 @@ async def incident_3_protected():
 
 
 # ============================================================================
-# INCIDENT 4: langgraph #7117 — Tool-call subgraph loses memory
+# INCIDENT 4: langgraph #7117 - Tool-call subgraph loses memory
 # ============================================================================
 
 
@@ -233,7 +233,7 @@ async def incident_4_protected():
     langgraph #7117 protected: Mycelium keeps conversation state fresh.
     """
     print("\n" + "=" * 70)
-    print("INCIDENT 4: langgraph #7117 — Subgraph loses memory (PROTECTED)")
+    print("INCIDENT 4: langgraph #7117 - Subgraph loses memory (PROTECTED)")
     print("=" * 70)
 
     runtime = AgentRuntimeWithContextProtection(verbose=True)
@@ -261,7 +261,7 @@ async def incident_4_protected():
 
 
 # ============================================================================
-# INCIDENT 5: crewAI #5155 — Behavioral drift across sessions
+# INCIDENT 5: crewAI #5155 - Behavioral drift across sessions
 # ============================================================================
 
 
@@ -280,7 +280,7 @@ async def incident_5_protected():
     crewAI #5155 protected: Mycelium detects personality drift.
     """
     print("\n" + "=" * 70)
-    print("INCIDENT 5: crewAI #5155 — Behavioral drift (PROTECTED)")
+    print("INCIDENT 5: crewAI #5155 - Behavioral drift (PROTECTED)")
     print("=" * 70)
 
     runtime = AgentRuntimeWithContextProtection(verbose=True)

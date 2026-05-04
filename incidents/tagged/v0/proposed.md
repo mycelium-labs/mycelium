@@ -1,8 +1,8 @@
-# v0 Proposed Tags — Review
+# v0 Proposed Tags - Review
 
 AI-proposed tags for the 43 un-tagged issues in the v0 queue.
 **You review, you approve, you ingest.** Same epistemic standard as supervised
-labeling at any ML lab — the corpus is *human-reviewed*, not human-typed.
+labeling at any ML lab - the corpus is *human-reviewed*, not human-typed.
 
 ## How to use this file
 
@@ -30,7 +30,7 @@ labeling at any ML lab — the corpus is *human-reviewed*, not human-typed.
 | AF-006 (Context Corruption) | 5 | crewAI #5057, crewAI #5155, langgraph #6938, cline #7462, langgraph #7117 |
 | AF-002 (Observability Black Hole) | 2 | langchain #36703, stagehand #914 |
 | AF-009 (Instruction Injection) | 1 | crewAI #5057 (double-tagged with AF-006) |
-| AF-001, 003, 004, 005, 007, 008 | 0 | — |
+| AF-001, 003, 004, 005, 007, 008 | 0 | - |
 
 **Headline finding:** 80% of real agent-failure issues in this corpus map to
 **AF-006 or AF-002**. AF-006 is the dominant signal. That's a strong hint at
@@ -43,7 +43,7 @@ which two failure modes Mycelium v1 should focus on (issue #4 in your roadmap).
 These are the issues worth your attention. Each is shown with the proposed tag,
 confidence, evidence, and reasoning.
 
-### #02 — `crewAIInc/crewAI#5057` → AF-009 + AF-006 (high) ★ best find
+### #02 - `crewAIInc/crewAI#5057` → AF-009 + AF-006 (high) ★ best find
 > [Security] Memory content injected into system prompt without sanitization enables indirect prompt injection
 
 **URL:** https://github.com/crewAIInc/crewAI/issues/5057
@@ -52,7 +52,7 @@ confidence, evidence, and reasoning.
 into the system prompt. Poisoned tool outputs persist as memories and on the
 next session get elevated to system-prompt authority. Code refs:
 `lite_agent.py:568-581`. This is a CVE-shaped writeup against a major
-framework — exactly the kind of incident Mycelium would prevent at the gateway
+framework - exactly the kind of incident Mycelium would prevent at the gateway
 layer.
 
 **Two failure modes overlap:** AF-009 (untrusted content reinterpreted as
@@ -60,12 +60,12 @@ instructions) + AF-006 (poisoned memory corrupts future agent context).
 
 ---
 
-### #08 — `crewAIInc/crewAI#5155` → AF-006 (low)
+### #08 - `crewAIInc/crewAI#5155` → AF-006 (low)
 > RFC: Detecting silent behavioral drift in agents across session boundaries
 
 **URL:** https://github.com/crewAIInc/crewAI/issues/5155
 
-**Why:** Not an incident — it's an RFC describing the AF-006 mechanism with
+**Why:** Not an incident - it's an RFC describing the AF-006 mechanism with
 three measurable signals (lexicon decay, tool-call sequence shift, semantic
 drift) and a reference impl ([compression-monitor](https://github.com/agent-morrow/compression-monitor)).
 Useful design-partner evidence: **the community is already asking for what
@@ -74,32 +74,32 @@ reproducible.
 
 ---
 
-### #24 — `langchain-ai/langgraph#6938` → AF-006 (medium)
+### #24 - `langchain-ai/langgraph#6938` → AF-006 (medium)
 > Fail closed on checkpoint schema validation before load
 
 **URL:** https://github.com/langchain-ai/langgraph/issues/6938
 
-**Why:** Hardening request — without strict fail-closed schema validation, a
+**Why:** Hardening request - without strict fail-closed schema validation, a
 malformed checkpoint can corrupt agent state on resume. Same shape as the
 langchain `except: pass` finding (#36703): **structural mechanism evidence** for
 AF-006 in a major framework, not an observed runtime incident.
 
 ---
 
-### #37 — `browserbase/stagehand#914` → AF-002 (medium)
+### #37 - `browserbase/stagehand#914` → AF-002 (medium)
 > Better agent logging
 
 **URL:** https://github.com/browserbase/stagehand/issues/914
 
 **Why:** Author identifies that agent-level LLM calls (`AnthropicCUAClient`,
 `OpenAICUAClient`) bypass Stagehand's `logInferenceToFile` infrastructure
-entirely — the agent's reasoning is invisible to the trace. Same pattern as the
+entirely - the agent's reasoning is invisible to the trace. Same pattern as the
 langchain finding, **second AF-002 mechanism in the corpus across two different
 vendors.** Strong "this is a category-wide problem" signal for the pitch.
 
 ---
 
-### #39 — `cline/cline#7462` → AF-006 (high) ★ best behavioral incident
+### #39 - `cline/cline#7462` → AF-006 (high) ★ best behavioral incident
 > Cline doesn't recognize that Act mode is active.
 
 **URL:** https://github.com/cline/cline/issues/7462
@@ -112,7 +112,7 @@ user-facing impact and clear repro.
 
 ---
 
-### #40 — `langchain-ai/langgraph#7117` → AF-006 (low)
+### #40 - `langchain-ai/langgraph#7117` → AF-006 (low)
 > When invoking the tool-call subgraph, the main agent loses the memory of previous tool invocations.
 
 **URL:** https://github.com/langchain-ai/langgraph/issues/7117
@@ -170,19 +170,19 @@ Brief verdict + reason for each. Skim, flip any you disagree with.
 
 ---
 
-## Borderline calls — worth a sanity check
+## Borderline calls - worth a sanity check
 
 These are the ones I had to think about. If you'd flip any, edit `proposed.jsonl`:
 
-- **#08** (crewAI #5155) — RFC, not incident. Tagged AF-006 low. Flip to `n` if
+- **#08** (crewAI #5155) - RFC, not incident. Tagged AF-006 low. Flip to `n` if
   you want strict "incident only" corpus. I'd keep it; it's pitch fuel.
-- **#24** (langgraph #6938) — Hardening request, not incident. Same logic as
+- **#24** (langgraph #6938) - Hardening request, not incident. Same logic as
   AF-002 #36703 (langchain except-pass) which you already accepted. Keep.
-- **#31** (langchain #30578) — Library API design bug, not agent behavior.
+- **#31** (langchain #30578) - Library API design bug, not agent behavior.
   Flagged `n`. Could stretch to AF-004 low-confidence. I'd leave as `n`.
-- **#37** (stagehand #914) — Same shape as #36703 (mechanism evidence, not
+- **#37** (stagehand #914) - Same shape as #36703 (mechanism evidence, not
   incident). Keep at AF-002.
-- **#40** (langgraph #7117) — Repro looks AI-generated. Tagged AF-006 low. If
+- **#40** (langgraph #7117) - Repro looks AI-generated. Tagged AF-006 low. If
   you want a clean corpus, flip to `n` (with reason "repro looks AI-generated").
 
 ## What this gets you

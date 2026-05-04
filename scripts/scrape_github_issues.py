@@ -225,7 +225,7 @@ _DATASET_CARD = """---
 license: other
 language:
   - en
-pretty_name: Mycelium — Agent Failure Corpus
+pretty_name: Mycelium - Agent Failure Corpus
 size_categories:
   - 1K<n<100K
 tags:
@@ -235,7 +235,7 @@ tags:
   - mycelium
 ---
 
-# Mycelium — Agent Failure Corpus
+# Mycelium - Agent Failure Corpus
 
 Private Hugging Face dataset for **Mycelium Labs internal research only**
 (building and maintaining the AF-* agent failure-mode taxonomy). **Do not
@@ -243,7 +243,7 @@ redistribute** this snapshot or bulk exports without explicit permission.
 
 ## Intended use
 
-Taxonomy work, classifier development, and qualitative review — not a
+Taxonomy work, classifier development, and qualitative review - not a
 general-purpose open corpus release. For collaboration, contact Mycelium Labs.
 
 ## Public sources ingested (GitHub)

@@ -1,4 +1,4 @@
-"""Mycelium SDK — runtime protection for AI agents."""
+"""Mycelium SDK - runtime protection for AI agents."""
 
 __version__ = "0.1.0"
 

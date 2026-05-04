@@ -34,7 +34,7 @@ Complete proof that AF-006 is 100% prevented.
 
 ### Real-World Validation: External Repo
 
-**[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** — Comprehensive validation with real failure tests, scenario reproduction, and framework integration testing.
+**[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** - Comprehensive validation with real failure tests, scenario reproduction, and framework integration testing.
 
 | File | Purpose | Count |
 |------|---------|-------|
@@ -45,8 +45,8 @@ Complete proof that AF-006 is 100% prevented.
 | **tests/test_af006_coverage.py** | Direct integration tests | 47 cases |
 | **tests/test_af006_properties.py** | Property-based tests (hypothesis) | 500+ cases |
 | **tests/test_af006_adversarial.py** | Attack scenarios | 12 cases |
-| **[AF006_PROOF.md](https://github.com/mycelium-labs/agent-test-AF006/blob/main/AF006_PROOF.md)** | Coverage matrix and real failure analysis | — |
-| **src/compare.py** | 4 synthetic scenarios | — |
+| **[AF006_PROOF.md](https://github.com/mycelium-labs/agent-test-AF006/blob/main/AF006_PROOF.md)** | Coverage matrix and real failure analysis | - |
+| **src/compare.py** | 4 synthetic scenarios | - |
 
 ---
 
@@ -76,8 +76,8 @@ Complete proof that AF-006 is 100% prevented.
    - Canonical specs in `AF-*.md` files
 
 2. **Research** (`/research`)
-   - `failure_modes.md` — Index of all 9 modes
-   - `v1-scope.md` — Implementation roadmap (AF-006, AF-004, AF-002)
+   - `failure_modes.md` - Index of all 9 modes
+   - `v1-scope.md` - Implementation roadmap (AF-006, AF-004, AF-002)
    - Tag frequency analysis and dataset correlation
 
 3. **SDK Implementation** (`/sdk`)
@@ -135,7 +135,7 @@ All 600+ tests pass, proving AF-006 is blocked.
 
 ### SDK Documentation
 
-**[sdk/README.md](sdk/README.md)** — *Start here*
+**[sdk/README.md](sdk/README.md)** - *Start here*
 - Quick start in 5 minutes
 - Installation instructions
 - Usage examples for each framework (LangGraph, CrewAI, AutoGen, OpenAI Agents, Smolagents)
@@ -145,7 +145,7 @@ All 600+ tests pass, proving AF-006 is blocked.
 - Test instructions
 - **Links to proof documentation**
 
-**[sdk/PROOF_SUMMARY.md](sdk/PROOF_SUMMARY.md)** — *For decision-makers*
+**[sdk/PROOF_SUMMARY.md](sdk/PROOF_SUMMARY.md)** - *For decision-makers*
 - Executive summary: 100% proven protection
 - All 7 AF-006 manifestations covered (stale data, cross-entity leakage, cross-source mixing, behavioral drift, unbounded growth, race conditions, error invalidation)
 - Formal invariants proved
@@ -153,7 +153,7 @@ All 600+ tests pass, proving AF-006 is blocked.
 - Real-world validation results
 - Conclusion: complete proof with 0 false negatives
 
-**[sdk/AF006_PROOF.md](sdk/AF006_PROOF.md)** — *For security reviewers*
+**[sdk/AF006_PROOF.md](sdk/AF006_PROOF.md)** - *For security reviewers*
 - Detailed coverage matrix for all 7 manifestations
 - Test inventory: all 47 direct tests listed
 - Property-based testing strategy
@@ -163,7 +163,7 @@ All 600+ tests pass, proving AF-006 is blocked.
 - Real-world validation details
 - Stress test results
 
-**[sdk/INTEGRATION_CHECKLIST.md](sdk/INTEGRATION_CHECKLIST.md)** — *For engineers*
+**[sdk/INTEGRATION_CHECKLIST.md](sdk/INTEGRATION_CHECKLIST.md)** - *For engineers*
 - Pre-integration assessment (5 questions)
 - Installation & setup
 - Tool decoration with `@tool` decorator
@@ -176,7 +176,7 @@ All 600+ tests pass, proving AF-006 is blocked.
 - Production deployment checklist
 - Verification against all 7 manifestations
 
-**[sdk/PROOF_INDEX.md](sdk/PROOF_INDEX.md)** — *Master navigation*
+**[sdk/PROOF_INDEX.md](sdk/PROOF_INDEX.md)** - *Master navigation*
 - Quick navigation by audience (engineers, security reviewers, researchers, devops)
 - Finding answers ("How do I use it?", "Is AF-006 really prevented?", etc.)
 - Coverage summary (100% of 7 manifestations)
@@ -186,7 +186,7 @@ All 600+ tests pass, proving AF-006 is blocked.
 
 ### External Validation
 
-**[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** — *Real-world proof*
+**[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** - *Real-world proof*
 
 Comparison agent showing practical AF-006 protection:
 
@@ -199,24 +199,24 @@ Comparison agent showing practical AF-006 protection:
 | Memory growth | 📈 UNBOUNDED | ✅ BOUNDED |
 
 **Contains:**
-- **test_af006_coverage.py** — 47 integration tests (FM1-FM7, entity segmentation, TTL, criticality, memory, errors)
-- **test_af006_properties.py** — 500+ property-based tests (hypothesis: random TTL, entities, sequences, audit, memory)
-- **test_af006_adversarial.py** — 12 attack scenarios (entity confusion, poisoning, bypass, DoS, race, tampering, spoofing)
-- **src/compare.py** — 4 scenarios (multi-customer, mid-session change, critical re-verify, long run)
-- **AF006_PROOF.md** — Local coverage matrix and proof appendix
-- **TESTING.md** — How to run all tests, troubleshooting
+- **test_af006_coverage.py** - 47 integration tests (FM1-FM7, entity segmentation, TTL, criticality, memory, errors)
+- **test_af006_properties.py** - 500+ property-based tests (hypothesis: random TTL, entities, sequences, audit, memory)
+- **test_af006_adversarial.py** - 12 attack scenarios (entity confusion, poisoning, bypass, DoS, race, tampering, spoofing)
+- **src/compare.py** - 4 scenarios (multi-customer, mid-session change, critical re-verify, long run)
+- **AF006_PROOF.md** - Local coverage matrix and proof appendix
+- **TESTING.md** - How to run all tests, troubleshooting
 
 ---
 
 ## 🔐 The 7 AF-006 Manifestations (All Blocked)
 
-1. **Stale Data** — TTL enforcement + age tracking ✅
-2. **Cross-Entity Leakage** — Entity segmentation in cache keys ✅
-3. **Cross-Source Mixing** — Tool name in cache keys ✅
-4. **Behavioral Drift** — Criticality re-verification at threshold ✅
-5. **Unbounded Growth** — TTL cleanup + capacity limits ✅
-6. **Race Conditions** — Immutable versioning + async safety ✅
-7. **Error Invalidation** — Pattern-based error detection ✅
+1. **Stale Data** - TTL enforcement + age tracking ✅
+2. **Cross-Entity Leakage** - Entity segmentation in cache keys ✅
+3. **Cross-Source Mixing** - Tool name in cache keys ✅
+4. **Behavioral Drift** - Criticality re-verification at threshold ✅
+5. **Unbounded Growth** - TTL cleanup + capacity limits ✅
+6. **Race Conditions** - Immutable versioning + async safety ✅
+7. **Error Invalidation** - Pattern-based error detection ✅
 
 ---
 
@@ -247,11 +247,11 @@ Framework Integration Coverage (5 frameworks × 3 scenarios)
 └─ Total Protection      15/15 (100%) ✅
 
 Real Failure Coverage (507 documented failures across 10 frameworks)
-├─ Stale Data            233 (46.0%) — blocked by TTL enforcement ✅
-├─ Cross-Entity Leakage  139 (27.4%) — blocked by entity segmentation ✅
-├─ Error Invalidation    103 (20.3%) — blocked by error detection ✅
-├─ Unbounded Growth        4 (0.8%)  — blocked by memory bounds ✅
-├─ Race Conditions         3 (0.6%)  — blocked by isolation ✅
+├─ Stale Data            233 (46.0%) - blocked by TTL enforcement ✅
+├─ Cross-Entity Leakage  139 (27.4%) - blocked by entity segmentation ✅
+├─ Error Invalidation    103 (20.3%) - blocked by error detection ✅
+├─ Unbounded Growth        4 (0.8%)  - blocked by memory bounds ✅
+├─ Race Conditions         3 (0.6%)  - blocked by isolation ✅
 └─ Total Mapped          482 (95.1%) to AF-006 protection mechanisms ✅
 
 Synthetic Test Coverage
@@ -386,8 +386,8 @@ python main.py
 - Comprehensive proof documentation (5 files)
 
 **AF-004 & AF-002**: 🔧 **Planned for v2 SDK**
-- AF-004 (Tool Misuse) — 575 occurrences
-- AF-002 (Observability Black Hole) — 304 occurrences
+- AF-004 (Tool Misuse) - 575 occurrences
+- AF-002 (Observability Black Hole) - 304 occurrences
 - Design phase underway
 - Will follow AF-006 implementation pattern
 

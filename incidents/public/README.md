@@ -21,6 +21,6 @@ public/
 
 - Raw data only. No transformation at ingest time.
 - Each ingest run is dated. Never overwrite older snapshots.
-- Commit raw data to the repo — it IS the research corpus.
+- Commit raw data to the repo - it IS the research corpus.
 - All sources must be free and permissively-licensed for internal research
   use. Cite + link every incident when it graduates to `tagged/`.

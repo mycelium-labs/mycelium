@@ -39,23 +39,23 @@ uv run python ../examples/context_corruption_usage.py
 
 Reproduces all 5 AF-006 incidents from your corpus and shows Mycelium catching them:
 
-1. **cline #7462** — State loss with large context (100k+ tokens)
+1. **cline #7462** - State loss with large context (100k+ tokens)
    - Problem: Agent forgets it's in Act mode
    - Fix: CRITICAL mode marked, refetched on 2nd read
 
-2. **crewAI #5057** — Memory injection into system prompt
+2. **crewAI #5057** - Memory injection into system prompt
    - Problem: Poisoned tool output injected as instruction
    - Fix: Memory marked with TTL=3, refetched before injection
 
-3. **langgraph #6938** — Checkpoint schema validation
+3. **langgraph #6938** - Checkpoint schema validation
    - Problem: Malformed checkpoint corrupts state on resume
    - Fix: Checkpoint marked CRITICAL + invalidate_after_steps=1
 
-4. **langgraph #7117** — Tool-call subgraph loses memory
+4. **langgraph #7117** - Tool-call subgraph loses memory
    - Problem: Conversation state lost during subgraph execution
    - Fix: State re-verified after subgraph completes
 
-5. **crewAI #5155** — Behavioral drift across sessions
+5. **crewAI #5155** - Behavioral drift across sessions
    - Problem: Agent personality changes between sessions
    - Fix: Personality re-verified at session boundaries
 
@@ -76,39 +76,39 @@ uv run python ../examples/af006_incident_reproducers.py
 #### **test_context_corruption.py** (13 tests)
 
 Cache behavior tests:
-- ✅ `test_add_and_get_hit` — Basic cache hit
-- ✅ `test_get_missing` — Cache miss on non-existent entry
-- ✅ `test_ttl_expiration` — TTL enforced correctly
-- ✅ `test_criticality_recheck` — HIGH criticality re-verifies on 2nd read
-- ✅ `test_entity_segmentation` — Per-entity isolation works
-- ✅ `test_source_segmentation` — Per-source isolation works
-- ✅ `test_both_segmentation` — BOTH segmentation (entity + source)
-- ✅ `test_invalidate_on_error` — Error invalidates related entries
-- ✅ `test_rate_limit_detection` — Rate-limit errors detected
-- ✅ `test_custom_rate_limit_pattern` — Custom regex patterns work
-- ✅ `test_version_immutability` — Versions are frozen
-- ✅ `test_audit_trail` — All operations logged
-- ✅ `test_snapshot_shows_all_entries` — State snapshot complete
+- ✅ `test_add_and_get_hit` - Basic cache hit
+- ✅ `test_get_missing` - Cache miss on non-existent entry
+- ✅ `test_ttl_expiration` - TTL enforced correctly
+- ✅ `test_criticality_recheck` - HIGH criticality re-verifies on 2nd read
+- ✅ `test_entity_segmentation` - Per-entity isolation works
+- ✅ `test_source_segmentation` - Per-source isolation works
+- ✅ `test_both_segmentation` - BOTH segmentation (entity + source)
+- ✅ `test_invalidate_on_error` - Error invalidates related entries
+- ✅ `test_rate_limit_detection` - Rate-limit errors detected
+- ✅ `test_custom_rate_limit_pattern` - Custom regex patterns work
+- ✅ `test_version_immutability` - Versions are frozen
+- ✅ `test_audit_trail` - All operations logged
+- ✅ `test_snapshot_shows_all_entries` - State snapshot complete
 
 #### **test_runtime_context_corruption.py** (16 tests)
 
 Runtime integration tests:
-- ✅ `test_register_tool` — Tool metadata stored correctly
-- ✅ `test_extract_entity_id` — Entity ID extracted from parameters
-- ✅ `test_list_all` — Registry lists all tools
-- ✅ `test_tool_call_cache_miss` — Cache miss on first call
-- ✅ `test_tool_call_cache_hit` — Cache hit on 2nd call
-- ✅ `test_tool_call_with_step_advancement` — TTL triggered on step advancement
-- ✅ `test_entity_segmentation` — Different entities don't share cache
-- ✅ `test_criticality_recheck` — HIGH criticality triggers refetch
-- ✅ `test_always_fresh_tool` — TTL=1 refetches every step
-- ✅ `test_tool_error_invalidation` — Errors remove cache entries
-- ✅ `test_rate_limit_error_detection` — Rate-limits detected
-- ✅ `test_sync_tool_execution` — Sync functions work
-- ✅ `test_unregistered_tool` — Unregistered tools work (no cache)
-- ✅ `test_cache_snapshot` — Snapshot accurate
-- ✅ `test_audit_log` — Audit trail complete
-- ✅ `test_agent_with_context_protection` — End-to-end agent loop
+- ✅ `test_register_tool` - Tool metadata stored correctly
+- ✅ `test_extract_entity_id` - Entity ID extracted from parameters
+- ✅ `test_list_all` - Registry lists all tools
+- ✅ `test_tool_call_cache_miss` - Cache miss on first call
+- ✅ `test_tool_call_cache_hit` - Cache hit on 2nd call
+- ✅ `test_tool_call_with_step_advancement` - TTL triggered on step advancement
+- ✅ `test_entity_segmentation` - Different entities don't share cache
+- ✅ `test_criticality_recheck` - HIGH criticality triggers refetch
+- ✅ `test_always_fresh_tool` - TTL=1 refetches every step
+- ✅ `test_tool_error_invalidation` - Errors remove cache entries
+- ✅ `test_rate_limit_error_detection` - Rate-limits detected
+- ✅ `test_sync_tool_execution` - Sync functions work
+- ✅ `test_unregistered_tool` - Unregistered tools work (no cache)
+- ✅ `test_cache_snapshot` - Snapshot accurate
+- ✅ `test_audit_log` - Audit trail complete
+- ✅ `test_agent_with_context_protection` - End-to-end agent loop
 
 ---
 
@@ -251,11 +251,11 @@ The implementation is **production-grade**:
 
 ## Known Limitations
 
-1. **Stress tests not yet run** — Performance under extreme load TBD
-2. **Framework integrations TBD** — Not yet wired to LangGraph/CrewAI/etc.
-3. **Benchmarks TBD** — Cache hit rates and memory overhead not measured
-4. **Fact extraction TBD** — Currently assumes facts pre-extracted (future work)
-5. **Distributed caching TBD** — Single-runtime cache (not distributed)
+1. **Stress tests not yet run** - Performance under extreme load TBD
+2. **Framework integrations TBD** - Not yet wired to LangGraph/CrewAI/etc.
+3. **Benchmarks TBD** - Cache hit rates and memory overhead not measured
+4. **Fact extraction TBD** - Currently assumes facts pre-extracted (future work)
+5. **Distributed caching TBD** - Single-runtime cache (not distributed)
 
 ---
 

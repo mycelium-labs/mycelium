@@ -9,19 +9,19 @@ Complete reference guide to all Mycelium SDK proof, validation, and integration 
 ### For Different Audiences
 
 **Engineers integrating the SDK**:
-1. Start: [README.md](README.md) — Quick start and examples
-2. Integrate: [INTEGRATION_CHECKLIST.md](INTEGRATION_CHECKLIST.md) — Step-by-step guide
-3. Verify: Run `pytest tests/ -v` — Validate your setup
+1. Start: [README.md](README.md) - Quick start and examples
+2. Integrate: [INTEGRATION_CHECKLIST.md](INTEGRATION_CHECKLIST.md) - Step-by-step guide
+3. Verify: Run `pytest tests/ -v` - Validate your setup
 
 **Security reviewers**:
-1. Overview: [PROOF_SUMMARY.md](PROOF_SUMMARY.md) — Complete proof strategy
-2. Details: [AF006_PROOF.md](AF006_PROOF.md) — Test matrix and invariants
-3. Real-world: [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) — Practical validation
+1. Overview: [PROOF_SUMMARY.md](PROOF_SUMMARY.md) - Complete proof strategy
+2. Details: [AF006_PROOF.md](AF006_PROOF.md) - Test matrix and invariants
+3. Real-world: [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) - Practical validation
 
 **Researchers / architects**:
-1. Theory: [PROOF_SUMMARY.md](PROOF_SUMMARY.md) — Formal invariant proofs
+1. Theory: [PROOF_SUMMARY.md](PROOF_SUMMARY.md) - Formal invariant proofs
 2. Implementation: Read source code in `mycelium/protections/context_corruption.py`
-3. Validation: [AF006_PROOF.md](AF006_PROOF.md) — Full test suite and coverage
+3. Validation: [AF006_PROOF.md](AF006_PROOF.md) - Full test suite and coverage
 
 **DevOps / monitoring**:
 1. Deployment: [INTEGRATION_CHECKLIST.md](INTEGRATION_CHECKLIST.md#production-deployment)
@@ -80,13 +80,13 @@ Complete reference guide to all Mycelium SDK proof, validation, and integration 
 → [INTEGRATION_CHECKLIST.md](INTEGRATION_CHECKLIST.md)
 
 ### "Is AF-006 really prevented?"
-→ [PROOF_SUMMARY.md](PROOF_SUMMARY.md) — Complete formal proof
+→ [PROOF_SUMMARY.md](PROOF_SUMMARY.md) - Complete formal proof
 
 ### "What's the test coverage?"
-→ [AF006_PROOF.md](AF006_PROOF.md) — Test matrix with all 600+ cases
+→ [AF006_PROOF.md](AF006_PROOF.md) - Test matrix with all 600+ cases
 
 ### "Can I see a working example?"
-→ [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) — Comparison agent
+→ [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) - Comparison agent
 
 ### "How do I run the tests?"
 → [agent-test-AF006 TESTING.md](https://github.com/mycelium-labs/agent-test-AF006/blob/main/TESTING.md)

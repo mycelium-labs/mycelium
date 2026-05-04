@@ -12,7 +12,7 @@ by `id` (e.g. "langchain-ai/langchain#34906"). Append-only and idempotent:
 re-running won't re-classify what's already there.
 
 **Failure-mode catalog:** the dataset on Hugging Face (`predictions/*.jsonl`) is
-the product catalog — prefilter rows (`model: prefilter:*`) plus LLM rows
+the product catalog - prefilter rows (`model: prefilter:*`) plus LLM rows
 (`label`, `evidence`, etc.). There is no separate human-curated merge step.
 
 Commands:
@@ -31,7 +31,7 @@ Commands:
     # Restrict to a single repo (handy for debugging).
     python scripts/classify_corpus.py run --repo langchain-ai/langchain
 
-Auth (classifier — use one provider):
+Auth (classifier - use one provider):
     GROQ_API_KEY       recommended: Groq OpenAI-compatible API, fast / cheap Llama
                        (https://console.groq.com). Default model: see GROQ_MODEL.
     GROQ_MAX_CONCURRENCY   cap parallel Groq calls (default 2 on on-demand TPM).
@@ -124,14 +124,14 @@ def load_taxonomy_text() -> str:
     parts: list[str] = []
     for path in sorted(TAXONOMY_DIR.glob("AF-*.md")):
         text = path.read_text()
-        m_name = re.match(r"#\s*(AF-\d+)\s*[—-]\s*(.+)", text.splitlines()[0])
+        m_name = re.match(r"#\s*(AF-\d+)\s*[--]\s*(.+)", text.splitlines()[0])
         if not m_name:
             continue
         af_id, name = m_name.group(1), m_name.group(2).strip()
         oneline = re.search(r"\*\*One-line:\*\*\s*(.+)", text)
         signal = re.search(r"\*\*Detection signal:\*\*\s*(.+)", text)
         out_of = re.search(r"\*\*Out of scope[^\n]*\n((?:- .+\n?)+)", text, re.MULTILINE)
-        block = [f"{af_id} — {name}"]
+        block = [f"{af_id} - {name}"]
         if oneline:
             block.append(f"  meaning: {oneline.group(1).strip()}")
         if signal:
@@ -165,7 +165,7 @@ CRITICAL DECISION RULES:
    - "How do I..." usage questions with no failure
    - vendor pitches and integration proposals from third parties
    - UI / cosmetic / formatting bugs in the framework's surface
-   - loud crashes, raised exceptions, missing retry logic — runtime plumbing,
+   - loud crashes, raised exceptions, missing retry logic - runtime plumbing,
      covered by Sentry-class tools, not Mycelium
    - library API design ambiguity (return-type bugs, config bugs) when the
      agent's behavior wasn't reported as wrong
@@ -198,12 +198,12 @@ CRITICAL DECISION RULES:
 # -----------------------------------------------------------------------------
 # Deterministic pre-filter
 #
-# Most agent-framework GitHub issues are not behavioral failures — they're
+# Most agent-framework GitHub issues are not behavioral failures - they're
 # feature requests, docs PRs, install errors, vendor pitches, etc. We can
 # regex-reject the most obvious ones and skip the LLM entirely.
 #
 # Design contract: ZERO false negatives against the v0 hand-tagged set. False
-# positives (passing an `n` through to the LLM) are fine — the LLM handles
+# positives (passing an `n` through to the LLM) are fine - the LLM handles
 # them. Run `python scripts/classify_corpus.py validate-prefilter` to verify.
 # -----------------------------------------------------------------------------
 
@@ -244,7 +244,7 @@ PREFILTER_RULES: list[tuple[str, "re.Pattern", str]] = [
 def apply_prefilter(issue: dict[str, Any]) -> tuple[str, str] | None:
     """Return (rule_name, human_category) if a rule fires, else None.
 
-    Only inspects the title — body inspection is reserved for the LLM. This
+    Only inspects the title - body inspection is reserved for the LLM. This
     keeps false-negative risk low: titles are short and pattern-matchable;
     bodies are where the real failure mechanism shows up.
     """
@@ -789,7 +789,7 @@ async def classify_repo(
     # Checkpoint every CHECKPOINT_INTERVAL successful classifications. At
     # Tier-1's 3 RPM, no single repo can finish within a 90-min CI run, so
     # without checkpointing every timeout would discard hours of LLM work.
-    # Pushes are idempotent on issue id — restart-safe.
+    # Pushes are idempotent on issue id - restart-safe.
     CHECKPOINT_INTERVAL = 50
 
     async def maybe_checkpoint() -> None:
@@ -852,7 +852,7 @@ async def classify_repo(
                             print(
                                 f"  ABORT: {errors} consecutive failures with zero successes.\n"
                                 f"  Check API keys and quotas (Groq: console.groq.com; Anthropic: console.anthropic.com).\n"
-                                f"  Pipeline is idempotent — already-classified issues will be skipped.\n",
+                                f"  Pipeline is idempotent - already-classified issues will be skipped.\n",
                                 file=sys.stderr,
                             )
                         abort_event.set()
@@ -897,7 +897,7 @@ async def classify_repo(
             print(f"    sample error: {sample}", file=sys.stderr)
 
     if not successful:
-        print(f"  no successful classifications this run — skipping HF push", file=sys.stderr)
+        print(f"  no successful classifications this run - skipping HF push", file=sys.stderr)
         return {"repo": repo, "raw": len(raw_issues), "delta": 0, "errors": errors,
                 "aborted": abort_event.is_set()}
 
@@ -1056,7 +1056,7 @@ def run_validate_prefilter() -> int:
     print(f"  → these would skip the LLM, saving API spend on obvious 'n' rows\n")
 
     if af_caught:
-        print(f"FALSE NEGATIVES ({len(af_caught)}) — pre-filter wrongly dropped real AF issues:")
+        print(f"FALSE NEGATIVES ({len(af_caught)}) - pre-filter wrongly dropped real AF issues:")
         for issue, rule, cat in af_caught:
             print(f"  ✗ {issue['id']} [{rule}]")
             print(f"      title: {issue['title'][:90]}")
@@ -1065,7 +1065,7 @@ def run_validate_prefilter() -> int:
     print("FALSE NEGATIVES on AF-tagged: 0  ✓ (contract held)\n")
 
     if n_caught:
-        print(f"TRUE NEGATIVES ({len(n_caught)}) — pre-filter correctly dropped these:")
+        print(f"TRUE NEGATIVES ({len(n_caught)}) - pre-filter correctly dropped these:")
         by_rule: dict[str, list[dict]] = {}
         for issue, rule, cat in n_caught:
             by_rule.setdefault(rule, []).append(issue)

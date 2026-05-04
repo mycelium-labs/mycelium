@@ -1,0 +1,9 @@
+2. Test across all 5 framework integrations - We have LangGraph, CrewAI, AutoGen, OpenAI Agents, Smolagents. Could run the 
+  real failures through each framework's adapter to see which integrations are most stressed (useful for prioritization).    
+  3. Start on AF-004 (Tool Misuse) - 575 occurrences (more than AF-006). Same playbook: load real failures, test protection.
+  Would extend proof to the second most common failure mode and get us one step closer to v2 SDK.                            
+  4. Create failure examples/catalog - Generate a browsable document with real examples from each of the 6 failure categories
+   (stale data, cross-entity, error-related, etc.) - link directly to GitHub issues so users can see what each looks like in 
+  production.     
+  5. Benchmark protection overhead - Measure latency and memory cost of the protection mechanisms. Important for users       
+  deciding whether to enable AF-006 in production.      

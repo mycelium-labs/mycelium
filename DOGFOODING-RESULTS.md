@@ -21,7 +21,7 @@ Tested AF-006 Context Corruption Protection against 5 actual failure modes extra
 ### 2. crewAI#5155 - Behavioral Drift
 **Labels**: AF-006 | **Type**: RFC (architectural issue)
 
-**Failure Mode**: Agents silently change behavior after context compression or memory rotation — without triggering exceptions or failed tasks. The agent completes the work, but the behavioral fingerprint changes.
+**Failure Mode**: Agents silently change behavior after context compression or memory rotation - without triggering exceptions or failed tasks. The agent completes the work, but the behavioral fingerprint changes.
 
 **Test Result**: ✅ PROTECTED
 - Config versions remain consistent (1.0 → 1.0)
@@ -108,9 +108,9 @@ All framework integrations successfully protect against these failure modes.
 ## Key Insights
 
 ### High-Impact Protection
-1. **cline#7462** is a real user-facing failure — agent forgets its mode after long tasks. AF-006 protection prevents this by enforcing fresh state checks.
-2. **crewAI#5057** combines two failure modes (AF-006 + AF-009) — context corruption enables prompt injection. Isolation prevents propagation.
-3. **crewAI#5155** is RFC-based but describes a real architectural problem — silent drift that doesn't trigger alarms. Re-verification catches it.
+1. **cline#7462** is a real user-facing failure - agent forgets its mode after long tasks. AF-006 protection prevents this by enforcing fresh state checks.
+2. **crewAI#5057** combines two failure modes (AF-006 + AF-009) - context corruption enables prompt injection. Isolation prevents propagation.
+3. **crewAI#5155** is RFC-based but describes a real architectural problem - silent drift that doesn't trigger alarms. Re-verification catches it.
 
 ### Protection Guarantees
 - **No silent state divergence**: Critical tools are re-verified when TTL expires

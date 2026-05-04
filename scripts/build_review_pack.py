@@ -3,7 +3,7 @@
 
 The **catalog of record** is the Hugging Face dataset (`predictions/<repo>.jsonl`)
 produced by `classify_corpus.py run`. This script only materializes a filtered
-view under `incidents/tagged/v1/` for skimming (markdown + jsonl) — not a
+view under `incidents/tagged/v1/` for skimming (markdown + jsonl) - not a
 second “approved” store and not merged back into anything by default.
 
     python scripts/classify_corpus.py run   # populate HF
@@ -211,7 +211,7 @@ def main() -> int:
         "## Notes",
         "",
         "Authoritative labels live on Hugging Face (`predictions/<repo>.jsonl`).",
-        "This folder is a convenience export for reading and sharing — not a second database.",
+        "This folder is a convenience export for reading and sharing - not a second database.",
         "",
     ]
 
@@ -219,7 +219,7 @@ def main() -> int:
         items = sorted(by_label[lbl], key=lambda p: (0 if p["confidence"] == "high" else 1, p["repo"], p["number"]))
         md_lines.append("---")
         md_lines.append("")
-        md_lines.append(f"## {lbl} — {len(items)} candidates")
+        md_lines.append(f"## {lbl} - {len(items)} candidates")
         md_lines.append("")
         for p in items:
             md_lines.append(f"### `{p['id']}` ({p['confidence']})")
