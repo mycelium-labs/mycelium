@@ -1,4 +1,9 @@
-"""AutoGen Integration for AF-006 Context Corruption Protection"""
+"""Stagehand Integration for AF-006 Context Corruption Protection
+
+Stagehand agents execute browser actions (act, extract, observe).
+This adapter wraps those calls with AF-006 protection to prevent
+stale DOM state and cross-page context leakage.
+"""
 
 from collections.abc import Callable
 from typing import Any
@@ -10,34 +15,28 @@ from mycelium.core.runtime_context_corruption import (
 from mycelium.protections import ContextSegmentation, tool
 
 
-class AutoGenContextProtection:
-    """Context protection for AutoGen multi-agent systems."""
+class StagehandContextProtection:
+    """Context protection for Stagehand browser agent actions."""
 
-    def __init__(
-        self,
-        policy: InvalidationPolicy | None = None,
-        verbose: bool = False,
-    ):
+    def __init__(self, policy: InvalidationPolicy | None = None, verbose: bool = False):
         if policy is None:
             policy = InvalidationPolicy(
-                default_ttl_steps=5,
-                criticality_recheck_threshold=2,
+                default_ttl_steps=3,
+                criticality_recheck_threshold=1,
                 segmentation=ContextSegmentation.BOTH,
             )
-
         self.policy = policy
         self.runtime = AgentRuntimeWithContextProtection(policy=policy, verbose=verbose)
-        self.message_counter = 0
+        self.action_counter = 0
 
     def register_tool(
         self,
         name: str,
         func: Callable[..., Any],
         critical: bool = False,
-        invalidate_after_steps: int = 5,
+        invalidate_after_steps: int = 3,
         entity_param: str | None = None,
     ) -> None:
-        """Register tool with AutoGen agent."""
         decorated = tool(
             critical=critical,
             invalidate_after_steps=invalidate_after_steps,
@@ -46,55 +45,43 @@ class AutoGenContextProtection:
         self.runtime.register_tools([decorated])
 
     async def call_tool_protected(self, name: str, func: Callable[..., Any], **kwargs: Any) -> Any:
-        """Call tool through protection."""
+        """Wrap a Stagehand action (act/extract/observe) with AF-006 protection."""
         return await self.runtime.call_tool(name, func, **kwargs)
 
-    def handle_message(self) -> None:
-        """Called when agent sends/receives message."""
+    def advance_action(self) -> None:
+        """Call after each browser action to age TTLs."""
         self.runtime.advance_step()
-        self.message_counter += 1
+        self.action_counter += 1
+
+    def get_audit_log(self) -> list[dict[str, Any]]:
+        return self.runtime.get_audit_log()
 
     def get_stats(self) -> dict[str, Any]:
-        """Get AutoGen conversation stats."""
-        snapshot = self.runtime.get_cache_snapshot()
         audit = self.runtime.get_audit_log()
-        hits = len([e for e in audit if e["event_type"] == "get_hit"])
-        misses = len(
-            [e for e in audit if "get_" in e["event_type"] and e["event_type"] != "get_hit"]
-        )
+        hits = sum(1 for e in audit if e["event_type"] == "get_hit")
+        misses = sum(1 for e in audit if "get_" in e["event_type"] and e["event_type"] != "get_hit")
         return {
-            "cache_entries": len(snapshot),
             "cache_hits": hits,
             "cache_misses": misses,
             "hit_rate": hits / (hits + misses) if (hits + misses) > 0 else 0,
-            "messages_processed": self.message_counter,
+            "actions": self.action_counter,
         }
 
-    def get_audit_log(self) -> list[dict[str, Any]]:
-        """Get complete audit trail."""
-        return self.runtime.get_audit_log()
 
+class StagehandIntegration:
+    """High-level integration for Stagehand browser agents."""
 
-class AutoGenIntegration:
-    """High-level AutoGen integration."""
-
-    def __init__(
-        self,
-        policy: InvalidationPolicy | None = None,
-        verbose: bool = False,
-    ):
-        self.protection = AutoGenContextProtection(policy=policy, verbose=verbose)
+    def __init__(self, policy: InvalidationPolicy | None = None, verbose: bool = False):
+        self.protection = StagehandContextProtection(policy=policy, verbose=verbose)
 
     def register_tools(
         self,
         tools: dict[str, Callable[..., Any]],
         critical_tools: list[str] | None = None,
     ) -> None:
-        """Register tools for AutoGen agents."""
         critical_tools = critical_tools or []
         for name, func in tools.items():
             self.protection.register_tool(name, func, critical=(name in critical_tools))
 
-    def get_protection(self) -> AutoGenContextProtection:
-        """Get protection instance."""
+    def get_protection(self) -> StagehandContextProtection:
         return self.protection

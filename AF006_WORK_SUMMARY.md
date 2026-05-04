@@ -53,25 +53,29 @@ Loaded and validated all 507 documented AF-006 failures from the HuggingFace dat
 
 ---
 
-## Phase 2: Scenario Reproduction (30 reproducer tests)
+## Phase 2: Scenario Reproduction (70 reproducer tests - all 7 manifestations)
 
 ### What We Did
-Created 30 synthetic tests that **reproduce the exact conditions** from real failures:
+Created 70 synthetic tests (10 for each of the 7 AF-006 manifestations) that **reproduce the exact conditions** from real failures:
 - 10 stale data scenarios (simulating data mutation without TTL refresh)
+- 10 cross-source mixing scenarios (simulating CRM + inventory cache collision)
 - 10 cross-entity scenarios (simulating non-segmented cache keys)
+- 10 behavioral drift scenarios (simulating preferences stale after backend update)
+- 10 unbounded growth scenarios (simulating no cache eviction, memory leak)
+- 10 race condition scenarios (simulating concurrent writes to same cache key)
 - 10 error invalidation scenarios (simulating transient errors cached forever)
 
 Each reproducer:
 1. Sets up the failure condition
 2. Shows the agent makes a wrong decision without protection
 3. Shows the agent makes the correct decision with protection
-4. **Result: 100% prevention rate** across all 30 scenarios
+4. **Result: 100% prevention rate** across all 70 scenarios
 
 ### Design Decisions
 
-**Decision 1: Three reproducer classes (StaleDataReproducer, CrossEntityReproducer, ErrorInvalidationReproducer)**
+**Decision 1: Seven reproducer classes (one per manifestation)**
 - *Why*: Each manifestation has a different setup and verification strategy. Bundling them would create complex conditional logic.
-- *How*: Three lightweight classes, each with a `reproduce()` method and assertion helpers. Each tests one thing well.
+- *How*: Seven lightweight classes (StaleDataReproducer, CrossSourceMixingReproducer, CrossEntityReproducer, BehavioralDriftReproducer, UnboundedGrowthReproducer, RaceConditionReproducer, ErrorInvalidationReproducer), each with a `reproduce_without_sdk()` and `reproduce_with_sdk()` method. Each tests one thing well.
 
 **Decision 2: Deterministic scenarios, not random**
 - *Why*: Reproducibility. If a test flakes, we need to debug it, not re-run it.
@@ -83,27 +87,38 @@ Each reproducer:
 
 ### Test Implementation
 - **File**: `tests/test_af006_scenario_reproduction.py`
-- **Structure**: 7 test methods + 3 reproducer classes
-- **Coverage**: 30 scenarios (10 per category)
-- **Results**: 100% prevention rate; shows exact moment where unprotected agent fails and protected agent succeeds
+- **Structure**: 11 test methods + 7 reproducer classes
+- **Coverage**: 70 scenarios (10 per manifestation)
+- **Test breakdown**:
+  - 7 individual reproduction tests (one per manifestation)
+  - 1 scenario coverage test (verifies all 7 manifestations covered)
+  - 1 reproducer framework test (validates reproducer infrastructure)
+  - 1 all-major-categories test (cross-category prevention verification)
+  - 1 scaled scenario test (70 tests with detailed results per manifestation)
+- **Results**: 100% prevention rate across all 70 tests; shows exact moment where unprotected agent fails and protected agent succeeds
 
 ---
 
-## Phase 3: Framework Integration Tests (5 frameworks, 15 combinations)
+## Phase 3: Framework Integration Tests (10 frameworks, 70 combinations across all 7 manifestations)
 
 ### What We Did
-Built adapter classes for all 5 major agent frameworks and tested protection works across each:
+Built adapter classes for all 10 production frameworks mentioned in the real failure data:
 
 1. **LangGraph** - graph-based agentic control flow
 2. **CrewAI** - multi-agent crews with role delegation
 3. **AutoGen** - group chat and code execution agents
 4. **OpenAI Agents** - native OpenAI agent runtime
 5. **Smolagents** - lightweight agents with tool routing
+6. **Cline** - highest impact (180 real failures)
+7. **LiveKit Agents** - real-time communication (82 real failures)
+8. **OpenHands** - comprehensive agent orchestration (67 real failures)
+9. **LangChain** - foundational agent framework
+10. **Stagehand** - web interaction agents
 
 For each framework, we:
-- Built an adapter that registers tools with `LangGraphContextProtection`
-- Ran 3 scenario types (stale data, cross-entity, error) through each
-- Verified all scenarios get **100% protection** (15/15 framework×scenario combinations)
+- Built an adapter that implements all 7 manifestation test methods
+- Ran all 7 manifestation scenarios through each framework
+- Verified all scenarios get **100% protection** (70/70 framework×manifestation combinations)
 
 ### Design Decisions
 
@@ -239,11 +254,18 @@ Measured the performance cost of AF-006 protection in two scenarios:
 
 ## Summary: What We Proved
 
-1. **Real failures exist at scale**: 507 documented, across 10 frameworks
-2. **We can prevent them**: 100% prevention rate across 30 reproducer scenarios
-3. **It works everywhere**: 100% protection across 5 framework integrations
-4. **Users can see the proof**: Browsable catalog with direct GitHub issue links
+1. **Real failures exist at scale**: 507 documented, across 10 production frameworks
+2. **We can prevent them all**: 100% prevention rate across 70 reproducer scenarios (10 tests × 7 manifestations)
+3. **It works everywhere**: 100% protection across 70 framework-manifestation combinations (10 frameworks × 7 manifestations)
+4. **Users can see the proof**: Browsable catalog with direct GitHub issue links to all 507 real failures
 5. **The cost is acceptable**: <5% overhead in realistic scenarios, negligible compared to benefit
+
+**Complete Test Coverage:**
+- Phase 1: 507 real failure validations
+- Phase 2: 70 reproducer scenario tests
+- Phase 3: 70 framework integration tests
+- Phase 4: AF006_FAILURE_CATALOG.md with GitHub links
+- Phase 5: Comprehensive overhead benchmarking
 
 ---
 

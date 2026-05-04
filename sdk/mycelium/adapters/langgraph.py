@@ -72,6 +72,10 @@ class LangGraphContextProtection:
         """Call a tool through the protected runtime."""
         return await self.runtime.call_tool(name, func, **kwargs)
 
+    async def call_tool_protected(self, name: str, func: Callable[..., Any], **kwargs: Any) -> Any:
+        """Alias for call_tool — consistent API across all adapters."""
+        return await self.runtime.call_tool(name, func, **kwargs)
+
     def advance_step(self) -> None:
         """Advance step counter after agent step."""
         self.runtime.advance_step()
