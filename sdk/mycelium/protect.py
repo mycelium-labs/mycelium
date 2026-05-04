@@ -15,6 +15,7 @@ Usage:
     result = await fetch_customer(customer_id="c1")
 """
 
+import asyncio
 import functools
 import time
 from contextvars import ContextVar
@@ -172,6 +173,87 @@ def protect(
                 args=args,
                 kwargs=kwargs,
             )
+
+        wrapper._mycelium_protected = True
+        wrapper._mycelium_entity_param = entity_param
+        wrapper._mycelium_ttl = ttl
+        return wrapper
+
+    return decorator
+
+
+def protect_sync(
+    entity_param: str | None = None,
+    ttl: float = _DEFAULT_TTL,
+    critical: bool = False,
+) -> Callable:
+    """
+    Decorator for synchronous tool functions (e.g. smolagents Tool.forward).
+
+    Behaves identically to @protect but wraps a sync function. Uses the
+    current thread's event loop if one exists, otherwise creates a new one.
+
+        @protect_sync(entity_param="customer_id", ttl=60)
+        def fetch_customer(customer_id: str) -> dict:
+            return db.get(customer_id)
+    """
+    def decorator(func: Callable) -> Callable:
+        tool_name = func.__name__
+
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if critical:
+                return func(*args, **kwargs)
+
+            session = _get_session()
+            entity_id = kwargs.get(entity_param) if entity_param else None
+            key = session._key(tool_name, entity_id)
+            now = time.monotonic()
+
+            entry = session._cache.get(key)
+            if entry is not None and now < entry.expires_at:
+                session._audit.append({
+                    "event": "cache_hit",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "ts": now,
+                })
+                return entry.value
+
+            if entry is not None:
+                session._audit.append({
+                    "event": "cache_stale",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "ts": now,
+                })
+
+            try:
+                result = func(*args, **kwargs)
+            except Exception as exc:
+                session._cache.pop(key, None)
+                session._audit.append({
+                    "event": "cache_error",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "error": str(exc),
+                    "ts": now,
+                })
+                raise
+
+            session._cache[key] = _CacheEntry(
+                value=result,
+                expires_at=now + ttl,
+                entity_id=entity_id,
+                tool_name=tool_name,
+            )
+            session._audit.append({
+                "event": "cache_add",
+                "tool": tool_name,
+                "entity_id": entity_id,
+                "ts": now,
+            })
+            return result
 
         wrapper._mycelium_protected = True
         wrapper._mycelium_entity_param = entity_param
