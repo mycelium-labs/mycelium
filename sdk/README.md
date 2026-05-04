@@ -1,313 +1,120 @@
-# Mycelium SDK (Python)
+# Mycelium SDK
 
-Runtime protection library for AI agents against context corruption failure modes (AF-006).
+Runtime protection for AI agents against context corruption (AF-006).
 
-## Quick Start
+Decorate your tools once. Use them normally in any framework. Mycelium handles the rest.
 
-From this directory:
-
-```bash
-uv sync --all-groups
-uv run pytest
-uv run python -c "import mycelium; print(mycelium.__version__)"
-```
-
-Uses **`sdk/.venv`** (separate from a repo-root `.venv` if you have one).
-
-## Installation
-
-Install the SDK as a library in your agent project:
+## Install
 
 ```bash
-# From the mycelium repo
 pip install ./sdk
-
-# Or editable install for development
-pip install -e ./sdk
 ```
 
 ## Usage
 
-### Basic Usage with LangChain/LangGraph
+```python
+from mycelium import protect, Session
+
+@protect(entity_param="customer_id", ttl=60)
+async def fetch_customer(customer_id: str) -> dict:
+    return await db.get(customer_id)
+
+@protect(entity_param="sku", ttl=300)
+async def get_inventory(sku: str) -> dict:
+    return await warehouse.get(sku)
+```
+
+That's it. Call your tools normally in LangGraph, AutoGen, CrewAI, or any other framework — Mycelium intercepts at the function level.
 
 ```python
-from mycelium.adapters.langgraph import LangGraphIntegration
-from mycelium.core.runtime_context_corruption import AgentRuntimeWithContextProtection
+# LangGraph — no changes to how you use the graph
+tool_node = ToolNode([fetch_customer, get_inventory])
 
-# Create protection for your agent
-integration = LangGraphIntegration()
+# AutoGen — no changes to agent setup
+agent = AssistantAgent(tools=[fetch_customer, get_inventory])
 
-# Define a tool
-def fetch_user(user_id: str) -> dict:
-    return {"id": user_id, "name": "User"}
+# Direct call — works the same
+result = await fetch_customer(customer_id="c1")
+```
 
-# Register with protection rules
-integration.register_tools(
-    {"fetch_user": fetch_user},
-    critical_tools=["fetch_user"]  # Mark critical data
-)
+## Session isolation
 
-# Use in your agent
-protection = integration.get_protection()
+Wrap each agent run in a `Session` to prevent cache leakage between runs:
 
-# Call tools through protection
-result = await protection.call_tool_protected(
-    "fetch_user",
-    fetch_user,
-    user_id="alice"
-)
+```python
+async with Session() as session:
+    result = await fetch_customer(customer_id="c1")
+    result2 = await fetch_customer(customer_id="c1")  # cache hit — no second DB call
 
-# Advance step after each agent reasoning step
+# New run gets a clean cache
+async with Session() as session:
+    result = await fetch_customer(customer_id="c1")  # fresh call
+```
+
+Without an explicit `Session`, a global session is used — fine for single-agent scripts, not for production services handling concurrent requests.
+
+## Parameters
+
+### `@protect`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `entity_param` | `str \| None` | `None` | Kwarg name that identifies the entity. Different entity values get separate cache entries. |
+| `ttl` | `float` | `300` | Seconds before a cached result is considered stale and the real function is called again. |
+| `critical` | `bool` | `False` | Skip caching entirely — always call the real function. Use for tools where staleness is never acceptable. |
+
+### `Session`
+
+| Method | Description |
+|--------|-------------|
+| `session.cache_size()` | Number of live (non-expired) entries |
+| `session.audit_log()` | Full list of cache events (`cache_add`, `cache_hit`, `cache_stale`, `cache_error`) |
+| `session.invalidate(tool_name, entity_id)` | Manually evict a specific entry |
+
+## What it protects against
+
+All 7 AF-006 manifestations:
+
+| Manifestation | How Mycelium prevents it |
+|---|---|
+| Stale data | TTL expiry — real function called after `ttl` seconds |
+| Cross-entity leakage | Separate cache entry per `entity_param` value |
+| Cross-source mixing | Separate cache entry per tool name |
+| Behavioral drift | TTL forces re-fetch — drift surfaces on next call |
+| Unbounded growth | Expired entries evicted automatically |
+| Race conditions | Per-entity cache keys — concurrent calls never overwrite each other |
+| Error invalidation | Any exception clears the entry — next call always gets fresh data |
+
+## Audit log
+
+Every cache decision is recorded:
+
+```python
+async with Session() as s:
+    await fetch_customer(customer_id="c1")
+    await fetch_customer(customer_id="c1")  # hit
+
+for event in s.audit_log():
+    print(event)
+# {'event': 'cache_add', 'tool': 'fetch_customer', 'entity_id': 'c1', 'ts': ...}
+# {'event': 'cache_hit', 'tool': 'fetch_customer', 'entity_id': 'c1', 'ts': ...}
+```
+
+## Real-world validation
+
+- **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** — test suite with 507 real failure cases, AutoGen #6789 and LiveKit #5408 real reproductions, and all 7 AF-006 manifestations tested end-to-end
+
+## Framework adapters (advanced)
+
+If you need step-based TTL instead of time-based, or want tighter integration with a specific framework's lifecycle, framework adapters are available in `mycelium.adapters.*`. They wrap the same core protection but expose `advance_step()` / `advance_turn()` / `advance_action()` for manual step control.
+
+```python
+from mycelium.adapters.langgraph import LangGraphContextProtection
+
+protection = LangGraphContextProtection()
+protection.register_tool("fetch_customer", fetch_customer, entity_param="customer_id")
+result = await protection.call_tool_protected("fetch_customer", fetch_customer, customer_id="c1")
 protection.advance_step()
-
-# Get statistics
-stats = integration.get_stats()
-print(f"Cache hit rate: {stats['hit_rate']}")
 ```
 
-### Framework Integrations
-
-The SDK supports multiple agent frameworks:
-
-#### LangGraph
-```python
-from mycelium.adapters.langgraph import LangGraphIntegration
-
-integration = LangGraphIntegration()
-integration.register_tools({"tool_name": tool_func})
-protection = integration.get_protection()
-```
-
-#### CrewAI
-```python
-from mycelium.adapters.crewai import CrewAIIntegration
-
-integration = CrewAIIntegration()
-integration.register_tools({"tool_name": tool_func})
-protection = integration.get_protection()
-```
-
-#### AutoGen
-```python
-from mycelium.adapters.autogen import AutoGenIntegration
-
-integration = AutoGenIntegration()
-integration.register_tools({"tool_name": tool_func})
-protection = integration.get_protection()
-```
-
-#### OpenAI Agents SDK
-```python
-from mycelium.adapters.openai_agents import OpenAIAgentsIntegration
-
-integration = OpenAIAgentsIntegration()
-integration.register_tools({"tool_name": tool_func})
-protection = integration.get_protection()
-```
-
-#### Smolagents
-```python
-from mycelium.adapters.smolagents import SmolagentsIntegration
-
-integration = SmolagentsIntegration()
-integration.register_tools({"tool_name": tool_func})
-protection = integration.get_protection()
-```
-
-### Protecting Tools
-
-Mark tools with protection rules using decorators:
-
-```python
-from mycelium.protections.decorators import tool
-
-@tool(
-    critical=True,                 # HIGH criticality → force re-verify on repeated reads
-    entity_param="user_id",        # Parameter name that identifies the entity
-    invalidate_after_steps=5       # Refetch after 5 agent reasoning steps
-)
-async def fetch_user_profile(user_id: str) -> dict:
-    """Fetch user profile (must stay fresh)."""
-    return api.get(f"/users/{user_id}")
-
-@tool(
-    critical=False,
-    invalidate_after_steps=10      # Less critical, can use older cache
-)
-async def search_documents(query: str) -> list[dict]:
-    """Search documents."""
-    return db.search(query)
-```
-
-### Configuration
-
-Customize context invalidation rules:
-
-```python
-from mycelium.core.runtime_context_corruption import (
-    AgentRuntimeWithContextProtection,
-    InvalidationPolicy,
-)
-from mycelium.protections.context_corruption import ContextSegmentation
-
-policy = InvalidationPolicy(
-    default_ttl_steps=5,                           # Default cache TTL
-    criticality_recheck_threshold=2,               # Re-verify high-criticality after 2+ reads
-    segmentation=ContextSegmentation.BOTH,         # Separate cache by entity AND source
-    rate_limit_patterns=[r"(?i)(rate.?limit|429)"] # Custom rate-limit detection
-)
-
-runtime = AgentRuntimeWithContextProtection(policy=policy, verbose=True)
-```
-
-### Monitoring
-
-Access cache statistics and audit logs:
-
-```python
-# Get current cache state
-snapshot = protection.get_cache_snapshot()
-print(f"Cached entries: {len(snapshot)}")
-
-# Get audit trail
-audit = protection.get_audit_log()
-for event in audit:
-    print(f"{event['event_type']}: {event['data']}")
-
-# Get stats
-stats = protection.get_stats()
-print(f"Hits: {stats['cache_hits']}, Misses: {stats['cache_misses']}")
-print(f"Hit rate: {stats['hit_rate']:.1%}")
-```
-
-## Core Concepts
-
-### Context Corruption (AF-006)
-
-Agents can suffer from context corruption when:
-- **Stale data**: Using old cached context without re-verification
-- **Cross-contamination**: Mixing context from different entities/sources
-- **Behavioral drift**: High-criticality data read repeatedly without re-check
-
-### Protection Mechanisms
-
-1. **TTL-based invalidation**: Auto-refetch after N reasoning steps
-2. **Criticality re-verification**: Force re-check high-criticality data on repeated reads
-3. **Entity segmentation**: Separate caches by entity_id (e.g., user_id)
-4. **Source segmentation**: Separate caches by tool/source
-5. **Immutable versioning**: All entries are append-only with complete audit trail
-6. **Error invalidation**: Immediately invalidate on tool errors
-
-## Architecture
-
-```
-┌─ AgentRuntimeWithContextProtection (runtime enforcement)
-│  ├─ ContextCache (versioning + TTL + audit)
-│  ├─ ToolRegistry (metadata + entity extraction)
-│  └─ Interceptor (tool call wrapping)
-│
-└─ Framework Adapters (LangGraph, CrewAI, etc.)
-   └─ Integration classes (high-level API)
-```
-
-## Testing
-
-Run the full test suite:
-
-```bash
-# Unit tests
-uv run pytest tests/test_context_corruption.py
-
-# Runtime integration tests
-uv run pytest tests/test_runtime_context_corruption.py
-
-# Stress tests (100K entries, 1000 concurrent calls, etc.)
-uv run pytest tests/test_stress_context_corruption.py
-```
-
-## Performance
-
-- **Throughput**: 68K-235K operations/second
-- **Cache hit rate**: 66-93% (depends on workload)
-- **Memory**: 0MB growth over 5000+ steps with proper TTL tuning
-
-## Proof Against AF-006
-
-This SDK is **proven** to protect against context corruption (AF-006) through comprehensive testing and formal verification.
-
-### Quick Proof Overview
-
-| Failure Mode | Test Type | Coverage | Status |
-|---|---|---|---|
-| **Stale Data** | Property-based + Adversarial | 100% | ✅ Proven |
-| **Cross-Entity Leakage** | Property-based + Integration | 100% | ✅ Proven |
-| **Cross-Source Mixing** | Property-based + Stress | 100% | ✅ Proven |
-| **Behavioral Drift** | Property-based + Runtime | 100% | ✅ Proven |
-| **Unbounded Growth** | Stress test | 100% | ✅ Proven |
-| **Race Conditions** | Adversarial | 100% | ✅ Proven |
-| **Error Invalidation** | Integration | 100% | ✅ Proven |
-
-**Total Coverage**: 47 direct + 500+ property-based + 12 adversarial = **600+ test cases**
-
-### Proof Documentation
-
-- **[PROOF_SUMMARY.md](PROOF_SUMMARY.md)** - Complete end-to-end proof across all 7 failure modes with formal invariants
-- **[AF006_PROOF.md](AF006_PROOF.md)** - Detailed test matrix, coverage report, and test execution guide
-- **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** - Real-world comparison agent demonstrating practical protection
-
-### Run the Proof
-
-```bash
-# Run all 600+ test cases
-uv run pytest tests/ -v
-
-# Run comparison agent (real-world validation)
-cd ../agent-test-AF006
-python main.py
-```
-
-### Real-World Results
-
-The [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) comparison agent shows practical protection:
-
-**Without Mycelium SDK**:
-- Cache hit rate: 67% (misleadingly high)
-- Data freshness: ⚠️ STALE (outdated customer profiles)
-- Entity isolation: ❌ RISK (no explicit segmentation)
-- Critical re-verify: ❌ NEVER (cache forever)
-- Memory growth: 📈 UNBOUNDED
-
-**With Mycelium SDK**:
-- Cache hit rate: 33% (balanced, forced refetches for freshness)
-- Data freshness: ✅ GUARANTEED (TTL enforcement)
-- Entity isolation: ✅ ENFORCED (per-entity cache keys)
-- Critical re-verify: ✅ AUTOMATIC (threshold-based refetch)
-- Memory growth: ✅ BOUNDED (0MB growth over 5000 steps)
-
-### Test Scenarios
-
-The comparison agent validates AF-006 protection across 4 real-world scenarios:
-
-1. **Multi-Customer Outreach** - Entity segmentation prevents cross-customer leakage
-2. **Data Changes Mid-Conversation** - TTL enforcement detects stale data
-3. **Critical Data Re-Verification** - Repeated reads trigger refetch on critical tools
-4. **Long Agent Run** - Memory stays bounded with TTL cleanup
-
-## Documentation
-
-**Code**:
-- Core protection mechanism: `mycelium/protections/context_corruption.py`
-- Runtime integration: `mycelium/core/runtime_context_corruption.py`
-- Decorators & metadata: `mycelium/protections/decorators.py`
-- Framework adapters: `mycelium/adapters/*.py`
-
-**Proof & Validation**:
-- [PROOF_SUMMARY.md](PROOF_SUMMARY.md) - End-to-end proof across all 7 failure modes
-- [AF006_PROOF.md](AF006_PROOF.md) - Detailed test matrix and invariant proofs
-- [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) - Real-world comparison agent
-- [TESTING.md](https://github.com/mycelium-labs/agent-test-AF006/blob/main/TESTING.md) - How to run all tests
-
-**Getting Started**:
-- [README.md](README.md) (this file) - Quick start and usage examples
-- [Installation](#installation) - Install as library
-- [Usage](#usage) - Framework integrations and examples
+The `@protect` decorator is the recommended approach for new integrations.
