@@ -384,6 +384,21 @@ class ContextCache:
         """Called when agent completes one reasoning step."""
         self._current_step += 1
         self._log_event("step_advanced", {"step": self._current_step})
+        self._evict_expired()
+
+    def _evict_expired(self) -> None:
+        """Remove entries whose TTL has been exceeded and have not been accessed since expiry."""
+        expired_keys = []
+        for key, history in self._entries.items():
+            current = history.current_version()
+            if current is None:
+                expired_keys.append(key)
+                continue
+            age = self._current_step - current.created_at_step
+            if age > current.invalidate_after_steps:
+                expired_keys.append(key)
+        for key in expired_keys:
+            del self._entries[key]
 
     def get_audit_log(self) -> list[dict[str, Any]]:
         """Return complete audit trail (immutable)."""
