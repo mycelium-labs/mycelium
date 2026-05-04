@@ -19,7 +19,7 @@ cline/cline
 browserbase/stagehand
 livekit/agents
 
-# Backlog — uncomment as the pipeline matures:
+# Backlog - uncomment as the pipeline matures:
 # princeton-nlp/SWE-agent
 # block/goose
 # ComposioHQ/composio

@@ -121,7 +121,7 @@ All with before/after comparison showing protection effectiveness
 ### Core Work
 ```
 d12fc5f chore: log closing GH #1 (scrape CI DoD)
-360729f docs(hf): flesh out dataset README — sources, licensing, cadence (#2)
+360729f docs(hf): flesh out dataset README - sources, licensing, cadence (#2)
 a3a554b docs(research): tag-frequency-v0 for hand-tag corpus; close #3
 3cd56dc feat(research): AF frequency script, v1-scope (#4)
 ```
@@ -191,7 +191,7 @@ e49e8aa docs: Phase 4-5 completion summary for AF-006 context corruption protect
 - Memory injection (crewAI#5057)
 - Behavioral drift (crewAI#5155)
 - Checkpoint corruption (langgraph#6938)
-- Lost state in long context (cline#7462) — REAL USER FAILURE
+- Lost state in long context (cline#7462) - REAL USER FAILURE
 - Subgraph memory loss (langgraph#7117)
 
 **Total Tests**: 13 + 16 + 12 + 5 + 5 + 5 = **56 passing tests**
@@ -255,7 +255,7 @@ docs/
 - Checkpoint schema validated on every load
 - Invalid states caught before propagation
 
-✅ **Long-Context State Loss** (AF-006) — Real User Failure
+✅ **Long-Context State Loss** (AF-006) - Real User Failure
 - Agent maintains correct mode/state through long task sequences
 - No silent divergence after N steps
 

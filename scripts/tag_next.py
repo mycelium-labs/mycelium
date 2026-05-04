@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LEGACY interactive tagging — builds `incidents/tagged/v0/` for regression tests.
+"""LEGACY interactive tagging - builds `incidents/tagged/v0/` for regression tests.
 
 The live failure-mode catalog is **only** Hugging Face `predictions/<repo>.jsonl`
 from `python scripts/classify_corpus.py run` (prefilter + Claude).
@@ -69,7 +69,7 @@ def load_taxonomy() -> dict[str, dict[str, str]]:
     for path in sorted(TAXONOMY_DIR.glob("AF-*.md")):
         text = path.read_text()
         af_id = path.name.split("-", 1)[0] + "-" + path.name.split("-")[1]
-        m_name = re.match(r"#\s*(AF-\d+)\s*[—-]\s*(.+)", text.splitlines()[0])
+        m_name = re.match(r"#\s*(AF-\d+)\s*[--]\s*(.+)", text.splitlines()[0])
         name = m_name.group(2).strip() if m_name else af_id
 
         def field(label: str) -> str:
@@ -144,7 +144,7 @@ def build_queue() -> int:
         if not issues:
             continue
 
-        # Sample N (or all, if fewer). Skip pull requests (defensive — already filtered).
+        # Sample N (or all, if fewer). Skip pull requests (defensive - already filtered).
         issues = [i for i in issues if "pull_request" not in i]
         n = min(SAMPLE_PER_REPO, len(issues))
         picks = rng.sample(issues, n)
@@ -306,7 +306,7 @@ def tag_one(issue: dict[str, Any], idx: int, total: int, tax: dict[str, dict[str
         if confidence not in ("h", "m", "l"):
             confidence = "m"
 
-        evidence = prompt("evidence (1-line quote or signal — required)")
+        evidence = prompt("evidence (1-line quote or signal - required)")
         while not evidence:
             print("  ! evidence is required (forces you to think; this is the data we'll learn from)")
             evidence = prompt("evidence (1-line quote or signal)")
@@ -341,7 +341,7 @@ def cmd_tag() -> int:
         return 0
 
     print(f"Resuming: {len(tagged_ids)} done, {len(todo)} to go.")
-    print("(Ctrl-C is safe — each tag is appended immediately, so you can quit anytime.)")
+    print("(Ctrl-C is safe - each tag is appended immediately, so you can quit anytime.)")
 
     for idx, issue in todo:
         try:
@@ -353,7 +353,7 @@ def cmd_tag() -> int:
             print("\n  (saved; resume later with `tag_next.py`)")
             return 0
 
-    print(f"\n✓ done — all {len(queue)} issues tagged. See `tag_next.py status`.")
+    print(f"\n✓ done - all {len(queue)} issues tagged. See `tag_next.py status`.")
     return 0
 
 

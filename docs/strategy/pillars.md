@@ -1,4 +1,4 @@
-# Mycelium — Product pillars
+# Mycelium - Product pillars
 
 > The five decisions that define Mycelium. Everything the company ships, sells,
 > or writes should be traceable back to one of these. If a feature, deck slide,
@@ -12,7 +12,7 @@ Status: v0, locked 2026-04-25. Revisit after first paying design partner.
 
 **What:** Mycelium wraps any agent stack without requiring a rewrite.
 Supported surfaces (v1 scope): LangGraph, CrewAI, AutoGen, OpenAI Agents SDK,
-Anthropic SDK, raw model-provider loops. Adapters are thin — the runtime core
+Anthropic SDK, raw model-provider loops. Adapters are thin - the runtime core
 is independent of any framework.
 
 **Why it matters:** Enterprises don't standardize on one agent framework. Every
@@ -37,13 +37,13 @@ factual claim, RBAC, per-tenant isolation, data-residency controls, and a
 defensible answer to every item on a SOC 2 / ISO 27001 / HIPAA / DPDP review.
 
 **Why it matters:** In regulated industries (fintech, healthcare, legal,
-government, pharma) agents are effectively banned in production today — not
+government, pharma) agents are effectively banned in production today - not
 because the tech doesn't work, but because the vendors can't answer the
 compliance questions. Mycelium's default answer is "yes, already handled."
 That's the wedge.
 
 **What it is NOT:** A prompt-injection-only product (that's a subset). Not a
-guardrails-as-a-service DLP layer. Compliance here is architectural — it's
+guardrails-as-a-service DLP layer. Compliance here is architectural - it's
 about making consequences traceable, not about filtering text.
 
 **Implication for roadmap:** Every feature must ship with its audit-log
@@ -64,7 +64,7 @@ broke *after* it broke. Mycelium stops it from breaking. This is the one-line
 pitch that makes a CISO lean forward.
 
 Observability and prevention are complements, not competitors. Customers will
-run both. But prevention is the harder, stickier, higher-leverage layer —
+run both. But prevention is the harder, stickier, higher-leverage layer -
 and nobody else is building it.
 
 **What it is NOT:** Not an eval platform. Evals run pre-deployment; Mycelium
@@ -93,18 +93,18 @@ corpus. The SDK is the distribution; the **catalog is the company**.
 corpus that drives code generation, policy defaults, and protection modules.
 
 **Implication for roadmap:** Corpus work (ingestion, tagging, research) is
-not support work — it's the product. The dogfooding and scraping pipelines
+not support work - it's the product. The dogfooding and scraping pipelines
 running today are P0 infra, not side projects.
 
 ---
 
 ## 5. Self-hostable, data-sovereign
 
-**What:** The SDK runs in-process — trace data never leaves the customer's
+**What:** The SDK runs in-process - trace data never leaves the customer's
 runtime by default. For enterprises that want a richer UX, an optional
 **gateway** mode ships as a single container deployed in their VPC. The
 Mycelium cloud control plane handles only policy metadata and aggregated
-signals — **never** raw trace payloads.
+signals - **never** raw trace payloads.
 
 **Why it matters:** Regulated enterprises can't send tool-call traces to a
 third-party SaaS. Most AI startups don't have this option because their
@@ -112,7 +112,7 @@ products are centralized. Data sovereignty is a binary procurement filter:
 either you have it or you lose the deal.
 
 **What it is NOT:** An on-prem-only product. The cloud control plane is real
-and valuable — policy management, catalog sync, aggregate telemetry,
+and valuable - policy management, catalog sync, aggregate telemetry,
 benchmarking. But the trace data path is severable, and that's what matters.
 
 **Implication for roadmap:** Every cloud feature must have an air-gapped
@@ -128,11 +128,11 @@ named separately:
 
 | Decision | Meaning | Trade-off |
 |---|---|---|
-| **Compliance as product pillar** (pillar 2) | Every customer gets SOC 2, encryption, audit, RBAC — built in. | Table stakes for any B2B enterprise play. |
+| **Compliance as product pillar** (pillar 2) | Every customer gets SOC 2, encryption, audit, RBAC - built in. | Table stakes for any B2B enterprise play. |
 | **Compliance-heavy as first ICP** | Fintech, healthcare, legal, gov are the first 10 customers. | Longer sales cycles, much higher ACV, sticker stickiness, brutal procurement. |
 
 Mycelium is currently saying yes to both. That's the right call because they
-reinforce each other — and because non-regulated customers benefit from the
+reinforce each other - and because non-regulated customers benefit from the
 same primitives at no extra cost.
 
 **Consequence for design-partner outreach (M5):** the first 20-person outreach
@@ -160,7 +160,7 @@ shiny demo or a customer request:
 ## When to revisit this doc
 
 - After the first paying design partner closes (pillars may sharpen).
-- If a pillar is in conflict with a $1M+ deal — re-examine the pillar, don't
+- If a pillar is in conflict with a $1M+ deal - re-examine the pillar, don't
   abandon it quietly.
 - Annually, at minimum. File a dated diff in `docs/strategy/pillars-v{N}.md`
   rather than overwriting. History matters.

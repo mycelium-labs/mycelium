@@ -13,7 +13,7 @@ The Hugging Face repo is the source of truth. The local directory
 `incidents/public/github-issues/` is just a short-lived upload buffer (and is
 gitignored).
 
-This is v0 of the Mycelium threat-research pipeline — manual for now, will be
+This is v0 of the Mycelium threat-research pipeline - manual for now, will be
 driven by a Claude skill later.
 
 ### One-time setup
@@ -42,7 +42,7 @@ export GITHUB_TOKEN=ghp_your_token_here
    - Under an org (recommended long-term): create an org
      `mycelium-labs`, then `mycelium-labs/agent-failures`
 
-   You do **not** need to create the dataset in the HF UI — the scraper will
+   You do **not** need to create the dataset in the HF UI - the scraper will
    create it (private) on first run if it doesn't exist.
 
 ```bash
@@ -76,7 +76,7 @@ source ~/.zshrc
 ### Run
 
 ```bash
-# Single repo — start here.
+# Single repo - start here.
 python scripts/scrape_github_issues.py langchain-ai/langchain
 
 # Every repo listed (uncommented) in scripts/repos.txt
@@ -119,7 +119,7 @@ HF settings UI once the corpus matures.
   previous days persist.
 - `--since` uses the `updated_at` field, so re-running picks up edited issues
   as well as new ones.
-- If the HF upload fails, the local buffer file still exists — re-run the same
+- If the HF upload fails, the local buffer file still exists - re-run the same
   command (with `--since` if you want to skip re-scraping) to retry.
 
 ### What to do after a successful scrape
@@ -144,4 +144,4 @@ python scripts/analyze_af_frequency.py
 python scripts/analyze_af_frequency.py --markdown   # paste-friendly table
 ```
 
-Used for roadmap decisions — see `research/v1-scope.md`.
+Used for roadmap decisions - see `research/v1-scope.md`.

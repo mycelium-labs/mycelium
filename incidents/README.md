@@ -4,9 +4,9 @@ This folder contains real-world agent failure data, tagged and structured by fai
 
 ## Structure
 
-- `public/` — raw ingested incidents, unprocessed
-- `tagged/` — incidents mapped to AF-001 through AF-009 taxonomy
-- `pipeline/ingest.md` — notes on how data gets in
+- `public/` - raw ingested incidents, unprocessed
+- `tagged/` - incidents mapped to AF-001 through AF-009 taxonomy
+- `pipeline/ingest.md` - notes on how data gets in
 
 ## How to Add an Entry
 

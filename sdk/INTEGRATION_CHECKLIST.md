@@ -310,10 +310,10 @@ Use this final checklist to confirm all AF-006 failure modes are prevented:
 
 For more details:
 
-- **[PROOF_SUMMARY.md](PROOF_SUMMARY.md)** — Complete proof across all 7 failure modes
-- **[AF006_PROOF.md](AF006_PROOF.md)** — Test matrix and coverage details
-- **[README.md](README.md)** — Usage examples and framework guides
-- **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** — Real-world comparison agent
+- **[PROOF_SUMMARY.md](PROOF_SUMMARY.md)** - Complete proof across all 7 failure modes
+- **[AF006_PROOF.md](AF006_PROOF.md)** - Test matrix and coverage details
+- **[README.md](README.md)** - Usage examples and framework guides
+- **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** - Real-world comparison agent
 
 ---
 

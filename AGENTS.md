@@ -30,7 +30,7 @@ want to ask.
 Reverse-chronological (newest on top). Each entry is **4 bullets, no more**:
 
 ```
-## YYYY-MM-DD — short title (<= 8 words)
+## YYYY-MM-DD - short title (<= 8 words)
 - did: <what happened this session>
 - found: <what we learned / decided / discovered> (optional)
 - now: <current state of the repo / project>
@@ -39,13 +39,13 @@ Reverse-chronological (newest on top). Each entry is **4 bullets, no more**:
 
 Rules for writing entries:
 
-- Max 6 lines total per entry. If you need more, you're over-logging — put
+- Max 6 lines total per entry. If you need more, you're over-logging - put
   the detail in `research/`, `incidents/`, or `docs/` and link from the log.
 - No emojis. No marketing language. Plain status.
 - Write in past tense for `did` / `found`, present tense for `now`,
   imperative for `next`.
-- If multiple sessions happen on the same day, append `— AM` / `— evening`
-  / `— session 2` to the title rather than merging entries.
+- If multiple sessions happen on the same day, append `- AM` / `- evening`
+  / `- session 2` to the title rather than merging entries.
 - Dates are the real calendar date. If you don't know it, ask or check
   `date` / the environment before writing the entry.
 

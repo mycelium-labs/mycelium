@@ -3,7 +3,7 @@
 
 The failure-mode **catalog of record** is Hugging Face `predictions/*.jsonl`
 from `scripts/classify_corpus.py run`. Use this script only if you still want a
-duplicate trail in git for offline grep — not required for the product.
+duplicate trail in git for offline grep - not required for the product.
 
 Idempotent: skips issue ids already in tagged.jsonl.
 

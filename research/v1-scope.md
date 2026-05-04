@@ -1,13 +1,13 @@
-# SDK v1 scope — failure modes to protect first
+# SDK v1 scope - failure modes to protect first
 
 **Decision date:** 2026-05-03  
 **Inputs:** (1) full Hugging Face classifier corpus `predictions/*.jsonl`, (2) v0 hand-tag sample (`research/tag-frequency-v0.md`, `incidents/tagged/v0/`).
 
 ---
 
-## 1. Full corpus — AF-* frequency (automated classifier)
+## 1. Full corpus - AF-* frequency (automated classifier)
 
-Source: `scripts/analyze_af_frequency.py` over **`ndileep/mycelium-agent-failures`** — all 10 repos in `scripts/classify_corpus.py` `REPOS`.
+Source: `scripts/analyze_af_frequency.py` over **`ndileep/mycelium-agent-failures`** - all 10 repos in `scripts/classify_corpus.py` `REPOS`.
 
 | Metric | Value |
 |--------|------:|
@@ -37,7 +37,7 @@ Source: `scripts/analyze_af_frequency.py` over **`ndileep/mycelium-agent-failure
 
 ## 2. v0 human sample (50 issues)
 
-From `tagged.jsonl` — AF assignments only (excluding pure `not-a-failure`):
+From `tagged.jsonl` - AF assignments only (excluding pure `not-a-failure`):
 
 | AF-ID | Human tag assignments |
 |-------|------------------------:|
@@ -50,17 +50,17 @@ From `tagged.jsonl` — AF assignments only (excluding pure `not-a-failure`):
 
 ---
 
-## 3. Decision — top 3 for SDK v1
+## 3. Decision - top 3 for SDK v1
 
 | Priority | Mode | Rationale |
 |----------|------|-----------|
-| **1** | **AF-006** — Context corruption | #1 in human v0; #2 in full corpus. Maps to memory/context hygiene, invalidation, provenance — core “substrate” story. |
-| **2** | **AF-004** — Tool misuse / boundary violations | #1 in corpus frequency; strongest match to **typed syscalls + capability gates** (enforceable at tool boundary). Aligns with enterprise “wrong tool / wrong args” incidents. |
-| **3** | **AF-002** — Observability black hole | Strong in v0 (#2 human); moderate in corpus (304). Maps to **mandatory verification / traceability** after writes — CISO-legible. |
+| **1** | **AF-006** - Context corruption | #1 in human v0; #2 in full corpus. Maps to memory/context hygiene, invalidation, provenance - core “substrate” story. |
+| **2** | **AF-004** - Tool misuse / boundary violations | #1 in corpus frequency; strongest match to **typed syscalls + capability gates** (enforceable at tool boundary). Aligns with enterprise “wrong tool / wrong args” incidents. |
+| **3** | **AF-002** - Observability black hole | Strong in v0 (#2 human); moderate in corpus (304). Maps to **mandatory verification / traceability** after writes - CISO-legible. |
 
 **Why not AF-007 first** despite high classifier count (415)? It overlaps linguistically with “agent stopped early” generic issues; we’ll fold **exit / completion checks** into the same runtime as AF-006/AF-004 where they collide, but **AF-007 is not a standalone v1 pillar** until we separate signal from noise in a human audit pass.
 
-**Why not AF-009 in the top 3 despite injection headlines?** Low prevalence in both slices (22 LLM, 1 human). Still **on the near roadmap** for a security SKU — not the first three enforcement modules.
+**Why not AF-009 in the top 3 despite injection headlines?** Low prevalence in both slices (22 LLM, 1 human). Still **on the near roadmap** for a security SKU - not the first three enforcement modules.
 
 ---
 

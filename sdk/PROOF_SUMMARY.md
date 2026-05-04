@@ -5,11 +5,11 @@
 This document provides a complete end-to-end proof that the Mycelium SDK protects against AF-006 (Context Corruption) failure modes.
 
 **Proof Components**:
-1. **Theory** — Invariant-based proofs of protection mechanisms
-2. **Direct Tests** — 47 integration test cases covering all failure modes
-3. **Property Tests** — 500+ hypothesis-generated examples verifying invariants
-4. **Adversarial Tests** — 12 attack scenarios proving the SDK cannot be bypassed
-5. **Real-World Validation** — Comparison agent showing before/after protection
+1. **Theory** - Invariant-based proofs of protection mechanisms
+2. **Direct Tests** - 47 integration test cases covering all failure modes
+3. **Property Tests** - 500+ hypothesis-generated examples verifying invariants
+4. **Adversarial Tests** - 12 attack scenarios proving the SDK cannot be bypassed
+5. **Real-World Validation** - Comparison agent showing before/after protection
 
 **Total Coverage**: 600+ test cases + formal proofs across 7 failure modes
 
@@ -131,7 +131,7 @@ This document provides a complete end-to-end proof that the Mycelium SDK protect
 | Adversarial | 12 | Attack resistance | `tests/test_af006_adversarial.py` |
 | Stress | 100K+ ops | Scalability | `tests/test_stress_context_corruption.py` |
 | Real-World | 4 scenarios | Practical validation | [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) |
-| **TOTAL** | **600+** | **100% of AF-006** | — |
+| **TOTAL** | **600+** | **100% of AF-006** | - |
 
 ---
 
@@ -201,19 +201,19 @@ The [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) reposi
 
 ### Scenarios Tested
 
-1. **Multi-Customer Outreach** — 3 customers, 9 tool calls
+1. **Multi-Customer Outreach** - 3 customers, 9 tool calls
    - Without SDK: Cross-customer risk from naive cache
    - With SDK: Perfect entity isolation
 
-2. **Data Changes Mid-Conversation** — Backend mutation during agent loop
+2. **Data Changes Mid-Conversation** - Backend mutation during agent loop
    - Without SDK: Agent continues with outdated preferences
    - With SDK: Mutation detected, critical tool refetches
 
-3. **Critical Data Re-Verification** — Repeated reads on same entity
+3. **Critical Data Re-Verification** - Repeated reads on same entity
    - Without SDK: Behavioral drift, stale decisions
    - With SDK: Criticality threshold triggers refetch
 
-4. **Long Agent Run** — 52 steps, multiple tool calls
+4. **Long Agent Run** - 52 steps, multiple tool calls
    - Without SDK: Cache unbounded, memory grows
    - With SDK: TTL cleanup keeps memory flat
 
@@ -281,9 +281,9 @@ Evidence:
 
 ## References
 
-- [AF006_PROOF.md](AF006_PROOF.md) — Detailed test coverage matrix
-- [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) — Real-world validation
-- [README.md](README.md) — SDK usage and quick start
-- `tests/test_context_corruption.py` — Direct test implementations
-- `tests/test_af006_properties.py` — Property-based test implementations
-- `tests/test_af006_adversarial.py` — Adversarial test implementations
+- [AF006_PROOF.md](AF006_PROOF.md) - Detailed test coverage matrix
+- [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) - Real-world validation
+- [README.md](README.md) - SDK usage and quick start
+- `tests/test_context_corruption.py` - Direct test implementations
+- `tests/test_af006_properties.py` - Property-based test implementations
+- `tests/test_af006_adversarial.py` - Adversarial test implementations

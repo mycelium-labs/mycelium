@@ -251,9 +251,9 @@ This SDK is **proven** to protect against context corruption (AF-006) through co
 
 ### Proof Documentation
 
-- **[PROOF_SUMMARY.md](PROOF_SUMMARY.md)** — Complete end-to-end proof across all 7 failure modes with formal invariants
-- **[AF006_PROOF.md](AF006_PROOF.md)** — Detailed test matrix, coverage report, and test execution guide
-- **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** — Real-world comparison agent demonstrating practical protection
+- **[PROOF_SUMMARY.md](PROOF_SUMMARY.md)** - Complete end-to-end proof across all 7 failure modes with formal invariants
+- **[AF006_PROOF.md](AF006_PROOF.md)** - Detailed test matrix, coverage report, and test execution guide
+- **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** - Real-world comparison agent demonstrating practical protection
 
 ### Run the Proof
 
@@ -288,10 +288,10 @@ The [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) compar
 
 The comparison agent validates AF-006 protection across 4 real-world scenarios:
 
-1. **Multi-Customer Outreach** — Entity segmentation prevents cross-customer leakage
-2. **Data Changes Mid-Conversation** — TTL enforcement detects stale data
-3. **Critical Data Re-Verification** — Repeated reads trigger refetch on critical tools
-4. **Long Agent Run** — Memory stays bounded with TTL cleanup
+1. **Multi-Customer Outreach** - Entity segmentation prevents cross-customer leakage
+2. **Data Changes Mid-Conversation** - TTL enforcement detects stale data
+3. **Critical Data Re-Verification** - Repeated reads trigger refetch on critical tools
+4. **Long Agent Run** - Memory stays bounded with TTL cleanup
 
 ## Documentation
 
@@ -302,12 +302,12 @@ The comparison agent validates AF-006 protection across 4 real-world scenarios:
 - Framework adapters: `mycelium/adapters/*.py`
 
 **Proof & Validation**:
-- [PROOF_SUMMARY.md](PROOF_SUMMARY.md) — End-to-end proof across all 7 failure modes
-- [AF006_PROOF.md](AF006_PROOF.md) — Detailed test matrix and invariant proofs
-- [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) — Real-world comparison agent
-- [TESTING.md](https://github.com/mycelium-labs/agent-test-AF006/blob/main/TESTING.md) — How to run all tests
+- [PROOF_SUMMARY.md](PROOF_SUMMARY.md) - End-to-end proof across all 7 failure modes
+- [AF006_PROOF.md](AF006_PROOF.md) - Detailed test matrix and invariant proofs
+- [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) - Real-world comparison agent
+- [TESTING.md](https://github.com/mycelium-labs/agent-test-AF006/blob/main/TESTING.md) - How to run all tests
 
 **Getting Started**:
-- [README.md](README.md) (this file) — Quick start and usage examples
-- [Installation](#installation) — Install as library
-- [Usage](#usage) — Framework integrations and examples
+- [README.md](README.md) (this file) - Quick start and usage examples
+- [Installation](#installation) - Install as library
+- [Usage](#usage) - Framework integrations and examples
