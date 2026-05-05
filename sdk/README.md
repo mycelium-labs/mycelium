@@ -104,17 +104,22 @@ for event in s.audit_log():
 
 - **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** — test suite with 507 real failure cases, AutoGen #6789 and LiveKit #5408 real reproductions, and all 7 AF-006 manifestations tested end-to-end
 
-## Framework adapters (advanced)
+## Synchronous frameworks
 
-If you need step-based TTL instead of time-based, or want tighter integration with a specific framework's lifecycle, framework adapters are available in `mycelium.adapters.*`. They wrap the same core protection but expose `advance_step()` / `advance_turn()` / `advance_action()` for manual step control.
+For frameworks that call tools synchronously (Smolagents, CrewAI's `BaseTool._run`), use `protect_sync`:
 
 ```python
-from mycelium.adapters.langgraph import LangGraphContextProtection
+from mycelium import protect_sync, Session
+from mycelium.protect import _session_var
 
-protection = LangGraphContextProtection()
-protection.register_tool("fetch_customer", fetch_customer, entity_param="customer_id")
-result = await protection.call_tool_protected("fetch_customer", fetch_customer, customer_id="c1")
-protection.advance_step()
+@protect_sync(entity_param="customer_id", ttl=60)
+def fetch_customer(customer_id: str) -> dict:
+    return db.get(customer_id)
+
+session = Session()
+token = _session_var.set(session)
+try:
+    result = fetch_customer(customer_id="c1")
+finally:
+    _session_var.reset(token)
 ```
-
-The `@protect` decorator is the recommended approach for new integrations.
