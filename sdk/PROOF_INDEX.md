@@ -53,10 +53,9 @@ Complete reference guide to all Mycelium SDK proof, validation, and integration 
 
 | File | Purpose |
 |------|---------|
-| `mycelium/protections/context_corruption.py` | Core protection mechanism (ContextCache, versioning, TTL, audit) |
+| `mycelium/protect.py` | Primary API: `@protect`, `protect_sync`, `Session` |
+| `mycelium/protections/context_corruption.py` | Core cache mechanics (ContextCache, versioning, TTL, audit) |
 | `mycelium/core/runtime_context_corruption.py` | Runtime integration and tool interception |
-| `mycelium/protections/decorators.py` | @tool and @protect decorators with metadata |
-| `mycelium/adapters/*.py` | Framework-specific integrations (LangGraph, CrewAI, etc.) |
 
 ### Tests
 
