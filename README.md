@@ -31,7 +31,7 @@ result = await fetch_customer("c1")  # fresh
 result = await fetch_customer("c1")  # Mycelium detects stale, calls DB again
 ```
 
-No new calling convention. No adapter imports. The tool works exactly the same in LangGraph, AutoGen, CrewAI, or any framework.
+No new calling convention. No adapter imports. The tool works exactly the same in LangGraph, AutoGen, CrewAI, Pydantic AI, LangChain, or any other framework.
 
 ---
 
@@ -93,18 +93,35 @@ See [sdk/README.md](sdk/README.md) for full documentation.
 
 ---
 
+## Framework support
+
+Confirmed end-to-end with real framework invocation paths:
+
+| Framework | Invocation path |
+|---|---|
+| LangGraph | `StateGraph.compile().ainvoke()` |
+| AutoGen | `FunctionCall` → executor |
+| CrewAI | `BaseTool._run(**calling.arguments)` |
+| Smolagents | `Tool.forward()` |
+| OpenAI Agents | `FunctionTool.on_invoke_tool()` |
+| LiveKit Agents | `execute_function_call()` |
+| LangChain | `tool.ainvoke(args_dict)` |
+| Pydantic AI | `FunctionSchema.call()` → `await function(**kwargs)` |
+
+DSPy and Haystack follow the same async function call pattern — tests not yet written.
+
+---
+
 ## Repository layout
 
 ```
 sdk/                          Python package (pip install ./sdk)
   mycelium/
-    protect.py                @protect decorator and Session — primary API
+    protect.py                @protect / protect_sync decorators and Session
     protections/
       context_corruption.py   ContextCache: TTL, versioning, eviction, audit
     core/
-      runtime_context_corruption.py  Step-based runtime (used by adapters)
-    adapters/                 Framework adapters (LangGraph, AutoGen, CrewAI, ...)
-                              Use these if you need step-based TTL control.
+      runtime_context_corruption.py  Step-based runtime (advanced use)
 
 research/                     AF-006 and other failure mode analysis
 incidents/                    Tagged real incidents from production agents

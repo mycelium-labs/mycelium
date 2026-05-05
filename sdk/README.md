@@ -24,7 +24,7 @@ async def get_inventory(sku: str) -> dict:
     return await warehouse.get(sku)
 ```
 
-That's it. Call your tools normally in LangGraph, AutoGen, CrewAI, or any other framework — Mycelium intercepts at the function level.
+That's it. Call your tools normally in any framework — Mycelium intercepts at the function level.
 
 ```python
 # LangGraph — no changes to how you use the graph
@@ -33,9 +33,33 @@ tool_node = ToolNode([fetch_customer, get_inventory])
 # AutoGen — no changes to agent setup
 agent = AssistantAgent(tools=[fetch_customer, get_inventory])
 
-# Direct call — works the same
+# Pydantic AI — register as a tool_plain
+@agent.tool_plain
+async def get_customer(customer_id: str) -> str:
+    return str(await fetch_customer(customer_id=customer_id))
+
+# Direct call — works the same everywhere
 result = await fetch_customer(customer_id="c1")
 ```
+
+## Framework support
+
+Confirmed end-to-end with real framework invocation paths — no mocks:
+
+| Framework | Invocation path | Sync/Async |
+|---|---|---|
+| LangGraph | `StateGraph.compile().ainvoke()` | async |
+| AutoGen | `FunctionCall` → executor | async |
+| CrewAI | `BaseTool._run(**calling.arguments)` | sync |
+| Smolagents | `Tool.forward()` | sync |
+| OpenAI Agents | `FunctionTool.on_invoke_tool()` | async |
+| LiveKit Agents | `execute_function_call()` | async |
+| LangChain | `tool.ainvoke(args_dict)` | async |
+| Pydantic AI | `FunctionSchema.call()` → `await function(**kwargs)` | async |
+
+Sync frameworks (CrewAI, Smolagents) use `protect_sync` — see below. All other frameworks use `protect`.
+
+DSPy (`dspy.ReAct` modules) and Haystack (`@component` tools) follow the same async function call pattern and should work with `@protect` without changes — tests not yet written.
 
 ## Session isolation
 
