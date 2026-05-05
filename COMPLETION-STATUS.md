@@ -47,7 +47,7 @@ All with before/after comparison showing protection effectiveness
 ### Phase 3: Stress Testing ✅ COMPLETE
 **Status**: 12 stress tests committed, all passing
 
-- **Concurrent Access**: 220K ops/sec (100 and 1000 concurrent calls)
+- **Concurrent Access**: ~300K ops/sec (20 tasks × 500 calls, @protect decorator)
 - **Large Context**: 100K entries = 199MB, 10K entries = 20MB
 - **Long Runs**: 1000 steps = 101K steps/sec, 0MB growth
 - **Entity Churn**: 1000 entities handled efficiently
@@ -83,21 +83,17 @@ All with before/after comparison showing protection effectiveness
 - Methods: `register_tool()`, `call_tool_protected()`, `advance_step()`, `get_stats()`
 
 ### Phase 5: Performance Benchmarks ✅ COMPLETE
-**Status**: Comprehensive benchmark suite (commit 180987d)
+**Status**: Benchmarked against `@protect` decorator (see `examples/benchmark_protect_decorator.py`)
 
-| Workload | Throughput | Hit Rate |
-|----------|-----------|----------|
-| Sequential (100 calls, 1 entity) | 205.8K ops/sec | 80% |
-| Entity Churn (50 entities) | 235.9K ops/sec | 80% |
-| Mixed Criticality (100 calls) | 68.7K ops/sec | 66% |
-| Concurrent (10 tasks × 50 calls) | 218.9K ops/sec | 80% |
-| TTL Sensitivity | - | 93% |
+| Pattern | Throughput |
+|---|---|
+| Cache hit (same entity) | ~300K ops/sec |
+| Cache miss (entity churn) | ~190K ops/sec |
+| Mixed (20 entities) | ~490K ops/sec |
+| Concurrent (20 tasks × 500 calls) | ~300K ops/sec |
+| TTL=0 worst case | ~220K ops/sec |
 
-**Key Findings**:
-- 68K-235K ops/sec across all patterns
-- 66-93% hit rates with intelligent cache management
-- Zero memory overhead with Python GC
-- Stable performance at scale
+Note: Earlier numbers (68K-235K ops/sec) were from `AgentRuntimeWithContextProtection` benchmarks against the old step-based adapter API, not the current `@protect` decorator.
 
 ### Phase 6: Real Agent Dogfooding ✅ COMPLETE
 **Status**: Testing against actual labeled dataset (commit 69a8960)
@@ -167,7 +163,7 @@ e49e8aa docs: Phase 4-5 completion summary for AF-006 context corruption protect
 - Error invalidation
 
 ### Stress Tests: 12 ✅
-- Concurrent access (220K ops/sec)
+- Concurrent access (~300K ops/sec, @protect decorator)
 - Large context (100K entries, 199MB)
 - Long runs (1000 steps, 0MB growth)
 - Entity churn (1000 entities)
@@ -267,12 +263,12 @@ docs/
 
 ## Performance Characteristics
 
-- **Throughput**: 68K-235K ops/sec (depends on access pattern)
-- **Hit Rates**: 66-93% (intelligent TTL-based caching)
-- **Latency**: ~0.1-0.5ms per cache lookup
-- **Memory**: Minimal overhead, 0MB growth in 5000-step runs
-- **Scalability**: Handles 100K cache entries, 10+ concurrent tasks
-- **TTL Tuning**: Longer TTLs → higher hit rates, shorter TTLs → fresher data
+Numbers below are from `@protect` decorator benchmarks (`examples/benchmark_protect_decorator.py`):
+
+- **Throughput**: 190K-490K ops/sec (cache hits ~300K, misses ~190K)
+- **Latency**: dict lookup + `time.monotonic()` — negligible vs any real tool call
+- **Memory**: Minimal overhead, 0MB growth in long runs
+- **Scalability**: Handles concurrent tasks without contention (ContextVar isolation)
 
 ---
 
@@ -316,7 +312,7 @@ docs/
 - ✅ Protects against memory injection, behavioral drift, state loss
 - ✅ Tested against 5 real failure modes (100% protection)
 - ✅ Integrated with 5 major frameworks
-- ✅ Performance validated (68K-235K ops/sec)
+- ✅ Performance validated (190K-490K ops/sec, @protect decorator)
 - ✅ Ready for immediate deployment
 
 **Next Step**: Deploy to production with monitoring. Optional: real agent dogfooding with production workloads for hit rate validation.
