@@ -124,6 +124,20 @@ for event in s.audit_log():
 # {'event': 'cache_hit', 'tool': 'fetch_customer', 'entity_id': 'c1', 'ts': ...}
 ```
 
+## Performance
+
+Benchmarked on Apple M-series (`python examples/benchmark_protect_decorator.py`):
+
+| Pattern | Throughput |
+|---|---|
+| Cache hit (same entity) | ~300K ops/sec |
+| Cache miss (entity churn) | ~190K ops/sec |
+| Mixed (20 entities) | ~490K ops/sec |
+| Concurrent (20 tasks × 500 calls) | ~300K ops/sec |
+| TTL=0 worst case (always miss) | ~220K ops/sec |
+
+The decorator adds a dict lookup and a `time.monotonic()` call on the hot path. Overhead is negligible compared to any real tool (HTTP call, DB query, etc.).
+
 ## Real-world validation
 
 - **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** — test suite with 507 real failure cases, AutoGen #6789 and LiveKit #5408 real reproductions, and all 7 AF-006 manifestations tested end-to-end

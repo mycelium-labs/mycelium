@@ -1,5 +1,7 @@
 # AF-006 Context Corruption Protection - Phases 4 & 5 Summary
 
+> **Note**: This document records the old adapter-based API (`AgentRuntimeWithContextProtection`). Performance numbers here (68K-235K ops/sec) are from that API. The current primary API is `@protect` — see `examples/benchmark_protect_decorator.py` for current numbers (190K-490K ops/sec).
+
 ## Overview
 Completed implementation of AF-006 context corruption protection with comprehensive framework integrations and performance benchmarking.
 
