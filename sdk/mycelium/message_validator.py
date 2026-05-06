@@ -187,7 +187,7 @@ class MessageValidator:
                     )
 
             # Structured output artifact check
-            if self._check_parsed and msg.get("parsed") is not None:
+            if self._check_parsed and "parsed" in msg:
                 self._record_violation("parsed_artifact", i)
                 raise MessageValidationError(
                     f"Message {i} contains a 'parsed' field — structured output artifact "
