@@ -12,11 +12,16 @@ Usage:
     from mycelium import MessageValidator, MessageValidationError
 
     validator = MessageValidator()
-    messages = validator.validate(messages)   # raises on structural errors
+
+    # Raises on the first structural error found:
+    messages = validator.validate(messages)
+
+    # Or auto-repair what can be fixed, raise only for what cannot:
+    messages = validator.repair(messages)
 """
 
-import hashlib
 import time
+from copy import deepcopy
 from typing import Any
 
 
@@ -38,13 +43,13 @@ class MessageValidationError(Exception):
 
 _VALID_ROLES = {"system", "user", "assistant", "tool", "function"}
 
+# Violations that repair() can fix automatically.
+_REPAIRABLE = {"duplicate_tool_call_blocks", "duplicate_tool_call_ids",
+               "nonzero_tool_call_index", "parsed_artifact"}
+
 
 def _get_tool_calls(message: dict) -> list:
     return message.get("tool_calls") or []
-
-
-def _get_function_call(message: dict) -> dict | None:
-    return message.get("function_call")
 
 
 def _tool_call_id(tc: Any) -> str | None:
@@ -79,20 +84,25 @@ def _is_call_final(tc: Any) -> bool:
 
 class MessageValidator:
     """
-    Validates message list structure before passing to the LLM.
+    Validates and optionally repairs message list structure before passing to the LLM.
 
-    Checks performed (in order):
-      1. Role validity — every message has a known role
-      2. Duplicate tool-call blocks — fc_* + call_* mixed in same message
-      3. Missing tool_call_id — tool-response messages without id
-      4. Inconsistent tool-call indices — non-zero-based or non-contiguous
-      5. Structured output artifacts — `parsed` field in message content
-      6. Duplicate tool_call ids across the same assistant message
+    validate(messages) — raises MessageValidationError on the first violation found.
+    repair(messages)   — auto-fixes what it can; raises only for unrecoverable violations.
+
+    Repairable violations:
+      - duplicate_tool_call_blocks  → drop fc_* partials, keep call_* finals
+      - duplicate_tool_call_ids     → deduplicate by id, keep last occurrence
+      - nonzero_tool_call_index     → re-number indices starting from 0
+      - parsed_artifact             → strip `parsed` and `refusal` keys
+
+    Unrecoverable violations (always raise):
+      - missing_tool_call_id        → cannot reconstruct the correct id
+      - invalid_role                → cannot infer the correct role
 
     Args:
         strict_roles:   Raise on unknown roles (default True).
-        check_indices:  Raise on non-zero-based tool-call index sequences (default True).
-        check_parsed:   Raise on `parsed` structured-output artifacts (default True).
+        check_indices:  Check/fix non-zero-based tool-call index sequences (default True).
+        check_parsed:   Check/fix `parsed` structured-output artifacts (default True).
     """
 
     def __init__(
@@ -112,12 +122,10 @@ class MessageValidator:
 
     def validate(self, messages: list) -> list:
         """
-        Validate message list structure.
-
-        Returns messages unchanged (pure validation, no mutation).
+        Validate message list structure. Returns messages unchanged.
 
         Raises:
-            MessageValidationError: one or more structural violations found.
+            MessageValidationError: on the first structural violation found.
         """
         now = time.monotonic()
         self._audit.append({"event": "validation_started", "message_count": len(messages), "ts": now})
@@ -138,7 +146,6 @@ class MessageValidator:
 
             tool_calls = _get_tool_calls(msg)
 
-            # Check for fc_* + call_* duplicates (LangChain streaming bug)
             if tool_calls:
                 has_fc = any(_is_fc_partial(tc) for tc in tool_calls)
                 has_call = any(_is_call_final(tc) for tc in tool_calls)
@@ -147,12 +154,11 @@ class MessageValidator:
                     raise MessageValidationError(
                         f"Message {i} (role={role!r}) contains both partial fc_* and final call_* "
                         f"tool-call blocks. LangChain streaming produced duplicate entries — "
-                        f"deduplicate or discard the fc_* partials before sending.",
+                        f"call repair() to drop the fc_* partials automatically.",
                         violation="duplicate_tool_call_blocks",
                         message_index=i,
                     )
 
-                # Check for duplicate tool_call ids within one message
                 ids = [_tool_call_id(tc) for tc in tool_calls if _tool_call_id(tc)]
                 if len(ids) != len(set(ids)):
                     self._record_violation("duplicate_tool_call_ids", i)
@@ -162,42 +168,140 @@ class MessageValidator:
                         message_index=i,
                     )
 
-                # Check index ordering (0-based, contiguous)
                 if self._check_indices:
                     indices = [_tool_call_index(tc) for tc in tool_calls if _tool_call_index(tc) is not None]
-                    if indices:
-                        if indices[0] != 0:
-                            self._record_violation("nonzero_tool_call_index", i)
-                            raise MessageValidationError(
-                                f"Message {i} tool_calls start at index {indices[0]}, expected 0. "
-                                f"Non-zero indices cause tool-result mismatches.",
-                                violation="nonzero_tool_call_index",
-                                message_index=i,
-                            )
+                    if indices and indices[0] != 0:
+                        self._record_violation("nonzero_tool_call_index", i)
+                        raise MessageValidationError(
+                            f"Message {i} tool_calls start at index {indices[0]}, expected 0. "
+                            f"Non-zero indices cause tool-result mismatches.",
+                            violation="nonzero_tool_call_index",
+                            message_index=i,
+                        )
 
-            # Tool-response message must have tool_call_id
-            if role == "tool":
-                if not msg.get("tool_call_id"):
-                    self._record_violation("missing_tool_call_id", i)
-                    raise MessageValidationError(
-                        f"Message {i} has role='tool' but no tool_call_id. "
-                        f"The LLM cannot match this response to the originating call.",
-                        violation="missing_tool_call_id",
-                        message_index=i,
-                    )
+            if role == "tool" and not msg.get("tool_call_id"):
+                self._record_violation("missing_tool_call_id", i)
+                raise MessageValidationError(
+                    f"Message {i} has role='tool' but no tool_call_id. "
+                    f"The LLM cannot match this response to the originating call.",
+                    violation="missing_tool_call_id",
+                    message_index=i,
+                )
 
-            # Structured output artifact check
             if self._check_parsed and "parsed" in msg:
                 self._record_violation("parsed_artifact", i)
                 raise MessageValidationError(
                     f"Message {i} contains a 'parsed' field — structured output artifact "
-                    f"left in message history. Remove before sending to the LLM.",
+                    f"left in message history. Call repair() to strip it automatically.",
                     violation="parsed_artifact",
                     message_index=i,
                 )
 
         self._audit.append({"event": "validation_ok", "message_count": len(messages), "ts": now})
         return messages
+
+    def repair(self, messages: list) -> list:
+        """
+        Auto-repair message list structure where possible.
+
+        Fixes repairable violations in-place on a deep copy and returns the
+        cleaned list. Raises MessageValidationError for unrecoverable violations
+        (missing_tool_call_id, invalid_role) where the correct value cannot be
+        inferred.
+
+        Repairs applied:
+          duplicate_tool_call_blocks — drop fc_* partials, keep call_* finals
+          duplicate_tool_call_ids    — deduplicate by id, keep last occurrence
+          nonzero_tool_call_index    — re-number indices starting from 0
+          parsed_artifact            — strip `parsed` and `refusal` keys
+
+        Returns:
+            Repaired copy of messages (input is never mutated).
+
+        Raises:
+            MessageValidationError: for unrecoverable violations.
+        """
+        now = time.monotonic()
+        result = deepcopy(messages)
+        repairs: list[dict[str, Any]] = []
+
+        for i, msg in enumerate(result):
+            if not isinstance(msg, dict):
+                continue
+
+            role = msg.get("role", "")
+
+            # Unrecoverable: invalid role
+            if self._strict_roles and role not in _VALID_ROLES:
+                self._record_violation("invalid_role", i)
+                raise MessageValidationError(
+                    f"Message {i} has invalid role {role!r} — cannot infer correct role.",
+                    violation="invalid_role",
+                    message_index=i,
+                )
+
+            tool_calls = _get_tool_calls(msg)
+
+            if tool_calls:
+                # Repair: drop fc_* partials when call_* finals are present
+                has_fc = any(_is_fc_partial(tc) for tc in tool_calls)
+                has_call = any(_is_call_final(tc) for tc in tool_calls)
+                if has_fc and has_call:
+                    cleaned = [tc for tc in tool_calls if not _is_fc_partial(tc)]
+                    msg["tool_calls"] = cleaned
+                    repairs.append({"repair": "duplicate_tool_call_blocks", "message_index": i,
+                                    "dropped": len(tool_calls) - len(cleaned)})
+                    tool_calls = cleaned
+
+                # Repair: deduplicate by id (keep last occurrence)
+                ids = [_tool_call_id(tc) for tc in tool_calls if _tool_call_id(tc)]
+                if len(ids) != len(set(ids)):
+                    seen: dict[str, Any] = {}
+                    for tc in tool_calls:
+                        tid = _tool_call_id(tc)
+                        if tid:
+                            seen[tid] = tc
+                    msg["tool_calls"] = list(seen.values())
+                    repairs.append({"repair": "duplicate_tool_call_ids", "message_index": i})
+                    tool_calls = msg["tool_calls"]
+
+                # Repair: re-number indices from 0
+                if self._check_indices:
+                    indices = [_tool_call_index(tc) for tc in tool_calls if _tool_call_index(tc) is not None]
+                    if indices and indices[0] != 0:
+                        offset = indices[0]
+                        for tc in tool_calls:
+                            if isinstance(tc, dict) and tc.get("index") is not None:
+                                tc["index"] = tc["index"] - offset
+                        repairs.append({"repair": "nonzero_tool_call_index", "message_index": i,
+                                        "offset_removed": offset})
+
+            # Unrecoverable: missing tool_call_id
+            if role == "tool" and not msg.get("tool_call_id"):
+                self._record_violation("missing_tool_call_id", i)
+                raise MessageValidationError(
+                    f"Message {i} has role='tool' but no tool_call_id — cannot reconstruct "
+                    f"which tool call this response belongs to.",
+                    violation="missing_tool_call_id",
+                    message_index=i,
+                )
+
+            # Repair: strip parsed/refusal structured-output artifacts
+            if self._check_parsed and "parsed" in msg:
+                for key in ("parsed", "refusal"):
+                    msg.pop(key, None)
+                repairs.append({"repair": "parsed_artifact", "message_index": i})
+
+        for r in repairs:
+            self._audit.append({"event": "repaired", "ts": now, **r})
+
+        if repairs:
+            self._audit.append({"event": "repair_ok", "repairs": len(repairs),
+                                 "message_count": len(result), "ts": now})
+        else:
+            self._audit.append({"event": "validation_ok", "message_count": len(result), "ts": now})
+
+        return result
 
     def audit_log(self) -> list[dict[str, Any]]:
         return list(self._audit)
