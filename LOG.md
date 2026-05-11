@@ -14,6 +14,14 @@ Template:
 
 ---
 
+## 2026-05-11 - Round-trip entity validation for tenancy mismatch
+
+- did: Added **`entity_field`** parameter to **`@protect`** and **`protect_sync`** — validates that the tool response contains the expected entity value (e.g. `customer_id`). **`TenancyMismatchError`** raises on DB-routing or proxy bugs where the response looks structurally valid but belongs to the wrong tenant/shard.
+- did: Added **`sdk/tests/test_tenancy_validation.py`** — 10 tests covering async/sync, dict/object responses, `critical=True`, backward compatibility, and retry-after-mismatch.
+- found: All 123 SDK tests pass; taxonomy now marks wrong tenancy as ✅ covered.
+- now: AF-006 has two new transport-level guards: payload completeness + tenancy round-trip.
+- next: None unless another taxonomy gap should be filled.
+
 ## 2026-05-11 - HTTP transport wrapper for payload completeness
 
 - did: Added **`mycelium.http`** module with **`AsyncClient`** and **`Client`** — drop-in replacements for `httpx` that automatically detect Content-Length mismatch, JSON structural truncation, empty JSON bodies, and parse failures. **`PayloadIncompleteError`** flows through `@protect` error invalidation like any other exception.
