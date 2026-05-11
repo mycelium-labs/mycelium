@@ -16,7 +16,7 @@
 | ⚠ | **Partial:** Some mitigation, opt-in behavior, or correct integration required; does **not** fully eliminate the class. |
 |  | **Not implemented** in the current public SDK for this class. |
 
-**Primitives referenced:** `@protect` / `protect_sync` + `Session` (TTL cache, per-tool and per-entity keys, `critical=True` bypass, error invalidation, audit); `StreamGuard`; `HistoryGuard`; `MessageValidator` / `repair()`; `ContentBlockNormalizer`.
+**Primitives referenced:** `@protect` / `protect_sync` + `Session` (TTL cache, per-tool and per-entity keys, `critical=True` bypass, error invalidation, audit); `StreamGuard`; `HistoryGuard`; `MessageValidator` / `repair()`; `ContentBlockNormalizer`; `AsyncClient` / `Client` (HTTP transport completeness).
 
 Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **out of scope** for this column unless they become stable public API.
 
@@ -164,7 +164,7 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 
 ## Summary counts (rough)
 
-- **✅ Direct coverage:** tool-result staleness and cache key classes; stream cut-off/duplicate; history size and silent drops; several message/tool-call shape bugs; provider content-block normalization for documented cases.
+- **✅ Direct coverage:** tool-result staleness and cache key classes; transport-level payload completeness (Content-Length, JSON truncation, empty body); stream cut-off/duplicate; history size and silent drops; several message/tool-call shape bugs; provider content-block normalization for documented cases.
 - **⚠ Partial:** replica lag, entity scoping only as good as your ids, summary fidelity, some orphan patterns, multi-agent shared state beyond Mycelium cache, ordering of side effects, outage split-brain.
 - **Gaps:** RAG, full multi-agent orchestration, modalities, infra canaries, injection, hard cache caps, negative caching.
 
