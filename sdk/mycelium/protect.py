@@ -24,6 +24,31 @@ from uuid import uuid4
 
 _DEFAULT_TTL = 300  # seconds
 
+
+class TenancyMismatchError(Exception):
+    """Raised when a tool response does not contain the expected entity value.
+
+    This catches DB-routing or proxy bugs where the response looks structurally
+    valid but belongs to the wrong tenant, customer, or shard.
+    """
+
+    def __init__(self, expected: Any, actual: Any, field: str) -> None:
+        super().__init__(
+            f"Tenancy mismatch: expected {field}={expected!r}, got {actual!r}. "
+            f"The response likely belongs to a different tenant/shard."
+        )
+        self.expected = expected
+        self.actual = actual
+        self.field = field
+
+
+def _extract_field(result: Any, field: str) -> Any:
+    """Pull *field* out of a dict or object."""
+    if isinstance(result, dict):
+        return result.get(field)
+    return getattr(result, field, None)
+
+
 # Per-async-context session, falls back to a global session
 _session_var: ContextVar["Session"] = ContextVar("mycelium_session")
 _global_session: "Session | None" = None
@@ -69,6 +94,7 @@ class Session:
         func: Callable,
         tool_name: str,
         entity_param: str | None,
+        entity_field: str | None,
         ttl: float,
         args: tuple,
         kwargs: dict,
@@ -108,6 +134,21 @@ class Session:
             })
             raise
 
+        if entity_field is not None and entity_id is not None:
+            actual = _extract_field(result, entity_field)
+            if actual != entity_id:
+                self._cache.pop(key, None)
+                self._audit.append({
+                    "event": "cache_error",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "error": f"tenancy_mismatch(expected={entity_id!r}, got={actual!r})",
+                    "ts": now,
+                })
+                raise TenancyMismatchError(
+                    expected=entity_id, actual=actual, field=entity_field
+                )
+
         self._cache[key] = _CacheEntry(
             value=result,
             expires_at=now + ttl,
@@ -143,6 +184,7 @@ class Session:
 
 def protect(
     entity_param: str | None = None,
+    entity_field: str | None = None,
     ttl: float = _DEFAULT_TTL,
     critical: bool = False,
 ) -> Callable:
@@ -152,6 +194,10 @@ def protect(
     Args:
         entity_param: kwarg name that identifies the entity (e.g. "customer_id").
                       Different entity values get separate cache entries.
+        entity_field: Optional field name inside the tool response to verify
+                      round-trip correctness. If set and the returned value
+                      does not match the entity_param value, TenancyMismatchError
+                      is raised (cache cleared, agent can retry).
         ttl:          Seconds before a cached result is considered stale and
                       the real function is called again. Default: 300s.
         critical:     If True, always refetch (no caching). Reserved for
@@ -163,12 +209,21 @@ def protect(
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             if critical:
-                return await func(*args, **kwargs)
+                result = await func(*args, **kwargs)
+                if entity_field is not None and entity_param is not None:
+                    entity_id = kwargs.get(entity_param)
+                    actual = _extract_field(result, entity_field)
+                    if actual != entity_id:
+                        raise TenancyMismatchError(
+                            expected=entity_id, actual=actual, field=entity_field
+                        )
+                return result
             session = _get_session()
             return await session.call(
                 func=func,
                 tool_name=tool_name,
                 entity_param=entity_param,
+                entity_field=entity_field,
                 ttl=ttl,
                 args=args,
                 kwargs=kwargs,
@@ -184,6 +239,7 @@ def protect(
 
 def protect_sync(
     entity_param: str | None = None,
+    entity_field: str | None = None,
     ttl: float = _DEFAULT_TTL,
     critical: bool = False,
 ) -> Callable:
@@ -203,7 +259,15 @@ def protect_sync(
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             if critical:
-                return func(*args, **kwargs)
+                result = func(*args, **kwargs)
+                if entity_field is not None and entity_param is not None:
+                    entity_id = kwargs.get(entity_param)
+                    actual = _extract_field(result, entity_field)
+                    if actual != entity_id:
+                        raise TenancyMismatchError(
+                            expected=entity_id, actual=actual, field=entity_field
+                        )
+                return result
 
             session = _get_session()
             entity_id = kwargs.get(entity_param) if entity_param else None
@@ -240,6 +304,21 @@ def protect_sync(
                     "ts": now,
                 })
                 raise
+
+            if entity_field is not None and entity_id is not None:
+                actual = _extract_field(result, entity_field)
+                if actual != entity_id:
+                    session._cache.pop(key, None)
+                    session._audit.append({
+                        "event": "cache_error",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "error": f"tenancy_mismatch(expected={entity_id!r}, got={actual!r})",
+                        "ts": now,
+                    })
+                    raise TenancyMismatchError(
+                        expected=entity_id, actual=actual, field=entity_field
+                    )
 
             session._cache[key] = _CacheEntry(
                 value=result,

@@ -32,7 +32,7 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 | Lossy or ambiguous serialization (dates, IDs, enums) across layers |  | Application responsibility. |
 | Non-deterministic tools (same call, different truth) | ⚠ | TTL forces **refetch**; does not make tools deterministic or resolve split-brain. |
 | Read-replica lag (“shadow reads”) | ⚠ | Fresh read after TTL may hit a different replica timing; no quorum / version token. |
-| Wrong tenancy / region / shard (shape OK, wrong customer) | ⚠ | `entity_param` scopes **cache keys** when you pass the real tenant/customer id; does not fix DB routing bugs. |
+| Wrong tenancy / region / shard (shape OK, wrong customer) | ✅ | `@protect(entity_param=…, entity_field=…)` validates round-trip: response field must match request entity. `TenancyMismatchError` raises on DB-routing or proxy bugs; cache cleared, agent can retry. |
 | Poisoned or hostile tool content (untrusted page as “data”) |  | No content-security / sandbox for tool outputs; overlaps **AF-009**. |
 
 ---
