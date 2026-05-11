@@ -14,6 +14,41 @@ Template:
 
 ---
 
+## 2026-05-11 - HTTP transport wrapper for payload completeness
+
+- did: Added **`mycelium.http`** module with **`AsyncClient`** and **`Client`** — drop-in replacements for `httpx` that automatically detect Content-Length mismatch, JSON structural truncation, empty JSON bodies, and parse failures. **`PayloadIncompleteError`** flows through `@protect` error invalidation like any other exception.
+- did: Added **`sdk/tests/test_payload_completeness.py`** — 25 tests covering unit guards, async/sync clients, and `@protect` integration (cache cleared + `cache_error` logged on truncated payload).
+- found: All 113 SDK tests pass; no regressions.
+- now: AF-006 taxonomy marks partial tool payloads as ✅ covered via transport-level guard.
+- next: Streaming response wrapper validation is implemented but not yet stress-tested with real chunked streams.
+
+## 2026-05-11 - Context corruption taxonomy
+
+- did: Added **`research/context-corruption-taxonomy.md`** — working list of real-world corruption classes with coverage markers vs public SDK (**`@protect`**, **`Session`**, **`StreamGuard`**, **`HistoryGuard`**, **`MessageValidator`**, **`ContentBlockNormalizer`**); linked from **`research/failure_modes.md`**.
+- found: Strong coverage on **tool cache + stream + history + message shape**; **RAG, injection, modalities, orchestrator subgraph state** unimplemented in public API.
+- now: Taxonomy lives under **`research/`** for scope and gap analysis.
+- next: None unless taxonomy should link from **`README.md`**.
+
+## 2026-05-05 - FM test names match behavior
+
+- did: Renamed **`sdk/tests/test_protect_failure_modes.py`** tests that still said **sdk**, **audit**, **not_registered**, **memory_estimates**, or **same_step**; fixed **FM2 mutate** docstring (was not post-TTL for **c2**); softened **FM5** section header and **FM7** first-exception docstring.
+- now: **47** tests pass for that file.
+- next: Optional cleanup of **`test_fm1_multi_customer_*`** names (single-entity prefs, not multi-customer).
+
+## 2026-05-05 - Honest docstrings in protect FM tests
+
+- did: Renamed misleading tests (FM4 order-history “critical”, FM7 “rate_limit/pattern”), corrected module preamble, and replaced apples-to-oranges “hit rate” asserts with paired naive-dict vs **`@protect`** backend fetch counts in **`sdk/tests/test_protect_failure_modes.py`**.
+- found: **`cache_hit` / audit length** is not the same metric as naive hits per logical call.
+- now: **47** tests still pass under **`uv run pytest`** for that file.
+- next: None unless you want the same wording pass on **`LOG.md`**’s earlier FM1–FM7 entry.
+
+## 2026-05-05 - Protect failure-mode tests (FM1–FM7)
+
+- did: Added **`sdk/tests/test_protect_failure_modes.py`** exercising **`protect` / `Session`** across TTL, entity isolation, tool isolation, `critical=True`, growth/concurrency, and error invalidation; used **`asyncio.sleep`** for TTL boundaries and fixed draft typos (inventory index, missing `@pytest.mark.asyncio`, parametrize pairs).
+- found: **`uv run pytest`** from **`sdk/`** is the reliable runner here (root **`.venv`** may lack **pytest**).
+- now: **47** new tests pass; **`mycelium`** public API unchanged.
+- next: Run full **`sdk/tests`** before merge if anything else is in flight.
+
 ## 2026-05-03 - Minimal SDK package (`uv sync` / `pytest`)
 
 - did: **`sdk/pyproject.toml`** declares **httpx**, **pydantic**, **typing-extensions**; **`mycelium`** package submodules get **`__init__.py`** for clean imports; **`sdk/.python-version`** 3.12; **`uv.lock`** generated; **`sdk/README.md`** one-liner workflow.
