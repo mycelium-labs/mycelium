@@ -12,8 +12,7 @@ Scenarios:
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -307,7 +306,7 @@ async def test_protect_content_length_mismatch_via_http_client() -> None:
             return (await client.get("https://example.com/test")).json()
 
     with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock, return_value=mock_resp):
-        async with Session() as s:
+        async with Session():
             with pytest.raises(PayloadIncompleteError):
                 await fetch(id="t1")
 
