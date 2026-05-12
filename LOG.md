@@ -14,6 +14,14 @@ Template:
 
 ---
 
+## 2026-05-11 - Non-deterministic tool handling + variance warnings
+
+- did: Added **`deterministic=False`** parameter to **`@protect`** and **`protect_sync`** — skips caching for tools that return different values with identical inputs (stock prices, random draws). Auto variance detection tracks last 5 value hashes per key and warns when 60%+ variance detected.
+- did: Added **`sdk/tests/test_deterministic.py`** — 8 tests covering deterministic=False, normal caching, entity_field validation with deterministic=False, and auto variance warnings.
+- found: All 131 SDK tests pass; taxonomy now marks non-deterministic tools as ✅ covered.
+- now: AF-006 has three new guards in one session: payload completeness + tenancy round-trip + non-deterministic tool handling.
+- next: None unless another taxonomy gap should be filled.
+
 ## 2026-05-11 - Round-trip entity validation for tenancy mismatch
 
 - did: Added **`entity_field`** parameter to **`@protect`** and **`protect_sync`** — validates that the tool response contains the expected entity value (e.g. `customer_id`). **`TenancyMismatchError`** raises on DB-routing or proxy bugs where the response looks structurally valid but belongs to the wrong tenant/shard.
