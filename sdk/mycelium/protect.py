@@ -49,6 +49,19 @@ def _extract_field(result: Any, field: str) -> Any:
     return getattr(result, field, None)
 
 
+def _is_empty_result(value: Any) -> bool:
+    """Return True for values that should be treated as 'negative' / empty."""
+    if value is None:
+        return True
+    if value == []:
+        return True
+    if value == {}:
+        return True
+    if value == "":
+        return True
+    return False
+
+
 # Per-async-context session, falls back to a global session
 _session_var: ContextVar["Session"] = ContextVar("mycelium_session")
 _global_session: "Session | None" = None
@@ -125,6 +138,7 @@ class Session:
         entity_param: str | None,
         entity_field: str | None,
         ttl: float,
+        cache_empty: float | None,
         deterministic: bool,
         args: tuple,
         kwargs: dict,
@@ -189,6 +203,32 @@ class Session:
             })
             return result
 
+        if _is_empty_result(result) and cache_empty is not None:
+            if cache_empty <= 0:
+                self._audit.append({
+                    "event": "cache_skip",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "reason": "negative_cache",
+                    "ts": now,
+                })
+                return result
+            effective_ttl = cache_empty
+            self._cache[key] = _CacheEntry(
+                value=result,
+                expires_at=now + effective_ttl,
+                entity_id=entity_id,
+                tool_name=tool_name,
+            )
+            self._audit.append({
+                "event": "cache_add_negative",
+                "tool": tool_name,
+                "entity_id": entity_id,
+                "ttl": effective_ttl,
+                "ts": now,
+            })
+            return result
+
         self._cache[key] = _CacheEntry(
             value=result,
             expires_at=now + ttl,
@@ -229,6 +269,7 @@ def protect(
     ttl: float = _DEFAULT_TTL,
     critical: bool = False,
     deterministic: bool = True,
+    cache_empty: float | None = None,
 ) -> Callable:
     """
     Decorator that adds context protection to any async tool function.
@@ -248,6 +289,10 @@ def protect(
                        different values for identical inputs (e.g. stock prices,
                        random draws, time-dependent data). The SDK still runs
                        entity_field validation and variance warnings.
+        cache_empty:  Special TTL for "negative" / empty results (None, [], {}, "").
+                      None  = empty results use the normal ttl (default).
+                      <= 0  = never cache empty results (always refetch).
+                      > 0   = empty results cached for this shorter TTL.
     """
     def decorator(func: Callable) -> Callable:
         tool_name = func.__name__
@@ -271,6 +316,7 @@ def protect(
                 entity_param=entity_param,
                 entity_field=entity_field,
                 ttl=ttl,
+                cache_empty=cache_empty,
                 deterministic=deterministic,
                 args=args,
                 kwargs=kwargs,
@@ -290,6 +336,7 @@ def protect_sync(
     ttl: float = _DEFAULT_TTL,
     critical: bool = False,
     deterministic: bool = True,
+    cache_empty: float | None = None,
 ) -> Callable:
     """
     Decorator for synchronous tool functions (e.g. smolagents Tool.forward).
@@ -374,6 +421,32 @@ def protect_sync(
                     "tool": tool_name,
                     "entity_id": entity_id,
                     "reason": "non_deterministic",
+                    "ts": now,
+                })
+                return result
+
+            if _is_empty_result(result) and cache_empty is not None:
+                if cache_empty <= 0:
+                    session._audit.append({
+                        "event": "cache_skip",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "reason": "negative_cache",
+                        "ts": now,
+                    })
+                    return result
+                effective_ttl = cache_empty
+                session._cache[key] = _CacheEntry(
+                    value=result,
+                    expires_at=now + effective_ttl,
+                    entity_id=entity_id,
+                    tool_name=tool_name,
+                )
+                session._audit.append({
+                    "event": "cache_add_negative",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "ttl": effective_ttl,
                     "ts": now,
                 })
                 return result

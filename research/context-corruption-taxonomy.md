@@ -45,7 +45,7 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 | Cross-tool / cross-function cache collision | ✅ | Function name in cache key. |
 | Cross-session or cross-request leakage | ✅ | `Session` + `ContextVar`; explicit `async with Session()` per run. |
 | Unbounded memory growth of cache | ⚠ | TTL expiry + session scope **bound live entries**; no hard max-entry cap. |
-| “Negative caching” (cache 404 / empty; state later exists) |  | No special negative-cache policy. |
+| “Negative caching” (cache 404 / empty; state later exists) | ✅ | `@protect(cache_empty=…)` — `0` never caches empty results (`[]`, `{}`, `None`, `""`); positive value caches them with a shorter TTL. Default `None` = normal TTL (backward compatible). |
 | Errors or exceptions cached as success | ✅ | Exception clears cache entry (`cache_error`); next call refetches. |
 | Write-through / ordering mismatch (local vs durable) |  | No distributed transaction or version-vector guard. |
 
@@ -164,7 +164,7 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 
 ## Summary counts (rough)
 
-- **✅ Direct coverage:** tool-result staleness and cache key classes; transport-level payload completeness (Content-Length, JSON truncation, empty body); non-deterministic tool handling (deterministic=False + variance warnings); stream cut-off/duplicate; history size and silent drops; several message/tool-call shape bugs; provider content-block normalization for documented cases.
+- **✅ Direct coverage:** tool-result staleness and cache key classes; transport-level payload completeness (Content-Length, JSON truncation, empty body); non-deterministic tool handling (deterministic=False + variance warnings); negative caching (cache_empty); stream cut-off/duplicate; history size and silent drops; several message/tool-call shape bugs; provider content-block normalization for documented cases.
 - **⚠ Partial:** replica lag, entity scoping only as good as your ids, summary fidelity, some orphan patterns, multi-agent shared state beyond Mycelium cache, ordering of side effects, outage split-brain.
 - **Gaps:** RAG, full multi-agent orchestration, modalities, infra canaries, injection, hard cache caps, negative caching.
 
