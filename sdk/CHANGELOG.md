@@ -32,6 +32,8 @@ Parameters:
 | `entity_param` | `str \| None` | `None` | kwarg name whose value scopes the cache. Different values get separate entries. Prevents cross-entity leakage (FM2). |
 | `ttl` | `float` | `300` | Seconds before a cached result is stale. After expiry, the real function is called and the cache is refreshed. Prevents stale data (FM1). |
 | `critical` | `bool` | `False` | If `True`, bypass the cache entirely on every call — no read, no write. For write-path tools and reads where staleness is never acceptable (FM4). |
+| `mark_as_write` | `bool` | `False` | Record this call as a write operation. Subsequent reads for the same entity within `read_after_write_grace` seconds will bypass the cache and fetch fresh data. Use on write-path tools to prevent replica-lag reads (FM1). |
+| `read_after_write_grace` | `float` | `0.0` | Seconds after a write during which reads for the same entity bypass the cache. Default `0` disables the guard. Typical value: `2.0`. |
 
 The decorator is transparent to callers: a protected function has the same signature and return type as the original. Works in LangGraph, CrewAI, AutoGen, OpenAI Agents, Smolagents, or any async Python code without framework-specific changes.
 

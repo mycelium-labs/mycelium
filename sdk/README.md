@@ -77,6 +77,32 @@ async with Session() as session:
 
 Without an explicit `Session`, a global session is used — fine for single-agent scripts, not for production services handling concurrent requests.
 
+## Write-after-read grace (replica-lag guard)
+
+When your agent writes to a database and then immediately reads the same entity, the read may hit a lagging read replica and return stale data. Use `mark_as_write` on write tools and `read_after_write_grace` on read tools to force fresh reads for a short window after any write:
+
+```python
+@protect(entity_param="customer_id", mark_as_write=True)
+async def update_balance(customer_id: str, amount: float) -> dict:
+    return await db.update_balance(customer_id, amount)
+
+@protect(entity_param="customer_id", ttl=60, read_after_write_grace=2.0)
+async def get_balance(customer_id: str) -> dict:
+    return await db.get_balance(customer_id)
+```
+
+```python
+async with Session() as s:
+    await update_balance(customer_id="c1", amount=50)  # write tracked
+    balance = await get_balance(customer_id="c1")      # bypasses cache, fetches fresh
+    # ... 3 seconds later ...
+    balance2 = await get_balance(customer_id="c1")     # cache hit (grace expired)
+```
+
+- Write tracking is **per-entity** — a write to `c1` does not affect reads for `c2`
+- Grace bypass results are still cached so reads after expiry can hit normally
+- Works with `critical=True` write tools as well
+
 ## Parameters
 
 ### `@protect`
@@ -86,6 +112,8 @@ Without an explicit `Session`, a global session is used — fine for single-agen
 | `entity_param` | `str \| None` | `None` | Kwarg name that identifies the entity. Different entity values get separate cache entries. |
 | `ttl` | `float` | `300` | Seconds before a cached result is considered stale and the real function is called again. |
 | `critical` | `bool` | `False` | Skip caching entirely — always call the real function. Use for tools where staleness is never acceptable. |
+| `mark_as_write` | `bool` | `False` | Record this call as a write operation. Enables `read_after_write_grace` bypass for subsequent reads. |
+| `read_after_write_grace` | `float` | `0.0` | Seconds after a write during which reads for the same entity bypass the cache. Use `2.0` to guard against read-replica lag. |
 
 ### `Session`
 
