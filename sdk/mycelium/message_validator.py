@@ -197,6 +197,30 @@ class MessageValidator:
                     message_index=i,
                 )
 
+        # Orphaned tool-result detection: every role="tool" must match a tool_call.id
+        # from a *preceding* role="assistant" message.
+        known_tool_call_ids: set[str] = set()
+        for i, msg in enumerate(messages):
+            if not isinstance(msg, dict):
+                continue
+            role = msg.get("role", "")
+            if role == "assistant":
+                for tc in _get_tool_calls(msg):
+                    tid = _tool_call_id(tc)
+                    if tid:
+                        known_tool_call_ids.add(tid)
+            elif role == "tool":
+                tcid = msg.get("tool_call_id")
+                if tcid and tcid not in known_tool_call_ids:
+                    self._record_violation("orphaned_tool_result", i)
+                    raise MessageValidationError(
+                        f"Message {i} has role='tool' with tool_call_id={tcid!r}, "
+                        f"but no preceding assistant message contains a matching tool_call. "
+                        f"The assistant message may have been dropped or the id corrupted.",
+                        violation="orphaned_tool_result",
+                        message_index=i,
+                    )
+
         self._audit.append({"event": "validation_ok", "message_count": len(messages), "ts": now})
         return messages
 
