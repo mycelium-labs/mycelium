@@ -78,14 +78,15 @@ def _get_session() -> "Session":
 
 
 class _CacheEntry:
-    __slots__ = ("value", "expires_at", "entity_id", "tool_name", "value_hash")
+    __slots__ = ("value", "expires_at", "entity_id", "tool_name", "value_hash", "last_accessed")
 
-    def __init__(self, value: Any, expires_at: float, entity_id: str | None, tool_name: str):
+    def __init__(self, value: Any, expires_at: float, entity_id: str | None, tool_name: str, last_accessed: float | None = None):
         self.value = value
         self.expires_at = expires_at
         self.entity_id = entity_id
         self.tool_name = tool_name
         self.value_hash = _value_hash(value)
+        self.last_accessed = last_accessed
 
 
 def _value_hash(value: Any) -> str:
@@ -105,11 +106,12 @@ class Session:
             result = await fetch_customer(customer_id="c1")
     """
 
-    def __init__(self) -> None:
+    def __init__(self, max_entries: int | None = None) -> None:
         self._cache: dict[str, _CacheEntry] = {}
         self._audit: list[dict[str, Any]] = []
         self._variance_window: dict[str, list[str]] = {}  # key -> last 5 value hashes
         self._writes: dict[str, float] = {}  # entity_id -> last write timestamp
+        self._max_entries = max_entries
 
     def _record_variance(self, key: str, entry: _CacheEntry) -> None:
         """Track value changes for the same cache key. Warn if non-deterministic."""
@@ -131,6 +133,23 @@ class Session:
 
     def _key(self, tool_name: str, entity_id: str | None) -> str:
         return f"{tool_name}:{entity_id}" if entity_id is not None else tool_name
+
+    def _evict_if_needed(self, now: float) -> None:
+        """If cache exceeds max_entries, evict the least-recently-used entry."""
+        if self._max_entries is None:
+            return
+        live = {k: e for k, e in self._cache.items() if now < e.expires_at}
+        if len(live) < self._max_entries:
+            return
+        # Find LRU entry among live ones
+        lru_key = min(live, key=lambda k: live[k].last_accessed or 0)
+        self._cache.pop(lru_key, None)
+        self._audit.append({
+            "event": "cache_evict_lru",
+            "tool": live[lru_key].tool_name,
+            "entity_id": live[lru_key].entity_id,
+            "ts": now,
+        })
 
     async def call(
         self,
@@ -174,11 +193,13 @@ class Session:
                             expected=entity_id, actual=actual, field=entity_field
                         )
                 # Cache the fresh result so future reads (after grace) can hit.
+                self._evict_if_needed(now)
                 self._cache[key] = _CacheEntry(
                     value=result,
                     expires_at=now + ttl,
                     entity_id=entity_id,
                     tool_name=tool_name,
+                    last_accessed=now,
                 )
                 self._record_variance(key, self._cache[key])
                 self._audit.append({
@@ -191,6 +212,7 @@ class Session:
 
         entry = self._cache.get(key)
         if entry is not None and now < entry.expires_at:
+            entry.last_accessed = now
             self._audit.append({
                 "event": "cache_hit",
                 "tool": tool_name,
@@ -256,11 +278,13 @@ class Session:
                 })
                 return result
             effective_ttl = cache_empty
+            self._evict_if_needed(now)
             self._cache[key] = _CacheEntry(
                 value=result,
                 expires_at=now + effective_ttl,
                 entity_id=entity_id,
                 tool_name=tool_name,
+                last_accessed=now,
             )
             self._audit.append({
                 "event": "cache_add_negative",
@@ -271,11 +295,13 @@ class Session:
             })
             return result
 
+        self._evict_if_needed(now)
         self._cache[key] = _CacheEntry(
             value=result,
             expires_at=now + ttl,
             entity_id=entity_id,
             tool_name=tool_name,
+            last_accessed=now,
         )
         self._record_variance(key, self._cache[key])
         self._audit.append({
@@ -477,11 +503,13 @@ def protect_sync(
                             raise TenancyMismatchError(
                                 expected=entity_id, actual=actual, field=entity_field
                             )
+                    session._evict_if_needed(now)
                     session._cache[key] = _CacheEntry(
                         value=result,
                         expires_at=now + ttl,
                         entity_id=entity_id,
                         tool_name=tool_name,
+                        last_accessed=now,
                     )
                     session._record_variance(key, session._cache[key])
                     session._audit.append({
@@ -494,6 +522,7 @@ def protect_sync(
 
             entry = session._cache.get(key)
             if entry is not None and now < entry.expires_at:
+                entry.last_accessed = now
                 session._audit.append({
                     "event": "cache_hit",
                     "tool": tool_name,
@@ -559,11 +588,13 @@ def protect_sync(
                     })
                     return result
                 effective_ttl = cache_empty
+                session._evict_if_needed(now)
                 session._cache[key] = _CacheEntry(
                     value=result,
                     expires_at=now + effective_ttl,
                     entity_id=entity_id,
                     tool_name=tool_name,
+                    last_accessed=now,
                 )
                 session._audit.append({
                     "event": "cache_add_negative",
@@ -574,11 +605,13 @@ def protect_sync(
                 })
                 return result
 
+            session._evict_if_needed(now)
             session._cache[key] = _CacheEntry(
                 value=result,
                 expires_at=now + ttl,
                 entity_id=entity_id,
                 tool_name=tool_name,
+                last_accessed=now,
             )
             session._record_variance(key, session._cache[key])
             session._audit.append({
