@@ -14,6 +14,14 @@ Template:
 
 ---
 
+## 2026-05-12 - Write-after-read grace period (replica-lag guard)
+
+- did: Added **`mark_as_write`** and **`read_after_write_grace`** parameters to **`@protect`** and **`protect_sync`** — write tools record entity timestamps; read tools bypass cache for recently-written entities within the grace window. Caches fresh results during bypass so normal caching resumes after expiry.
+- did: Added 5 tests covering grace bypass, expiry, cross-entity isolation, disabled grace, and critical write tracking. All 145 SDK tests pass.
+- did: Updated docs — `sdk/README.md` (new section + parameter table), `sdk/CHANGELOG.md` (parameter docs), `research/context-corruption-taxonomy.md` (replica lag moved from ⚠️ to ✅).
+- now: Replica lag is now fully documented and covered in the SDK. Working tree clean.
+- next: None unless another taxonomy gap should be filled.
+
 ## 2026-05-11 - Negative caching guard (cache_empty)
 
 - did: Added **`cache_empty`** parameter to **`@protect`** and **`protect_sync`** — controls caching of empty results (`[]`, `{}`, `None`, `""`). `cache_empty=0` never caches empties; `cache_empty=10` caches them for 10s; default `None` uses normal TTL.
