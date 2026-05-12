@@ -14,6 +14,14 @@ Template:
 
 ---
 
+## 2026-05-11 - Negative caching guard (cache_empty)
+
+- did: Added **`cache_empty`** parameter to **`@protect`** and **`protect_sync`** — controls caching of empty results (`[]`, `{}`, `None`, `""`). `cache_empty=0` never caches empties; `cache_empty=10` caches them for 10s; default `None` uses normal TTL.
+- did: Added **`sdk/tests/test_negative_caching.py`** — 9 tests covering empty list/dict/string/None, non-empty still cached, short TTL expiry, sync path.
+- found: All 140 SDK tests pass; taxonomy marks negative caching as ✅ covered.
+- now: Four AF-006 gaps closed today: payload completeness + tenancy round-trip + non-deterministic tools + negative caching.
+- next: None unless another taxonomy gap should be filled.
+
 ## 2026-05-11 - Non-deterministic tool handling + variance warnings
 
 - did: Added **`deterministic=False`** parameter to **`@protect`** and **`protect_sync`** — skips caching for tools that return different values with identical inputs (stock prices, random draws). Auto variance detection tracks last 5 value hashes per key and warns when 60%+ variance detected.
