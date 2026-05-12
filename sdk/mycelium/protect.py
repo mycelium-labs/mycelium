@@ -65,13 +65,23 @@ def _get_session() -> "Session":
 
 
 class _CacheEntry:
-    __slots__ = ("value", "expires_at", "entity_id", "tool_name")
+    __slots__ = ("value", "expires_at", "entity_id", "tool_name", "value_hash")
 
     def __init__(self, value: Any, expires_at: float, entity_id: str | None, tool_name: str):
         self.value = value
         self.expires_at = expires_at
         self.entity_id = entity_id
         self.tool_name = tool_name
+        self.value_hash = _value_hash(value)
+
+
+def _value_hash(value: Any) -> str:
+    """Stable hash for variance detection."""
+    try:
+        import hashlib
+        return hashlib.md5(str(value).encode(), usedforsecurity=False).hexdigest()
+    except Exception:
+        return ""
 
 
 class Session:
@@ -85,6 +95,25 @@ class Session:
     def __init__(self) -> None:
         self._cache: dict[str, _CacheEntry] = {}
         self._audit: list[dict[str, Any]] = []
+        self._variance_window: dict[str, list[str]] = {}  # key -> last 5 value hashes
+
+    def _record_variance(self, key: str, entry: _CacheEntry) -> None:
+        """Track value changes for the same cache key. Warn if non-deterministic."""
+        window = self._variance_window.setdefault(key, [])
+        window.append(entry.value_hash)
+        if len(window) > 5:
+            window.pop(0)
+        if len(window) >= 3:
+            unique = len(set(window))
+            if unique >= len(window) * 0.6:  # 60%+ variance = likely non-deterministic
+                self._audit.append({
+                    "event": "variance_warning",
+                    "tool": entry.tool_name,
+                    "entity_id": entry.entity_id,
+                    "unique_values": unique,
+                    "window_size": len(window),
+                    "ts": time.monotonic(),
+                })
 
     def _key(self, tool_name: str, entity_id: str | None) -> str:
         return f"{tool_name}:{entity_id}" if entity_id is not None else tool_name
@@ -96,6 +125,7 @@ class Session:
         entity_param: str | None,
         entity_field: str | None,
         ttl: float,
+        deterministic: bool,
         args: tuple,
         kwargs: dict,
     ) -> Any:
@@ -149,12 +179,23 @@ class Session:
                     expected=entity_id, actual=actual, field=entity_field
                 )
 
+        if not deterministic:
+            self._audit.append({
+                "event": "cache_skip",
+                "tool": tool_name,
+                "entity_id": entity_id,
+                "reason": "non_deterministic",
+                "ts": now,
+            })
+            return result
+
         self._cache[key] = _CacheEntry(
             value=result,
             expires_at=now + ttl,
             entity_id=entity_id,
             tool_name=tool_name,
         )
+        self._record_variance(key, self._cache[key])
         self._audit.append({
             "event": "cache_add",
             "tool": tool_name,
@@ -187,6 +228,7 @@ def protect(
     entity_field: str | None = None,
     ttl: float = _DEFAULT_TTL,
     critical: bool = False,
+    deterministic: bool = True,
 ) -> Callable:
     """
     Decorator that adds context protection to any async tool function.
@@ -202,6 +244,10 @@ def protect(
                       the real function is called again. Default: 300s.
         critical:     If True, always refetch (no caching). Reserved for
                       tools where staleness is never acceptable.
+        deterministic: If False, skip caching because the tool can return
+                       different values for identical inputs (e.g. stock prices,
+                       random draws, time-dependent data). The SDK still runs
+                       entity_field validation and variance warnings.
     """
     def decorator(func: Callable) -> Callable:
         tool_name = func.__name__
@@ -225,6 +271,7 @@ def protect(
                 entity_param=entity_param,
                 entity_field=entity_field,
                 ttl=ttl,
+                deterministic=deterministic,
                 args=args,
                 kwargs=kwargs,
             )
@@ -242,6 +289,7 @@ def protect_sync(
     entity_field: str | None = None,
     ttl: float = _DEFAULT_TTL,
     critical: bool = False,
+    deterministic: bool = True,
 ) -> Callable:
     """
     Decorator for synchronous tool functions (e.g. smolagents Tool.forward).
@@ -320,12 +368,23 @@ def protect_sync(
                         expected=entity_id, actual=actual, field=entity_field
                     )
 
+            if not deterministic:
+                session._audit.append({
+                    "event": "cache_skip",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "reason": "non_deterministic",
+                    "ts": now,
+                })
+                return result
+
             session._cache[key] = _CacheEntry(
                 value=result,
                 expires_at=now + ttl,
                 entity_id=entity_id,
                 tool_name=tool_name,
             )
+            session._record_variance(key, session._cache[key])
             session._audit.append({
                 "event": "cache_add",
                 "tool": tool_name,

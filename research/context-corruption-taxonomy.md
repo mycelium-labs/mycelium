@@ -30,7 +30,7 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 | Wrong tool chosen / invalid arguments (valid-looking garbage) |  | Tool-boundary enforcement is **AF-004** territory; not a stable public guard here. |
 | Partial tool payloads (timeout, truncated HTTP/stream JSON) | ✅ | `AsyncClient` / `Client` check Content-Length mismatch, JSON structural truncation, and empty JSON bodies. `PayloadIncompleteError` flows through `@protect` error invalidation. |
 | Lossy or ambiguous serialization (dates, IDs, enums) across layers |  | Application responsibility. |
-| Non-deterministic tools (same call, different truth) | ⚠ | TTL forces **refetch**; does not make tools deterministic or resolve split-brain. |
+| Non-deterministic tools (same call, different truth) | ✅ | `@protect(deterministic=False)` skips caching for tools that return different values with identical inputs (stock prices, random draws, time-dependent data). Auto variance detection warns when a cached tool unexpectedly changes between calls.
 | Read-replica lag (“shadow reads”) | ⚠ | Fresh read after TTL may hit a different replica timing; no quorum / version token. |
 | Wrong tenancy / region / shard (shape OK, wrong customer) | ✅ | `@protect(entity_param=…, entity_field=…)` validates round-trip: response field must match request entity. `TenancyMismatchError` raises on DB-routing or proxy bugs; cache cleared, agent can retry. |
 | Poisoned or hostile tool content (untrusted page as “data”) |  | No content-security / sandbox for tool outputs; overlaps **AF-009**. |
@@ -164,7 +164,7 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 
 ## Summary counts (rough)
 
-- **✅ Direct coverage:** tool-result staleness and cache key classes; transport-level payload completeness (Content-Length, JSON truncation, empty body); stream cut-off/duplicate; history size and silent drops; several message/tool-call shape bugs; provider content-block normalization for documented cases.
+- **✅ Direct coverage:** tool-result staleness and cache key classes; transport-level payload completeness (Content-Length, JSON truncation, empty body); non-deterministic tool handling (deterministic=False + variance warnings); stream cut-off/duplicate; history size and silent drops; several message/tool-call shape bugs; provider content-block normalization for documented cases.
 - **⚠ Partial:** replica lag, entity scoping only as good as your ids, summary fidelity, some orphan patterns, multi-agent shared state beyond Mycelium cache, ordering of side effects, outage split-brain.
 - **Gaps:** RAG, full multi-agent orchestration, modalities, infra canaries, injection, hard cache caps, negative caching.
 
