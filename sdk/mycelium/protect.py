@@ -109,6 +109,7 @@ class Session:
         self._cache: dict[str, _CacheEntry] = {}
         self._audit: list[dict[str, Any]] = []
         self._variance_window: dict[str, list[str]] = {}  # key -> last 5 value hashes
+        self._writes: dict[str, float] = {}  # entity_id -> last write timestamp
 
     def _record_variance(self, key: str, entry: _CacheEntry) -> None:
         """Track value changes for the same cache key. Warn if non-deterministic."""
@@ -140,12 +141,53 @@ class Session:
         ttl: float,
         cache_empty: float | None,
         deterministic: bool,
+        mark_as_write: bool,
+        read_after_write_grace: float,
         args: tuple,
         kwargs: dict,
     ) -> Any:
         entity_id = kwargs.get(entity_param) if entity_param else None
         key = self._key(tool_name, entity_id)
         now = time.monotonic()
+
+        # Write grace: if this entity was recently written, force fresh read.
+        if (
+            entity_id is not None
+            and read_after_write_grace > 0
+            and entity_id in self._writes
+        ):
+            elapsed = now - self._writes[entity_id]
+            if elapsed < read_after_write_grace:
+                self._audit.append({
+                    "event": "cache_write_grace_bypass",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "elapsed": round(elapsed, 3),
+                    "grace": read_after_write_grace,
+                    "ts": now,
+                })
+                result = await func(*args, **kwargs)
+                if entity_field is not None and entity_id is not None:
+                    actual = _extract_field(result, entity_field)
+                    if actual != entity_id:
+                        raise TenancyMismatchError(
+                            expected=entity_id, actual=actual, field=entity_field
+                        )
+                # Cache the fresh result so future reads (after grace) can hit.
+                self._cache[key] = _CacheEntry(
+                    value=result,
+                    expires_at=now + ttl,
+                    entity_id=entity_id,
+                    tool_name=tool_name,
+                )
+                self._record_variance(key, self._cache[key])
+                self._audit.append({
+                    "event": "cache_add",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "ts": now,
+                })
+                return result
 
         entry = self._cache.get(key)
         if entry is not None and now < entry.expires_at:
@@ -242,6 +284,16 @@ class Session:
             "entity_id": entity_id,
             "ts": now,
         })
+
+        if mark_as_write and entity_id is not None:
+            self._writes[entity_id] = now
+            self._audit.append({
+                "event": "write_tracked",
+                "tool": tool_name,
+                "entity_id": entity_id,
+                "ts": now,
+            })
+
         return result
 
     def invalidate(self, tool_name: str, entity_id: str | None = None) -> None:
@@ -270,6 +322,8 @@ def protect(
     critical: bool = False,
     deterministic: bool = True,
     cache_empty: float | None = None,
+    mark_as_write: bool = False,
+    read_after_write_grace: float = 0.0,
 ) -> Callable:
     """
     Decorator that adds context protection to any async tool function.
@@ -293,6 +347,11 @@ def protect(
                       None  = empty results use the normal ttl (default).
                       <= 0  = never cache empty results (always refetch).
                       > 0   = empty results cached for this shorter TTL.
+        mark_as_write: If True, record this call as a write operation. Subsequent
+                       reads for the same entity within read_after_write_grace
+                       seconds will bypass the cache and fetch fresh data.
+        read_after_write_grace: Seconds after a write during which reads for the
+                                same entity bypass the cache. Default 0 (disabled).
     """
     def decorator(func: Callable) -> Callable:
         tool_name = func.__name__
@@ -308,6 +367,17 @@ def protect(
                         raise TenancyMismatchError(
                             expected=entity_id, actual=actual, field=entity_field
                         )
+                if mark_as_write and entity_param is not None:
+                    entity_id = kwargs.get(entity_param)
+                    if entity_id is not None:
+                        session = _get_session()
+                        session._writes[entity_id] = time.monotonic()
+                        session._audit.append({
+                            "event": "write_tracked",
+                            "tool": tool_name,
+                            "entity_id": entity_id,
+                            "ts": time.monotonic(),
+                        })
                 return result
             session = _get_session()
             return await session.call(
@@ -318,6 +388,8 @@ def protect(
                 ttl=ttl,
                 cache_empty=cache_empty,
                 deterministic=deterministic,
+                mark_as_write=mark_as_write,
+                read_after_write_grace=read_after_write_grace,
                 args=args,
                 kwargs=kwargs,
             )
@@ -337,6 +409,8 @@ def protect_sync(
     critical: bool = False,
     deterministic: bool = True,
     cache_empty: float | None = None,
+    mark_as_write: bool = False,
+    read_after_write_grace: float = 0.0,
 ) -> Callable:
     """
     Decorator for synchronous tool functions (e.g. smolagents Tool.forward).
@@ -362,12 +436,61 @@ def protect_sync(
                         raise TenancyMismatchError(
                             expected=entity_id, actual=actual, field=entity_field
                         )
+                if mark_as_write and entity_param is not None:
+                    entity_id = kwargs.get(entity_param)
+                    if entity_id is not None:
+                        session = _get_session()
+                        session._writes[entity_id] = time.monotonic()
+                        session._audit.append({
+                            "event": "write_tracked",
+                            "tool": tool_name,
+                            "entity_id": entity_id,
+                            "ts": time.monotonic(),
+                        })
                 return result
 
             session = _get_session()
             entity_id = kwargs.get(entity_param) if entity_param else None
             key = session._key(tool_name, entity_id)
             now = time.monotonic()
+
+            # Write grace: if this entity was recently written, force fresh read.
+            if (
+                entity_id is not None
+                and read_after_write_grace > 0
+                and entity_id in session._writes
+            ):
+                elapsed = now - session._writes[entity_id]
+                if elapsed < read_after_write_grace:
+                    session._audit.append({
+                        "event": "cache_write_grace_bypass",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "elapsed": round(elapsed, 3),
+                        "grace": read_after_write_grace,
+                        "ts": now,
+                    })
+                    result = func(*args, **kwargs)
+                    if entity_field is not None and entity_id is not None:
+                        actual = _extract_field(result, entity_field)
+                        if actual != entity_id:
+                            raise TenancyMismatchError(
+                                expected=entity_id, actual=actual, field=entity_field
+                            )
+                    session._cache[key] = _CacheEntry(
+                        value=result,
+                        expires_at=now + ttl,
+                        entity_id=entity_id,
+                        tool_name=tool_name,
+                    )
+                    session._record_variance(key, session._cache[key])
+                    session._audit.append({
+                        "event": "cache_add",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "ts": now,
+                    })
+                    return result
 
             entry = session._cache.get(key)
             if entry is not None and now < entry.expires_at:
@@ -464,6 +587,16 @@ def protect_sync(
                 "entity_id": entity_id,
                 "ts": now,
             })
+
+            if mark_as_write and entity_id is not None:
+                session._writes[entity_id] = now
+                session._audit.append({
+                    "event": "write_tracked",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "ts": now,
+                })
+
             return result
 
         wrapper._mycelium_protected = True

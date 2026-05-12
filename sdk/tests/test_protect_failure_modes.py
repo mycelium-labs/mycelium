@@ -843,3 +843,145 @@ async def test_integration_ttl_protect_more_backend_reads_than_never_expiring_na
 
     assert naive_fetches[0] == 1
     assert protect_fetches[0] > naive_fetches[0]
+
+
+# ---------------------------------------------------------------------------
+# Write-after-read grace (replica-lag guard)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_write_grace_bypasses_cache_for_same_entity() -> None:
+    """After a write, reads for the same entity bypass cache during grace period."""
+    state = {"balance": 100}
+    read_calls = [0]
+
+    @protect(entity_param="customer_id", ttl=60, mark_as_write=True)
+    async def update_balance(customer_id: str, amount: float) -> dict:
+        state["balance"] += amount
+        return {"customer_id": customer_id, "balance": state["balance"]}
+
+    @protect(entity_param="customer_id", ttl=60, read_after_write_grace=2.0)
+    async def get_balance(customer_id: str) -> dict:
+        read_calls[0] += 1
+        return {"customer_id": customer_id, "balance": state["balance"]}
+
+    async with Session() as s:
+        await update_balance(customer_id="c1", amount=50)
+        r1 = await get_balance(customer_id="c1")
+        r2 = await get_balance(customer_id="c1")
+
+    assert r1["balance"] == 150
+    assert r2["balance"] == 150
+    assert read_calls[0] == 2  # bypassed cache both times
+    assert any(e["event"] == "write_tracked" for e in s.audit_log())
+    assert any(e["event"] == "cache_write_grace_bypass" for e in s.audit_log())
+
+
+@pytest.mark.asyncio
+async def test_write_grace_expires_then_cache_hit_allowed() -> None:
+    """After grace period expires, reads can hit the cache again."""
+    state = {"balance": 100}
+    read_calls = [0]
+
+    @protect(entity_param="customer_id", ttl=60, mark_as_write=True)
+    async def update_balance(customer_id: str, amount: float) -> dict:
+        state["balance"] += amount
+        return {"customer_id": customer_id, "balance": state["balance"]}
+
+    @protect(entity_param="customer_id", ttl=60, read_after_write_grace=0.05)
+    async def get_balance(customer_id: str) -> dict:
+        read_calls[0] += 1
+        return {"customer_id": customer_id, "balance": state["balance"]}
+
+    async with Session() as s:
+        await update_balance(customer_id="c1", amount=50)
+        r1 = await get_balance(customer_id="c1")
+        await asyncio.sleep(0.11)
+        r2 = await get_balance(customer_id="c1")
+
+    assert r1["balance"] == 150
+    assert r2["balance"] == 150
+    assert read_calls[0] == 1  # first bypassed, second hit cache
+    assert any(e["event"] == "cache_hit" for e in s.audit_log())
+
+
+@pytest.mark.asyncio
+async def test_write_grace_only_affects_same_entity() -> None:
+    """Write to c1 does not force grace bypass for c2 reads."""
+    store = {"c1": 100, "c2": 200}
+    read_calls = [0]
+
+    @protect(entity_param="customer_id", ttl=60, mark_as_write=True)
+    async def update_balance(customer_id: str, amount: float) -> dict:
+        store[customer_id] += amount
+        return {"customer_id": customer_id, "balance": store[customer_id]}
+
+    @protect(entity_param="customer_id", ttl=60, read_after_write_grace=2.0)
+    async def get_balance(customer_id: str) -> dict:
+        read_calls[0] += 1
+        return {"customer_id": customer_id, "balance": store[customer_id]}
+
+    async with Session() as s:
+        await update_balance(customer_id="c1", amount=50)
+        r = await get_balance(customer_id="c2")
+
+    assert r["balance"] == 200
+    assert read_calls[0] == 1
+    assert not any(
+        e["event"] == "cache_write_grace_bypass" and e.get("entity_id") == "c2"
+        for e in s.audit_log()
+    )
+
+
+@pytest.mark.asyncio
+async def test_mark_as_write_without_grace_does_not_affect_reads() -> None:
+    """mark_as_write=True with read_after_write_grace=0 does not force fresh reads."""
+    state = {"balance": 100}
+    read_calls = [0]
+
+    @protect(entity_param="customer_id", ttl=60, mark_as_write=True)
+    async def update_balance(customer_id: str, amount: float) -> dict:
+        state["balance"] += amount
+        return {"customer_id": customer_id, "balance": state["balance"]}
+
+    @protect(entity_param="customer_id", ttl=60, read_after_write_grace=0.0)
+    async def get_balance(customer_id: str) -> dict:
+        read_calls[0] += 1
+        return {"customer_id": customer_id, "balance": state["balance"]}
+
+    async with Session() as s:
+        await update_balance(customer_id="c1", amount=50)
+        r1 = await get_balance(customer_id="c1")
+        r2 = await get_balance(customer_id="c1")
+
+    assert r1["balance"] == 150
+    assert r2["balance"] == 150
+    assert read_calls[0] == 1  # cached, no grace bypass
+    assert any(e["event"] == "cache_hit" for e in s.audit_log())
+
+
+@pytest.mark.asyncio
+async def test_critical_write_tracked_for_grace_bypass() -> None:
+    """critical=True + mark_as_write=True still records write for grace bypass."""
+    state = {"balance": 100}
+    read_calls = [0]
+
+    @protect(entity_param="customer_id", critical=True, mark_as_write=True)
+    async def update_balance(customer_id: str, amount: float) -> dict:
+        state["balance"] += amount
+        return {"customer_id": customer_id, "balance": state["balance"]}
+
+    @protect(entity_param="customer_id", ttl=60, read_after_write_grace=2.0)
+    async def get_balance(customer_id: str) -> dict:
+        read_calls[0] += 1
+        return {"customer_id": customer_id, "balance": state["balance"]}
+
+    async with Session() as s:
+        await update_balance(customer_id="c1", amount=50)
+        r1 = await get_balance(customer_id="c1")
+
+    assert r1["balance"] == 150
+    assert read_calls[0] == 1
+    assert any(e["event"] == "write_tracked" for e in s.audit_log())
+    assert any(e["event"] == "cache_write_grace_bypass" for e in s.audit_log())
