@@ -123,6 +123,9 @@ class HistoryGuard:
                        None = no count limit.
         warn_at:       Fraction of max_tokens at which to emit a `history_near_limit`
                        audit event (default 0.9 = 90%).
+        detect_duplicates: If True, validate() raises HistoryTruncatedError when
+                       the same message fingerprint appears more than once in the
+                       history (duplicate or replayed turns).
     """
 
     def __init__(
@@ -130,10 +133,12 @@ class HistoryGuard:
         max_tokens: int | None = None,
         max_messages: int | None = None,
         warn_at: float = 0.9,
+        detect_duplicates: bool = True,
     ) -> None:
         self._max_tokens = max_tokens
         self._max_messages = max_messages
         self._warn_at = warn_at
+        self._detect_duplicates = detect_duplicates
         self._last_fingerprints: list[str] = []
         self._audit: list[dict[str, Any]] = []
 
@@ -213,6 +218,34 @@ class HistoryGuard:
                 message_count=count,
                 estimated_tokens=tokens,
             )
+
+        # Duplicate turn detection
+        if self._detect_duplicates:
+            seen: set[str] = set()
+            duplicates: list[int] = []
+            for i, fp in enumerate(_fingerprint(m) for m in messages):
+                if fp in seen:
+                    duplicates.append(i)
+                seen.add(fp)
+            if duplicates:
+                self._audit.append({
+                    "event": "history_duplicate_turns",
+                    "duplicate_indices": duplicates,
+                    "duplicate_count": len(duplicates),
+                    "ts": now,
+                })
+                self._log_to_session({
+                    "event": "history_duplicate_turns",
+                    "duplicate_indices": duplicates,
+                    "duplicate_count": len(duplicates),
+                    "ts": now,
+                })
+                raise HistoryTruncatedError(
+                    f"Duplicate turns detected at index(s) {duplicates}. "
+                    f"The same message appears {len(duplicates)} time(s) in the history.",
+                    message_count=count,
+                    estimated_tokens=tokens,
+                )
 
         # Record fingerprints for drop detection
         self._last_fingerprints = [_fingerprint(m) for m in messages]
