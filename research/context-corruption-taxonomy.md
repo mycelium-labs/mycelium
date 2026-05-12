@@ -44,7 +44,7 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 | Cross-entity cache collision | ✅ | `entity_param` + entity value in cache key. |
 | Cross-tool / cross-function cache collision | ✅ | Function name in cache key. |
 | Cross-session or cross-request leakage | ✅ | `Session` + `ContextVar`; explicit `async with Session()` per run. |
-| Unbounded memory growth of cache | ⚠ | TTL expiry + session scope **bound live entries**; no hard max-entry cap. |
+| Unbounded memory growth of cache | ✅ | `Session(max_entries=N)` enforces LRU eviction when live entries exceed N. TTL expiry + session scope also bound live entries. |
 | “Negative caching” (cache 404 / empty; state later exists) | ✅ | `@protect(cache_empty=…)` — `0` never caches empty results (`[]`, `{}`, `None`, `""`); positive value caches them with a shorter TTL. Default `None` = normal TTL (backward compatible). |
 | Errors or exceptions cached as success | ✅ | Exception clears cache entry (`cache_error`); next call refetches. |
 | Write-through / ordering mismatch (local vs durable) |  | No distributed transaction or version-vector guard. |
@@ -58,7 +58,7 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 | Token-window overflow (history too large) | ✅ | `HistoryGuard.validate()` — `HistoryTruncatedError` when over `max_tokens` / `max_messages`. |
 | Silent **drop** of messages between turns | ✅ | `HistoryGuard.check_for_drops()` — fingerprint monotonicity. |
 | Silent **summarization / compaction** (facts replaced by lossy summary) | ⚠ | Drop detection sees **count** changes, not semantic fidelity of summaries. |
-| Duplicate or replayed turns in history |  | Not a dedicated detector. |
+| Duplicate or replayed turns in history | ✅ | `HistoryGuard(detect_duplicates=True)` raises `HistoryTruncatedError` when the same message fingerprint appears more than once. |
 | Role / channel mis-tagging (system vs user vs tool) | ✅ | `MessageValidator` — `invalid_role`. |
 | Wrong checkpoint / resume token (time-travel) |  | Out of scope. |
 | Parallel tool calls merged incorrectly into linear transcript | ⚠ | `MessageValidator` helps **indices / ids / duplicates**; does not fix all merge strategies. |
@@ -69,7 +69,7 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 
 | Class | Mycelium | Notes |
 |-------|:--------:|-------|
-| Orphaned tool results (result without matching call) | ⚠ | Validator catches **missing `tool_call_id`** and structural issues; not every orphan pattern. |
+| Orphaned tool results (result without matching call) | ✅ | `MessageValidator` catches missing `tool_call_id` *and* detects tool results whose `tool_call_id` does not match any tool_call.id in a preceding assistant message. |
 | Mismatched / duplicate tool call IDs | ✅ | `MessageValidator` + `repair()`. |
 | Duplicate tool call blocks (streaming partial + final) | ✅ | `repair()` drops `fc_*` partials, etc. |
 | Provider / SDK message schema drift | ⚠ | `ContentBlockNormalizer` targets **known** provider block mismatches; not all versions. |
@@ -164,8 +164,8 @@ Internal stubs (`mycelium.protections.*` loop/tool misuse/observability) are **o
 
 ## Summary counts (rough)
 
-- **✅ Direct coverage:** tool-result staleness and cache key classes; transport-level payload completeness (Content-Length, JSON truncation, empty body); non-deterministic tool handling (deterministic=False + variance warnings); negative caching (cache_empty); stream cut-off/duplicate; history size and silent drops; several message/tool-call shape bugs; provider content-block normalization for documented cases.
-- **⚠ Partial:** entity scoping only as good as your ids, summary fidelity, some orphan patterns, multi-agent shared state beyond Mycelium cache, ordering of side effects, outage split-brain.
-- **Gaps:** RAG, full multi-agent orchestration, modalities, infra canaries, injection, hard cache caps, negative caching.
+- **✅ Direct coverage:** tool-result staleness and cache key classes; transport-level payload completeness (Content-Length, JSON truncation, empty body); non-deterministic tool handling (deterministic=False + variance warnings); negative caching (cache_empty); write-after-read grace (replica-lag guard); stream cut-off/duplicate; history size, silent drops, and duplicate turns; orphaned tool results and several message/tool-call shape bugs; provider content-block normalization for documented cases; hard cache cap (LRU eviction).
+- **⚠ Partial:** entity scoping only as good as your ids, summary fidelity, multi-agent shared state beyond Mycelium cache, ordering of side effects, outage split-brain.
+- **Gaps:** RAG, full multi-agent orchestration, modalities, infra canaries, injection.
 
 **Related repo docs:** `research/failure_modes.md`, `research/v1-scope.md`, `sdk/README.md`, `sdk/CHANGELOG.md`, `sdk/PROOF_SUMMARY.md`.
