@@ -6,6 +6,8 @@ Canonical specs live in `incidents/tagged/AF-*.md`.
 
 **v1 SDK** - see `research/v1-scope.md`: focus **AF-006**, **AF-004**, **AF-002** first.
 
+**AF-006 sub-types:** expanded checklist and per-class SDK coverage (implemented / partial / none) in `research/context-corruption-taxonomy.md`.
+
 | ID | Name | One-line | HF freq | v1 |
 |----|------|----------|--------:|:--:|
 | AF-001 | Hallucination cascade | The agent confidently acts on fabricated facts, compounding errors across tool calls. | 36 | |
