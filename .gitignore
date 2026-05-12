@@ -19,6 +19,7 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.context/
 
 # OS
 .DS_Store
