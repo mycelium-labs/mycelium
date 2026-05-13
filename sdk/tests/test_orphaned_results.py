@@ -37,7 +37,17 @@ def test_orphaned_tool_result_raises() -> None:
     validator = MessageValidator()
     messages = [
         {"role": "user", "content": "What's the weather?"},
-        {"role": "assistant", "content": "", "tool_calls": [{"id": "call_other", "type": "function", "function": {"name": "get_news", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_other",
+                    "type": "function",
+                    "function": {"name": "get_news", "arguments": "{}"},
+                }
+            ],
+        },
         {"role": "tool", "tool_call_id": "call_1", "content": "Sunny, 72F"},
     ]
     with pytest.raises(MessageValidationError) as exc_info:
