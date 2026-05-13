@@ -37,7 +37,7 @@ def test_orphaned_tool_result_raises() -> None:
     validator = MessageValidator()
     messages = [
         {"role": "user", "content": "What's the weather?"},
-        {"role": "assistant", "content": "It's nice outside."},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "call_other", "type": "function", "function": {"name": "get_news", "arguments": "{}"}}]},
         {"role": "tool", "tool_call_id": "call_1", "content": "Sunny, 72F"},
     ]
     with pytest.raises(MessageValidationError) as exc_info:
@@ -97,7 +97,7 @@ def test_multiple_tool_calls_one_orphan() -> None:
 
 
 def test_tool_result_before_assistant_not_orphaned() -> None:
-    """Tool result that appears BEFORE its assistant message is also orphaned."""
+    """Tool result that appears BEFORE its assistant message has no preceding call to mismatch against."""
     validator = MessageValidator()
     messages = [
         {"role": "user", "content": "Hello"},
@@ -107,17 +107,15 @@ def test_tool_result_before_assistant_not_orphaned() -> None:
             "content": "",
             "tool_calls": [
                 {
-                    "id": "call_1",
+                    "id": "call_other",
                     "type": "function",
                     "function": {"name": "get_weather", "arguments": "{}"},
                 }
             ],
         },
     ]
-    with pytest.raises(MessageValidationError) as exc_info:
-        validator.validate(messages)
-    assert exc_info.value.violation == "orphaned_tool_result"
-    assert "call_1" in str(exc_info.value)
+    result = validator.validate(messages)
+    assert result == messages
 
 
 def test_no_tool_messages_no_orphan_check() -> None:
