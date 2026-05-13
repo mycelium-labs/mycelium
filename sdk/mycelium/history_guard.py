@@ -44,6 +44,7 @@ class HistoryTruncatedError(Exception):
 # Token estimation (no external dependency)
 # ---------------------------------------------------------------------------
 
+
 def _extract_text(content: Any) -> str:
     """Pull plain text out of a message content field regardless of format."""
     if isinstance(content, str):
@@ -94,6 +95,7 @@ def estimate_tokens(messages: list) -> int:
 # Message fingerprinting for drop detection
 # ---------------------------------------------------------------------------
 
+
 def _fingerprint(message: Any) -> str:
     role = _message_role(message)
     text = _message_text(message)
@@ -104,6 +106,7 @@ def _fingerprint(message: Any) -> str:
 # ---------------------------------------------------------------------------
 # HistoryGuard
 # ---------------------------------------------------------------------------
+
 
 def _try_active_session() -> Any:
     try:
@@ -126,6 +129,9 @@ class HistoryGuard:
         detect_duplicates: If True, validate() raises HistoryTruncatedError when
                        the same message fingerprint appears more than once in the
                        history (duplicate or replayed turns).
+        track_keywords: List of critical keywords that must survive summarization.
+                       If a keyword was present in the original history but missing
+                       after framework processing, check_summary_fidelity() raises.
     """
 
     def __init__(
@@ -134,12 +140,15 @@ class HistoryGuard:
         max_messages: int | None = None,
         warn_at: float = 0.9,
         detect_duplicates: bool = True,
+        track_keywords: list[str] | None = None,
     ) -> None:
         self._max_tokens = max_tokens
         self._max_messages = max_messages
         self._warn_at = warn_at
         self._detect_duplicates = detect_duplicates
+        self._track_keywords = [kw.lower() for kw in (track_keywords or [])]
         self._last_fingerprints: list[str] = []
+        self._last_keywords: set[str] = set()
         self._audit: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
@@ -162,27 +171,43 @@ class HistoryGuard:
         count = len(messages)
         tokens = estimate_tokens(messages)
 
-        self._audit.append({
-            "event": "history_checked",
-            "message_count": count,
-            "estimated_tokens": tokens,
-            "ts": now,
-        })
-        self._log_to_session({"event": "history_checked", "message_count": count,
-                               "estimated_tokens": tokens, "ts": now})
+        self._audit.append(
+            {
+                "event": "history_checked",
+                "message_count": count,
+                "estimated_tokens": tokens,
+                "ts": now,
+            }
+        )
+        self._log_to_session(
+            {
+                "event": "history_checked",
+                "message_count": count,
+                "estimated_tokens": tokens,
+                "ts": now,
+            }
+        )
 
         # Token limit check
         if self._max_tokens is not None:
             if tokens > self._max_tokens:
-                self._audit.append({
-                    "event": "history_truncated",
-                    "reason": "token_limit",
-                    "estimated_tokens": tokens,
-                    "max_tokens": self._max_tokens,
-                    "ts": now,
-                })
-                self._log_to_session({"event": "history_truncated", "reason": "token_limit",
-                                       "estimated_tokens": tokens, "ts": now})
+                self._audit.append(
+                    {
+                        "event": "history_truncated",
+                        "reason": "token_limit",
+                        "estimated_tokens": tokens,
+                        "max_tokens": self._max_tokens,
+                        "ts": now,
+                    }
+                )
+                self._log_to_session(
+                    {
+                        "event": "history_truncated",
+                        "reason": "token_limit",
+                        "estimated_tokens": tokens,
+                        "ts": now,
+                    }
+                )
                 raise HistoryTruncatedError(
                     f"Message history would exceed token limit: "
                     f"~{tokens} estimated tokens > {self._max_tokens} max. "
@@ -191,27 +216,43 @@ class HistoryGuard:
                     estimated_tokens=tokens,
                 )
             if tokens >= self._max_tokens * self._warn_at:
-                self._audit.append({
-                    "event": "history_near_limit",
-                    "estimated_tokens": tokens,
-                    "max_tokens": self._max_tokens,
-                    "pct": round(tokens / self._max_tokens, 2),
-                    "ts": now,
-                })
-                self._log_to_session({"event": "history_near_limit", "estimated_tokens": tokens,
-                                       "pct": round(tokens / self._max_tokens, 2), "ts": now})
+                self._audit.append(
+                    {
+                        "event": "history_near_limit",
+                        "estimated_tokens": tokens,
+                        "max_tokens": self._max_tokens,
+                        "pct": round(tokens / self._max_tokens, 2),
+                        "ts": now,
+                    }
+                )
+                self._log_to_session(
+                    {
+                        "event": "history_near_limit",
+                        "estimated_tokens": tokens,
+                        "pct": round(tokens / self._max_tokens, 2),
+                        "ts": now,
+                    }
+                )
 
         # Message count limit check
         if self._max_messages is not None and count > self._max_messages:
-            self._audit.append({
-                "event": "history_truncated",
-                "reason": "message_count",
-                "message_count": count,
-                "max_messages": self._max_messages,
-                "ts": now,
-            })
-            self._log_to_session({"event": "history_truncated", "reason": "message_count",
-                                   "message_count": count, "ts": now})
+            self._audit.append(
+                {
+                    "event": "history_truncated",
+                    "reason": "message_count",
+                    "message_count": count,
+                    "max_messages": self._max_messages,
+                    "ts": now,
+                }
+            )
+            self._log_to_session(
+                {
+                    "event": "history_truncated",
+                    "reason": "message_count",
+                    "message_count": count,
+                    "ts": now,
+                }
+            )
             raise HistoryTruncatedError(
                 f"Message history exceeds max_messages: "
                 f"{count} messages > {self._max_messages} max.",
@@ -228,18 +269,22 @@ class HistoryGuard:
                     duplicates.append(i)
                 seen.add(fp)
             if duplicates:
-                self._audit.append({
-                    "event": "history_duplicate_turns",
-                    "duplicate_indices": duplicates,
-                    "duplicate_count": len(duplicates),
-                    "ts": now,
-                })
-                self._log_to_session({
-                    "event": "history_duplicate_turns",
-                    "duplicate_indices": duplicates,
-                    "duplicate_count": len(duplicates),
-                    "ts": now,
-                })
+                self._audit.append(
+                    {
+                        "event": "history_duplicate_turns",
+                        "duplicate_indices": duplicates,
+                        "duplicate_count": len(duplicates),
+                        "ts": now,
+                    }
+                )
+                self._log_to_session(
+                    {
+                        "event": "history_duplicate_turns",
+                        "duplicate_indices": duplicates,
+                        "duplicate_count": len(duplicates),
+                        "ts": now,
+                    }
+                )
                 raise HistoryTruncatedError(
                     f"Duplicate turns detected at index(s) {duplicates}. "
                     f"The same message appears {len(duplicates)} time(s) in the history.",
@@ -249,6 +294,11 @@ class HistoryGuard:
 
         # Record fingerprints for drop detection
         self._last_fingerprints = [_fingerprint(m) for m in messages]
+
+        # Record tracked keywords for summary fidelity check
+        if self._track_keywords:
+            combined = " ".join(_message_text(m) for m in messages).lower()
+            self._last_keywords = {kw for kw in self._track_keywords if kw in combined}
 
         self._audit.append({"event": "history_ok", "message_count": count, "ts": now})
         self._log_to_session({"event": "history_ok", "message_count": count, "ts": now})
@@ -268,8 +318,7 @@ class HistoryGuard:
         """
         if not self._last_fingerprints:
             raise RuntimeError(
-                "check_for_drops() called before validate(). "
-                "Call validate(messages) first."
+                "check_for_drops() called before validate(). Call validate(messages) first."
             )
 
         now = time.monotonic()
@@ -277,17 +326,21 @@ class HistoryGuard:
         dropped = [fp for fp in self._last_fingerprints if fp not in current_fingerprints]
 
         if dropped:
-            self._audit.append({
-                "event": "history_drop_detected",
-                "dropped_count": len(dropped),
-                "remaining_count": len(messages),
-                "ts": now,
-            })
-            self._log_to_session({
-                "event": "history_drop_detected",
-                "dropped_count": len(dropped),
-                "ts": now,
-            })
+            self._audit.append(
+                {
+                    "event": "history_drop_detected",
+                    "dropped_count": len(dropped),
+                    "remaining_count": len(messages),
+                    "ts": now,
+                }
+            )
+            self._log_to_session(
+                {
+                    "event": "history_drop_detected",
+                    "dropped_count": len(dropped),
+                    "ts": now,
+                }
+            )
             raise HistoryTruncatedError(
                 f"{len(dropped)} message(s) were silently dropped from the history. "
                 f"Had {len(self._last_fingerprints)} messages, now have {len(messages)}.",
@@ -295,11 +348,66 @@ class HistoryGuard:
                 estimated_tokens=estimate_tokens(messages),
             )
 
-        self._audit.append({
-            "event": "history_drop_check_ok",
-            "message_count": len(messages),
-            "ts": now,
-        })
+        self._audit.append(
+            {
+                "event": "history_drop_check_ok",
+                "message_count": len(messages),
+                "ts": now,
+            }
+        )
+
+    def check_summary_fidelity(self, messages: list) -> None:
+        """
+        Check whether tracked keywords were lost during summarization/compaction.
+
+        Call this after a framework has summarized or compacted the history.
+        If any tracked keyword that was present in the original validate() call
+        is no longer present in the processed messages, raises HistoryTruncatedError.
+
+        Raises:
+            HistoryTruncatedError: one or more tracked keywords were lost.
+            RuntimeError: called before validate() was ever called.
+        """
+        if not self._track_keywords:
+            return
+        if not self._last_keywords:
+            return
+
+        now = time.monotonic()
+        combined = " ".join(_message_text(m) for m in messages).lower()
+        lost = [kw for kw in self._last_keywords if kw not in combined]
+
+        if lost:
+            self._audit.append(
+                {
+                    "event": "history_summary_keyword_loss",
+                    "lost_keywords": list(lost),
+                    "lost_count": len(lost),
+                    "ts": now,
+                }
+            )
+            self._log_to_session(
+                {
+                    "event": "history_summary_keyword_loss",
+                    "lost_keywords": list(lost),
+                    "ts": now,
+                }
+            )
+            raise HistoryTruncatedError(
+                f"Summary/compaction dropped {len(lost)} critical keyword(s): "
+                f"{', '.join(lost)}. These keywords were present in the original "
+                f"history but missing after processing.",
+                message_count=len(messages),
+                estimated_tokens=estimate_tokens(messages),
+            )
+
+        self._audit.append(
+            {
+                "event": "history_summary_fidelity_ok",
+                "tracked_keywords": len(self._last_keywords),
+                "ts": now,
+            }
+        )
 
     def estimate_tokens(self, messages: list) -> int:
         """Estimate token count for the given message list."""
