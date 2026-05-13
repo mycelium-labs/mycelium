@@ -146,12 +146,6 @@ class ContentBlockNormalizer:
                 }
                 self._audit.append(event)
                 self._log_to_session(event)
-                if self._strict:
-                    raise ContentBlockError(
-                        f"Message format detected as {detected!r} but target_provider "
-                        f"is {self._target!r}. Normalization may not handle all differences.",
-                        violation="provider_format_mismatch",
-                    )
 
         result = deepcopy(messages)
 

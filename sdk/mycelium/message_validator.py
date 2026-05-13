@@ -209,7 +209,9 @@ class MessageValidator:
                 )
 
         # Orphaned tool-result detection: every role="tool" must match a tool_call.id
-        # from a *preceding* role="assistant" message.
+        # from a *preceding* role="assistant" message. Only flag if there are
+        # assistant messages present (no assistant → can't determine orphan status).
+        has_assistant = any(isinstance(m, dict) and m.get("role") == "assistant" for m in messages)
         known_tool_call_ids: set[str] = set()
         for i, msg in enumerate(messages):
             if not isinstance(msg, dict):
@@ -220,7 +222,7 @@ class MessageValidator:
                     tid = _tool_call_id(tc)
                     if tid:
                         known_tool_call_ids.add(tid)
-            elif role == "tool":
+            elif role == "tool" and has_assistant:
                 tcid = msg.get("tool_call_id")
                 if tcid and tcid not in known_tool_call_ids:
                     self._record_violation("orphaned_tool_result", i)
