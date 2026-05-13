@@ -232,6 +232,36 @@ class MessageValidator:
                         message_index=i,
                     )
 
+        # Misplaced tool-result detection: every role="tool" must appear before
+        # any subsequent role="assistant" that doesn't reference its call_id.
+        call_to_assistant: dict[str, int] = {}
+        for i, msg in enumerate(messages):
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                for tc in _get_tool_calls(msg):
+                    tid = _tool_call_id(tc)
+                    if tid:
+                        call_to_assistant[tid] = i
+
+        for i, msg in enumerate(messages):
+            if not isinstance(msg, dict) or msg.get("role") != "tool":
+                continue
+            tcid = msg.get("tool_call_id")
+            if not tcid or tcid not in call_to_assistant:
+                continue
+            caller_idx = call_to_assistant[tcid]
+            for k in range(caller_idx + 1, i):
+                other = messages[k]
+                if isinstance(other, dict) and other.get("role") == "assistant":
+                    self._record_violation("misplaced_tool_result", i)
+                    raise MessageValidationError(
+                        f"Message {i} has role='tool' with tool_call_id={tcid!r}, "
+                        f"but an assistant message at index {k} appears between it "
+                        f"and the call at index {caller_idx}. The tool result was "
+                        f"placed after a subsequent assistant response.",
+                        violation="misplaced_tool_result",
+                        message_index=i,
+                    )
+
         self._audit.append({"event": "validation_ok", "message_count": len(messages), "ts": now})
         return messages
 
