@@ -4,9 +4,7 @@ Tests for ContentBlockNormalizer provider format auto-detection.
 
 from __future__ import annotations
 
-import pytest
-
-from mycelium import ContentBlockError, ContentBlockNormalizer
+from mycelium import ContentBlockNormalizer
 
 
 class TestDetectFormat:
@@ -127,7 +125,17 @@ class TestProviderMismatchDetection:
     def test_mismatch_raises_when_strict(self) -> None:
         """Mismatch emits an event but does not raise (warning-only)."""
         messages = [
-            {"role": "assistant", "content": "", "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "x", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "x", "arguments": "{}"},
+                    }
+                ],
+            },
         ]
         normalizer = ContentBlockNormalizer(target_provider="anthropic", strict=True)
         result = normalizer.normalize(messages)
