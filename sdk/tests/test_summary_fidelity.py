@@ -94,3 +94,62 @@ def test_case_insensitive_matching() -> None:
     guard.validate(original)
     guard.check_summary_fidelity(summarized)
     assert any(e["event"] == "history_summary_fidelity_ok" for e in guard.audit_log())
+
+
+# ---------------------------------------------------------------------------
+# Compaction ratio detection
+# ---------------------------------------------------------------------------
+
+
+def test_excessive_compaction_raises() -> None:
+    """When token count drops by more than max_compaction_ratio, raises."""
+    guard = HistoryGuard(max_compaction_ratio=3.0)
+    original = [
+        {
+            "role": "user",
+            "content": "This is a long message with many words and details about the refund policy and deadline information that should all be preserved in the summary.",
+        },
+        {
+            "role": "assistant",
+            "content": "That is a very detailed response covering all the important points about the refund policy, the deadline, the process for requesting a refund, and the exceptions that apply in certain circumstances.",
+        },
+    ]
+    summarized = [
+        {"role": "user", "content": "refund question"},
+        {"role": "assistant", "content": "covered in policy"},
+    ]
+    guard.validate(original)
+    with pytest.raises(HistoryTruncatedError) as exc_info:
+        guard.check_summary_fidelity(summarized)
+    assert "Excessive compaction" in str(exc_info.value)
+    audit = guard.audit_log()
+    assert any(e["event"] == "history_excessive_compaction" for e in audit)
+
+
+def test_reasonable_compaction_passes() -> None:
+    """Token count reduction within max_compaction_ratio passes."""
+    guard = HistoryGuard(max_compaction_ratio=5.0)
+    original = [
+        {"role": "user", "content": "What's the weather in San Francisco today?"},
+        {"role": "assistant", "content": "It's sunny and 72 degrees."},
+    ]
+    summarized = [
+        {"role": "user", "content": "SF weather?"},
+        {"role": "assistant", "content": "Sunny, 72F."},
+    ]
+    guard.validate(original)
+    guard.check_summary_fidelity(summarized)  # no raise
+
+
+def test_no_max_compaction_ratio_skips_check() -> None:
+    """Without max_compaction_ratio, no compaction check is performed."""
+    guard = HistoryGuard()
+    original = [
+        {"role": "user", "content": "Very long message " * 20},
+    ]
+    summarized = [
+        {"role": "user", "content": "short"},
+    ]
+    guard.validate(original)
+    guard.check_summary_fidelity(summarized)
+    assert not any(e["event"] == "history_excessive_compaction" for e in guard.audit_log())

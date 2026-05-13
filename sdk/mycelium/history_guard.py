@@ -132,6 +132,9 @@ class HistoryGuard:
         track_keywords: List of critical keywords that must survive summarization.
                        If a keyword was present in the original history but missing
                        after framework processing, check_summary_fidelity() raises.
+        max_compaction_ratio: Maximum allowed token-count reduction ratio before
+                       compaction is considered excessive. E.g. 5.0 means a 5x
+                       reduction triggers a warning. None = disabled.
     """
 
     def __init__(
@@ -141,14 +144,17 @@ class HistoryGuard:
         warn_at: float = 0.9,
         detect_duplicates: bool = True,
         track_keywords: list[str] | None = None,
+        max_compaction_ratio: float | None = None,
     ) -> None:
         self._max_tokens = max_tokens
         self._max_messages = max_messages
         self._warn_at = warn_at
         self._detect_duplicates = detect_duplicates
         self._track_keywords = [kw.lower() for kw in (track_keywords or [])]
+        self._max_compaction_ratio = max_compaction_ratio
         self._last_fingerprints: list[str] = []
         self._last_keywords: set[str] = set()
+        self._last_token_count: int = 0
         self._audit: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
@@ -300,6 +306,9 @@ class HistoryGuard:
             combined = " ".join(_message_text(m) for m in messages).lower()
             self._last_keywords = {kw for kw in self._track_keywords if kw in combined}
 
+        # Record token count for compaction ratio check
+        self._last_token_count = tokens
+
         self._audit.append({"event": "history_ok", "message_count": count, "ts": now})
         self._log_to_session({"event": "history_ok", "message_count": count, "ts": now})
         return messages
@@ -358,17 +367,57 @@ class HistoryGuard:
 
     def check_summary_fidelity(self, messages: list) -> None:
         """
-        Check whether tracked keywords were lost during summarization/compaction.
+        Check whether tracked keywords were lost or excessive compaction occurred
+        during summarization/compaction.
 
         Call this after a framework has summarized or compacted the history.
         If any tracked keyword that was present in the original validate() call
         is no longer present in the processed messages, raises HistoryTruncatedError.
+        If token count dropped by more than max_compaction_ratio, raises.
 
         Raises:
-            HistoryTruncatedError: one or more tracked keywords were lost.
+            HistoryTruncatedError: tracked keywords lost or excessive compaction.
             RuntimeError: called before validate() was ever called.
         """
+        now = time.monotonic()
+
+        # Compaction ratio check
+        if self._max_compaction_ratio is not None and self._last_token_count > 0:
+            current_tokens = estimate_tokens(messages)
+            ratio = self._last_token_count / max(current_tokens, 1)
+            if ratio > self._max_compaction_ratio:
+                self._audit.append(
+                    {
+                        "event": "history_excessive_compaction",
+                        "original_tokens": self._last_token_count,
+                        "current_tokens": current_tokens,
+                        "ratio": round(ratio, 1),
+                        "max_ratio": self._max_compaction_ratio,
+                        "ts": now,
+                    }
+                )
+                self._log_to_session(
+                    {
+                        "event": "history_excessive_compaction",
+                        "original_tokens": self._last_token_count,
+                        "current_tokens": current_tokens,
+                        "ratio": round(ratio, 1),
+                        "ts": now,
+                    }
+                )
+                raise HistoryTruncatedError(
+                    f"Excessive compaction detected: original ~{self._last_token_count} "
+                    f"tokens compacted to ~{current_tokens} tokens "
+                    f"({ratio:.1f}x reduction, max allowed {self._max_compaction_ratio}x). "
+                    f"The summary may have lost critical details.",
+                    message_count=len(messages),
+                    estimated_tokens=current_tokens,
+                )
+
+        # Keyword fidelity check
         if not self._track_keywords:
+            return
+        if not self._last_keywords:
             return
         if not self._last_keywords:
             return
