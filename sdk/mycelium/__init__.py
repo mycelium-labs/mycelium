@@ -11,6 +11,7 @@ from mycelium.protect import (
     protect,
     protect_sync,
 )
+from mycelium.scratchpad_guard import ScratchpadGuard
 from mycelium.stream_guard import StreamCutOffError, StreamGuard
 
 __version__ = "0.1.0"
@@ -32,5 +33,6 @@ __all__ = [
     "PayloadIncompleteError",
     "TenancyMismatchError",
     "EntityPatternError",
+    "ScratchpadGuard",
     "__version__",
 ]
