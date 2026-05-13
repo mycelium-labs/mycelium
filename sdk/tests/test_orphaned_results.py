@@ -147,3 +147,105 @@ def test_missing_tool_call_id_caught_first() -> None:
     with pytest.raises(MessageValidationError) as exc_info:
         validator.validate(messages)
     assert exc_info.value.violation == "missing_tool_call_id"
+
+
+# ---------------------------------------------------------------------------
+# Misplaced tool results (after intervening assistant)
+# ---------------------------------------------------------------------------
+
+
+def test_tool_result_between_call_and_response_passes() -> None:
+    """Tool result between assistant call and response should pass."""
+    validator = MessageValidator()
+    messages = [
+        {"role": "user", "content": "What's the weather?"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": "{}"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "Sunny"},
+        {"role": "assistant", "content": "It's sunny!"},
+    ]
+    result = validator.validate(messages)
+    assert result == messages
+
+
+def test_tool_result_after_next_assistant_raises() -> None:
+    """Tool result that appears after a subsequent assistant message is flagged."""
+    validator = MessageValidator()
+    messages = [
+        {"role": "user", "content": "What's the weather?"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": "{}"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "Sunny"},
+        {"role": "assistant", "content": "It's sunny!"},
+        {"role": "tool", "tool_call_id": "call_2", "content": "72F"},  # orphane
+    ]
+    # call_2 is orphaned + misplaced, but orphaned is caught first
+    with pytest.raises(MessageValidationError) as exc_info:
+        validator.validate(messages)
+    assert exc_info.value.violation == "orphaned_tool_result"
+
+
+def test_misplaced_tool_result_after_unrelated_assistant() -> None:
+    """Tool result from assistant1 appears after assistant2's response."""
+    validator = MessageValidator()
+    messages = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"name": "a", "arguments": "{}"}}
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "Result A"},
+        {
+            "role": "assistant",
+            "content": "Got result A, calling B next.",
+            "tool_calls": [
+                {"id": "call_2", "type": "function", "function": {"name": "b", "arguments": "{}"}}
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_2", "content": "Result B"},
+        {"role": "assistant", "content": "All done."},
+        {"role": "tool", "tool_call_id": "call_1", "content": "Late result A"},  # misplaced
+    ]
+    with pytest.raises(MessageValidationError) as exc_info:
+        validator.validate(messages)
+    assert exc_info.value.violation == "misplaced_tool_result"
+
+
+def test_misplaced_caught_after_valid_tool_chain() -> None:
+    """After a valid tool chain, a misplaced result is still caught."""
+    validator = MessageValidator()
+    messages = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"name": "x", "arguments": "{}"}}
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "First result"},
+        {"role": "assistant", "content": "OK, moving on."},  # response without tool_calls
+        {"role": "tool", "tool_call_id": "call_1", "content": "Duplicate result"},  # misplaced
+    ]
+    with pytest.raises(MessageValidationError) as exc_info:
+        validator.validate(messages)
+    assert exc_info.value.violation == "misplaced_tool_result"
