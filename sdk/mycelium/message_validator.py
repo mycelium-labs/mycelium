@@ -222,7 +222,7 @@ class MessageValidator:
                     tid = _tool_call_id(tc)
                     if tid:
                         known_tool_call_ids.add(tid)
-            elif role == "tool" and has_assistant:
+            elif role == "tool" and has_assistant and known_tool_call_ids:
                 tcid = msg.get("tool_call_id")
                 if tcid and tcid not in known_tool_call_ids:
                     self._record_violation("orphaned_tool_result", i)
