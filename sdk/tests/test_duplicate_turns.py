@@ -52,7 +52,7 @@ def test_multiple_duplicates_detected() -> None:
         {"role": "user", "content": "Hello"},  # duplicate of index 0
         {"role": "assistant", "content": "Hi there!"},  # duplicate of index 1
     ]
-    with pytest.raises(HistoryTruncatedError) as exc_info:
+    with pytest.raises(HistoryTruncatedError):
         guard.validate(messages)
     audit = guard.audit_log()
     dup_event = [e for e in audit if e["event"] == "history_duplicate_turns"][0]
@@ -76,6 +76,7 @@ def test_duplicate_detection_disabled() -> None:
 
 def test_duplicate_with_langchain_messages() -> None:
     """Duplicate detection works with object-style messages too."""
+
     class FakeMessage:
         def __init__(self, role: str, content: str):
             self.type = role

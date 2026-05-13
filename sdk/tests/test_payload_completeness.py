@@ -26,7 +26,6 @@ from mycelium.http import (
     _is_json_complete,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers: mock httpx.Response
 # ---------------------------------------------------------------------------
@@ -57,7 +56,7 @@ def test_is_json_complete_valid_object() -> None:
 
 
 def test_is_json_complete_valid_array() -> None:
-    assert _is_json_complete('[1, 2, 3]') is True
+    assert _is_json_complete("[1, 2, 3]") is True
 
 
 def test_is_json_complete_unclosed_brace() -> None:
@@ -65,7 +64,7 @@ def test_is_json_complete_unclosed_brace() -> None:
 
 
 def test_is_json_complete_unclosed_bracket() -> None:
-    assert _is_json_complete('[1, 2,') is False
+    assert _is_json_complete("[1, 2,") is False
 
 
 def test_is_json_complete_unclosed_string() -> None:
@@ -117,7 +116,7 @@ def test_guard_response_truncated_json() -> None:
 
 def test_guard_response_json_parse_error() -> None:
     resp = _mock_response(
-        b'not json at all',
+        b"not json at all",
         headers={"content-type": "application/json"},
     )
     with pytest.raises(PayloadIncompleteError) as exc_info:

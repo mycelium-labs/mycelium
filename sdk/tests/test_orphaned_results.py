@@ -18,7 +18,11 @@ def test_valid_tool_chain_passes() -> None:
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": "{}"}}
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": "{}"},
+                }
             ],
         },
         {"role": "tool", "tool_call_id": "call_1", "content": "Sunny, 72F"},
@@ -52,7 +56,11 @@ def test_orphaned_after_assistant_with_different_id() -> None:
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "call_abc", "type": "function", "function": {"name": "get_weather", "arguments": "{}"}}
+                {
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": "{}"},
+                }
             ],
         },
         {"role": "tool", "tool_call_id": "call_xyz", "content": "Sunny, 72F"},
@@ -72,7 +80,11 @@ def test_multiple_tool_calls_one_orphan() -> None:
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": "{}"}},
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": "{}"},
+                },
             ],
         },
         {"role": "tool", "tool_call_id": "call_1", "content": "Sunny"},
@@ -94,7 +106,11 @@ def test_tool_result_before_assistant_not_orphaned() -> None:
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": "{}"}}
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": "{}"},
+                }
             ],
         },
     ]
@@ -119,7 +135,13 @@ def test_missing_tool_call_id_caught_first() -> None:
     """Missing tool_call_id is caught before orphaned check."""
     validator = MessageValidator()
     messages = [
-        {"role": "assistant", "content": "", "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "x", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"name": "x", "arguments": "{}"}}
+            ],
+        },
         {"role": "tool", "content": "result"},  # missing tool_call_id
     ]
     with pytest.raises(MessageValidationError) as exc_info:

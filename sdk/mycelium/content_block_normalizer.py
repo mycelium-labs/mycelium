@@ -78,6 +78,7 @@ def _extract_deepseek_thinking(text: str) -> tuple[str, str | None]:
 # ContentBlockNormalizer
 # ---------------------------------------------------------------------------
 
+
 class ContentBlockNormalizer:
     """
     Normalises content blocks in a message list for safe LLM submission.
@@ -129,7 +130,9 @@ class ContentBlockNormalizer:
         possible. Raises ContentBlockError for unrecoverable issues if strict=True.
         """
         now = time.monotonic()
-        self._audit.append({"event": "normalize_started", "message_count": len(messages), "ts": now})
+        self._audit.append(
+            {"event": "normalize_started", "message_count": len(messages), "ts": now}
+        )
 
         result = deepcopy(messages)
 
@@ -137,7 +140,6 @@ class ContentBlockNormalizer:
             if not isinstance(msg, dict):
                 continue
 
-            role = msg.get("role", "")
             content = msg.get("content")
 
             # --- Anthropic thinking block preservation ---
@@ -219,11 +221,13 @@ class ContentBlockNormalizer:
                 if fc and not msg.get("tool_calls"):
                     name = fc.get("name", "")
                     arguments = fc.get("arguments", "")
-                    msg["tool_calls"] = [{
-                        "id": f"call_{name}_migrated",
-                        "type": "function",
-                        "function": {"name": name, "arguments": arguments},
-                    }]
+                    msg["tool_calls"] = [
+                        {
+                            "id": f"call_{name}_migrated",
+                            "type": "function",
+                            "function": {"name": name, "arguments": arguments},
+                        }
+                    ]
                     del msg["function_call"]
                     event = {
                         "event": "function_call_normalized",
@@ -239,11 +243,7 @@ class ContentBlockNormalizer:
 
     def has_thinking_blocks(self, messages: list) -> bool:
         """Return True if any message contains Anthropic thinking blocks."""
-        return any(
-            _has_thinking_blocks(m.get("content"))
-            for m in messages
-            if isinstance(m, dict)
-        )
+        return any(_has_thinking_blocks(m.get("content")) for m in messages if isinstance(m, dict))
 
     def audit_log(self) -> list[dict[str, Any]]:
         return list(self._audit)

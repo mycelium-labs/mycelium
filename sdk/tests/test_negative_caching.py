@@ -17,7 +17,6 @@ import pytest
 
 from mycelium import Session, protect, protect_sync
 
-
 # ---------------------------------------------------------------------------
 # cache_empty=0 — never cache empty results
 # ---------------------------------------------------------------------------
@@ -51,7 +50,7 @@ async def test_cache_empty_zero_never_caches_none() -> None:
         calls[0] += 1
         return None
 
-    async with Session() as s:
+    async with Session():
         await search(q="x")
         await search(q="x")
 
@@ -67,7 +66,7 @@ async def test_cache_empty_zero_never_caches_empty_string() -> None:
         calls[0] += 1
         return ""
 
-    async with Session() as s:
+    async with Session():
         await search(q="x")
         await search(q="x")
 
@@ -83,7 +82,7 @@ async def test_cache_empty_zero_never_caches_empty_dict() -> None:
         calls[0] += 1
         return {}
 
-    async with Session() as s:
+    async with Session():
         await search(q="x")
         await search(q="x")
 
@@ -190,6 +189,7 @@ def test_sync_cache_empty_zero_never_caches_empty() -> None:
 
 def test_sync_cache_empty_short_caches_empty_briefly() -> None:
     import time
+
     from mycelium.protect import _session_var
 
     calls = [0]

@@ -16,7 +16,6 @@ import pytest
 
 from mycelium import Session, TenancyMismatchError, protect, protect_sync
 
-
 # ---------------------------------------------------------------------------
 # Async @protect with entity_field
 # ---------------------------------------------------------------------------

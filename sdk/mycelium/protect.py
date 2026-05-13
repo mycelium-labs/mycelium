@@ -15,12 +15,11 @@ Usage:
     result = await fetch_customer(customer_id="c1")
 """
 
-import asyncio
 import functools
 import time
+from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any, Callable
-from uuid import uuid4
+from typing import Any
 
 _DEFAULT_TTL = 300  # seconds
 
@@ -80,7 +79,14 @@ def _get_session() -> "Session":
 class _CacheEntry:
     __slots__ = ("value", "expires_at", "entity_id", "tool_name", "value_hash", "last_accessed")
 
-    def __init__(self, value: Any, expires_at: float, entity_id: str | None, tool_name: str, last_accessed: float | None = None):
+    def __init__(
+        self,
+        value: Any,
+        expires_at: float,
+        entity_id: str | None,
+        tool_name: str,
+        last_accessed: float | None = None,
+    ):
         self.value = value
         self.expires_at = expires_at
         self.entity_id = entity_id
@@ -93,6 +99,7 @@ def _value_hash(value: Any) -> str:
     """Stable hash for variance detection."""
     try:
         import hashlib
+
         return hashlib.md5(str(value).encode(), usedforsecurity=False).hexdigest()
     except Exception:
         return ""
@@ -122,14 +129,16 @@ class Session:
         if len(window) >= 3:
             unique = len(set(window))
             if unique >= len(window) * 0.6:  # 60%+ variance = likely non-deterministic
-                self._audit.append({
-                    "event": "variance_warning",
-                    "tool": entry.tool_name,
-                    "entity_id": entry.entity_id,
-                    "unique_values": unique,
-                    "window_size": len(window),
-                    "ts": time.monotonic(),
-                })
+                self._audit.append(
+                    {
+                        "event": "variance_warning",
+                        "tool": entry.tool_name,
+                        "entity_id": entry.entity_id,
+                        "unique_values": unique,
+                        "window_size": len(window),
+                        "ts": time.monotonic(),
+                    }
+                )
 
     def _key(self, tool_name: str, entity_id: str | None) -> str:
         return f"{tool_name}:{entity_id}" if entity_id is not None else tool_name
@@ -144,12 +153,14 @@ class Session:
         # Find LRU entry among live ones
         lru_key = min(live, key=lambda k: live[k].last_accessed or 0)
         self._cache.pop(lru_key, None)
-        self._audit.append({
-            "event": "cache_evict_lru",
-            "tool": live[lru_key].tool_name,
-            "entity_id": live[lru_key].entity_id,
-            "ts": now,
-        })
+        self._audit.append(
+            {
+                "event": "cache_evict_lru",
+                "tool": live[lru_key].tool_name,
+                "entity_id": live[lru_key].entity_id,
+                "ts": now,
+            }
+        )
 
     async def call(
         self,
@@ -170,21 +181,19 @@ class Session:
         now = time.monotonic()
 
         # Write grace: if this entity was recently written, force fresh read.
-        if (
-            entity_id is not None
-            and read_after_write_grace > 0
-            and entity_id in self._writes
-        ):
+        if entity_id is not None and read_after_write_grace > 0 and entity_id in self._writes:
             elapsed = now - self._writes[entity_id]
             if elapsed < read_after_write_grace:
-                self._audit.append({
-                    "event": "cache_write_grace_bypass",
-                    "tool": tool_name,
-                    "entity_id": entity_id,
-                    "elapsed": round(elapsed, 3),
-                    "grace": read_after_write_grace,
-                    "ts": now,
-                })
+                self._audit.append(
+                    {
+                        "event": "cache_write_grace_bypass",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "elapsed": round(elapsed, 3),
+                        "grace": read_after_write_grace,
+                        "ts": now,
+                    }
+                )
                 result = await func(*args, **kwargs)
                 if entity_field is not None and entity_id is not None:
                     actual = _extract_field(result, entity_field)
@@ -202,80 +211,92 @@ class Session:
                     last_accessed=now,
                 )
                 self._record_variance(key, self._cache[key])
-                self._audit.append({
-                    "event": "cache_add",
-                    "tool": tool_name,
-                    "entity_id": entity_id,
-                    "ts": now,
-                })
+                self._audit.append(
+                    {
+                        "event": "cache_add",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "ts": now,
+                    }
+                )
                 return result
 
         entry = self._cache.get(key)
         if entry is not None and now < entry.expires_at:
             entry.last_accessed = now
-            self._audit.append({
-                "event": "cache_hit",
-                "tool": tool_name,
-                "entity_id": entity_id,
-                "ts": now,
-            })
+            self._audit.append(
+                {
+                    "event": "cache_hit",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "ts": now,
+                }
+            )
             return entry.value
 
         if entry is not None:
-            self._audit.append({
-                "event": "cache_stale",
-                "tool": tool_name,
-                "entity_id": entity_id,
-                "ts": now,
-            })
+            self._audit.append(
+                {
+                    "event": "cache_stale",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "ts": now,
+                }
+            )
 
         try:
             result = await func(*args, **kwargs)
         except Exception as exc:
             self._cache.pop(key, None)
-            self._audit.append({
-                "event": "cache_error",
-                "tool": tool_name,
-                "entity_id": entity_id,
-                "error": str(exc),
-                "ts": now,
-            })
+            self._audit.append(
+                {
+                    "event": "cache_error",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "error": str(exc),
+                    "ts": now,
+                }
+            )
             raise
 
         if entity_field is not None and entity_id is not None:
             actual = _extract_field(result, entity_field)
             if actual != entity_id:
                 self._cache.pop(key, None)
-                self._audit.append({
-                    "event": "cache_error",
-                    "tool": tool_name,
-                    "entity_id": entity_id,
-                    "error": f"tenancy_mismatch(expected={entity_id!r}, got={actual!r})",
-                    "ts": now,
-                })
-                raise TenancyMismatchError(
-                    expected=entity_id, actual=actual, field=entity_field
+                self._audit.append(
+                    {
+                        "event": "cache_error",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "error": f"tenancy_mismatch(expected={entity_id!r}, got={actual!r})",
+                        "ts": now,
+                    }
                 )
+                raise TenancyMismatchError(expected=entity_id, actual=actual, field=entity_field)
 
         if not deterministic:
-            self._audit.append({
-                "event": "cache_skip",
-                "tool": tool_name,
-                "entity_id": entity_id,
-                "reason": "non_deterministic",
-                "ts": now,
-            })
+            self._audit.append(
+                {
+                    "event": "cache_skip",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "reason": "non_deterministic",
+                    "ts": now,
+                }
+            )
             return result
 
         if _is_empty_result(result) and cache_empty is not None:
             if cache_empty <= 0:
-                self._audit.append({
-                    "event": "cache_skip",
-                    "tool": tool_name,
-                    "entity_id": entity_id,
-                    "reason": "negative_cache",
-                    "ts": now,
-                })
+                self._audit.append(
+                    {
+                        "event": "cache_skip",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "reason": "negative_cache",
+                        "ts": now,
+                    }
+                )
                 return result
             effective_ttl = cache_empty
             self._evict_if_needed(now)
@@ -286,13 +307,15 @@ class Session:
                 tool_name=tool_name,
                 last_accessed=now,
             )
-            self._audit.append({
-                "event": "cache_add_negative",
-                "tool": tool_name,
-                "entity_id": entity_id,
-                "ttl": effective_ttl,
-                "ts": now,
-            })
+            self._audit.append(
+                {
+                    "event": "cache_add_negative",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "ttl": effective_ttl,
+                    "ts": now,
+                }
+            )
             return result
 
         self._evict_if_needed(now)
@@ -304,21 +327,25 @@ class Session:
             last_accessed=now,
         )
         self._record_variance(key, self._cache[key])
-        self._audit.append({
-            "event": "cache_add",
-            "tool": tool_name,
-            "entity_id": entity_id,
-            "ts": now,
-        })
-
-        if mark_as_write and entity_id is not None:
-            self._writes[entity_id] = now
-            self._audit.append({
-                "event": "write_tracked",
+        self._audit.append(
+            {
+                "event": "cache_add",
                 "tool": tool_name,
                 "entity_id": entity_id,
                 "ts": now,
-            })
+            }
+        )
+
+        if mark_as_write and entity_id is not None:
+            self._writes[entity_id] = now
+            self._audit.append(
+                {
+                    "event": "write_tracked",
+                    "tool": tool_name,
+                    "entity_id": entity_id,
+                    "ts": now,
+                }
+            )
 
         return result
 
@@ -379,6 +406,7 @@ def protect(
         read_after_write_grace: Seconds after a write during which reads for the
                                 same entity bypass the cache. Default 0 (disabled).
     """
+
     def decorator(func: Callable) -> Callable:
         tool_name = func.__name__
 
@@ -398,12 +426,14 @@ def protect(
                     if entity_id is not None:
                         session = _get_session()
                         session._writes[entity_id] = time.monotonic()
-                        session._audit.append({
-                            "event": "write_tracked",
-                            "tool": tool_name,
-                            "entity_id": entity_id,
-                            "ts": time.monotonic(),
-                        })
+                        session._audit.append(
+                            {
+                                "event": "write_tracked",
+                                "tool": tool_name,
+                                "entity_id": entity_id,
+                                "ts": time.monotonic(),
+                            }
+                        )
                 return result
             session = _get_session()
             return await session.call(
@@ -420,9 +450,9 @@ def protect(
                 kwargs=kwargs,
             )
 
-        wrapper._mycelium_protected = True
-        wrapper._mycelium_entity_param = entity_param
-        wrapper._mycelium_ttl = ttl
+        wrapper._mycelium_protected = True  # type: ignore[attr-defined]
+        wrapper._mycelium_entity_param = entity_param  # type: ignore[attr-defined]
+        wrapper._mycelium_ttl = ttl  # type: ignore[attr-defined]
         return wrapper
 
     return decorator
@@ -448,6 +478,7 @@ def protect_sync(
         def fetch_customer(customer_id: str) -> dict:
             return db.get(customer_id)
     """
+
     def decorator(func: Callable) -> Callable:
         tool_name = func.__name__
 
@@ -467,12 +498,14 @@ def protect_sync(
                     if entity_id is not None:
                         session = _get_session()
                         session._writes[entity_id] = time.monotonic()
-                        session._audit.append({
-                            "event": "write_tracked",
-                            "tool": tool_name,
-                            "entity_id": entity_id,
-                            "ts": time.monotonic(),
-                        })
+                        session._audit.append(
+                            {
+                                "event": "write_tracked",
+                                "tool": tool_name,
+                                "entity_id": entity_id,
+                                "ts": time.monotonic(),
+                            }
+                        )
                 return result
 
             session = _get_session()
@@ -488,14 +521,16 @@ def protect_sync(
             ):
                 elapsed = now - session._writes[entity_id]
                 if elapsed < read_after_write_grace:
-                    session._audit.append({
-                        "event": "cache_write_grace_bypass",
-                        "tool": tool_name,
-                        "entity_id": entity_id,
-                        "elapsed": round(elapsed, 3),
-                        "grace": read_after_write_grace,
-                        "ts": now,
-                    })
+                    session._audit.append(
+                        {
+                            "event": "cache_write_grace_bypass",
+                            "tool": tool_name,
+                            "entity_id": entity_id,
+                            "elapsed": round(elapsed, 3),
+                            "grace": read_after_write_grace,
+                            "ts": now,
+                        }
+                    )
                     result = func(*args, **kwargs)
                     if entity_field is not None and entity_id is not None:
                         actual = _extract_field(result, entity_field)
@@ -512,80 +547,94 @@ def protect_sync(
                         last_accessed=now,
                     )
                     session._record_variance(key, session._cache[key])
-                    session._audit.append({
-                        "event": "cache_add",
-                        "tool": tool_name,
-                        "entity_id": entity_id,
-                        "ts": now,
-                    })
+                    session._audit.append(
+                        {
+                            "event": "cache_add",
+                            "tool": tool_name,
+                            "entity_id": entity_id,
+                            "ts": now,
+                        }
+                    )
                     return result
 
             entry = session._cache.get(key)
             if entry is not None and now < entry.expires_at:
                 entry.last_accessed = now
-                session._audit.append({
-                    "event": "cache_hit",
-                    "tool": tool_name,
-                    "entity_id": entity_id,
-                    "ts": now,
-                })
+                session._audit.append(
+                    {
+                        "event": "cache_hit",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "ts": now,
+                    }
+                )
                 return entry.value
 
             if entry is not None:
-                session._audit.append({
-                    "event": "cache_stale",
-                    "tool": tool_name,
-                    "entity_id": entity_id,
-                    "ts": now,
-                })
+                session._audit.append(
+                    {
+                        "event": "cache_stale",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "ts": now,
+                    }
+                )
 
             try:
                 result = func(*args, **kwargs)
             except Exception as exc:
                 session._cache.pop(key, None)
-                session._audit.append({
-                    "event": "cache_error",
-                    "tool": tool_name,
-                    "entity_id": entity_id,
-                    "error": str(exc),
-                    "ts": now,
-                })
+                session._audit.append(
+                    {
+                        "event": "cache_error",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "error": str(exc),
+                        "ts": now,
+                    }
+                )
                 raise
 
             if entity_field is not None and entity_id is not None:
                 actual = _extract_field(result, entity_field)
                 if actual != entity_id:
                     session._cache.pop(key, None)
-                    session._audit.append({
-                        "event": "cache_error",
-                        "tool": tool_name,
-                        "entity_id": entity_id,
-                        "error": f"tenancy_mismatch(expected={entity_id!r}, got={actual!r})",
-                        "ts": now,
-                    })
+                    session._audit.append(
+                        {
+                            "event": "cache_error",
+                            "tool": tool_name,
+                            "entity_id": entity_id,
+                            "error": f"tenancy_mismatch(expected={entity_id!r}, got={actual!r})",
+                            "ts": now,
+                        }
+                    )
                     raise TenancyMismatchError(
                         expected=entity_id, actual=actual, field=entity_field
                     )
 
             if not deterministic:
-                session._audit.append({
-                    "event": "cache_skip",
-                    "tool": tool_name,
-                    "entity_id": entity_id,
-                    "reason": "non_deterministic",
-                    "ts": now,
-                })
+                session._audit.append(
+                    {
+                        "event": "cache_skip",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "reason": "non_deterministic",
+                        "ts": now,
+                    }
+                )
                 return result
 
             if _is_empty_result(result) and cache_empty is not None:
                 if cache_empty <= 0:
-                    session._audit.append({
-                        "event": "cache_skip",
-                        "tool": tool_name,
-                        "entity_id": entity_id,
-                        "reason": "negative_cache",
-                        "ts": now,
-                    })
+                    session._audit.append(
+                        {
+                            "event": "cache_skip",
+                            "tool": tool_name,
+                            "entity_id": entity_id,
+                            "reason": "negative_cache",
+                            "ts": now,
+                        }
+                    )
                     return result
                 effective_ttl = cache_empty
                 session._evict_if_needed(now)
@@ -596,13 +645,15 @@ def protect_sync(
                     tool_name=tool_name,
                     last_accessed=now,
                 )
-                session._audit.append({
-                    "event": "cache_add_negative",
-                    "tool": tool_name,
-                    "entity_id": entity_id,
-                    "ttl": effective_ttl,
-                    "ts": now,
-                })
+                session._audit.append(
+                    {
+                        "event": "cache_add_negative",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "ttl": effective_ttl,
+                        "ts": now,
+                    }
+                )
                 return result
 
             session._evict_if_needed(now)
@@ -614,27 +665,31 @@ def protect_sync(
                 last_accessed=now,
             )
             session._record_variance(key, session._cache[key])
-            session._audit.append({
-                "event": "cache_add",
-                "tool": tool_name,
-                "entity_id": entity_id,
-                "ts": now,
-            })
-
-            if mark_as_write and entity_id is not None:
-                session._writes[entity_id] = now
-                session._audit.append({
-                    "event": "write_tracked",
+            session._audit.append(
+                {
+                    "event": "cache_add",
                     "tool": tool_name,
                     "entity_id": entity_id,
                     "ts": now,
-                })
+                }
+            )
+
+            if mark_as_write and entity_id is not None:
+                session._writes[entity_id] = now
+                session._audit.append(
+                    {
+                        "event": "write_tracked",
+                        "tool": tool_name,
+                        "entity_id": entity_id,
+                        "ts": now,
+                    }
+                )
 
             return result
 
-        wrapper._mycelium_protected = True
-        wrapper._mycelium_entity_param = entity_param
-        wrapper._mycelium_ttl = ttl
+        wrapper._mycelium_protected = True  # type: ignore[attr-defined]
+        wrapper._mycelium_entity_param = entity_param  # type: ignore[attr-defined]
+        wrapper._mycelium_ttl = ttl  # type: ignore[attr-defined]
         return wrapper
 
     return decorator
