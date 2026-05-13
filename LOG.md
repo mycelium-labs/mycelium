@@ -247,4 +247,18 @@ Template:
 - now: empty scaffold, no code yet. Dogfooding on own agents is the next real phase.
 - next: run own agents for a week, start the incident log, pick the 3 failure modes for v1 based on real data.
 
-new things for me - ruff, pyright
+---
+
+## 2026-05-13 - Close remaining AF-006 gaps; repo cleanup
+
+- did: **Summary keyword guard** — `HistoryGuard(track_keywords=…)` + `check_summary_fidelity()` detects keyword loss and excessive token-ratio compaction during summarization.
+- did: **Stream sequence validation** — `StreamGuard(sequence_field=…)` detects out-of-order stream chunks.
+- did: **Provider format auto-detection** — `ContentBlockNormalizer.detect_format()` detects provider format mismatch and emits `provider_format_mismatch` event on `normalize()`.
+- did: **Entity pattern validation** — `@protect(entity_pattern=r"…")` raises `EntityPatternError` if entity_id doesn't match regex pattern.
+- did: **ScratchpadGuard** — wraps shared dicts to detect cross-agent overwrites, read-before-write, and cross-agent deletes.
+- did: **ToolSequencer** — monotonic sequence IDs for parallel tool calls; detects out-of-order results.
+- did: **Misplaced tool-result detector** — `MessageValidator` flags tool results that appear after a subsequent assistant message.
+- did: **CI fix** — pyright from 195→0 errors, ruff lint/format cleaned, httpx streaming removed (broken in 0.28+).
+- did: **Cleanup** — removed 5 stale docs, formatted all test files.
+- now: 223 tests, 0 pyright, ruff passes. AF-006 is fully covered at the SDK layer with 25 classes ✅ and 4 ⚠️ that are genuinely out of SDK scope (multi-agent memory, ordering, split-brain, summary heuristic limits).
+- next: AF-004 (Tool Misuse) — 575 occurrences, next highest-impact failure mode.
