@@ -140,6 +140,9 @@ class StreamGuard:
                         format. Takes precedence over format= if both given.
         deduplicate:    Drop chunks whose text content was already seen in
                         this stream. Default True.
+        sequence_field: Field name to extract sequence number from each chunk
+                        (e.g. ``"index"`` or ``"seq"``). If set, chunks with
+                        regressing sequence values are flagged as out-of-order.
     """
 
     def __init__(
@@ -147,6 +150,7 @@ class StreamGuard:
         format: str | None = None,
         stop_validator: Callable[[Any], bool] | None = None,
         deduplicate: bool = True,
+        sequence_field: str | None = None,
     ) -> None:
         if format is not None and format not in _ADAPTERS:
             raise ValueError(
@@ -158,11 +162,14 @@ class StreamGuard:
         self._stop_validator = stop_validator
         self._deduplicate = deduplicate
         self._can_detect_stop = format is not None or stop_validator is not None
+        self._sequence_field = sequence_field
 
         self._seen_hashes: set[str] = set()
         self._stop_seen = False
         self._chunk_count = 0
         self._duplicate_count = 0
+        self._last_sequence: int | None = None
+        self._out_of_order_count = 0
         self._audit: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
@@ -226,6 +233,31 @@ class StreamGuard:
                 }
             )
 
+        # Sequence validation — detect out-of-order chunks.
+        if self._sequence_field is not None:
+            seq = self._extract_sequence(chunk)
+            if seq is not None:
+                if self._last_sequence is not None and seq < self._last_sequence:
+                    self._out_of_order_count += 1
+                    self._audit.append(
+                        {
+                            "event": "stream_out_of_order",
+                            "chunk_index": self._chunk_count,
+                            "expected_gte": self._last_sequence,
+                            "got": seq,
+                            "ts": now,
+                        }
+                    )
+                    self._log_to_session(
+                        {
+                            "event": "stream_out_of_order",
+                            "expected_gte": self._last_sequence,
+                            "got": seq,
+                            "ts": now,
+                        }
+                    )
+                self._last_sequence = seq
+
         return chunk
 
     def audit_log(self) -> list[dict[str, Any]]:
@@ -242,6 +274,10 @@ class StreamGuard:
     @property
     def stop_seen(self) -> bool:
         return self._stop_seen
+
+    @property
+    def out_of_order_count(self) -> int:
+        return self._out_of_order_count
 
     # ------------------------------------------------------------------
     # Context manager
@@ -311,6 +347,19 @@ class StreamGuard:
         if self._adapter is not None:
             return self._adapter.content(chunk)
         return str(chunk)
+
+    def _extract_sequence(self, chunk: Any) -> int | None:
+        """Pull sequence number from *chunk* using *sequence_field*."""
+        if isinstance(chunk, dict):
+            val = chunk.get(self._sequence_field)
+        else:
+            val = getattr(chunk, self._sequence_field, None)
+        if val is not None:
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                pass
+        return None
 
     def _log_to_session(self, entry: dict[str, Any]) -> None:
         session = _try_active_session()
