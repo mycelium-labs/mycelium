@@ -15,7 +15,6 @@ import pytest
 
 from mycelium import Session, protect, protect_sync
 
-
 # ---------------------------------------------------------------------------
 # deterministic=False — no caching
 # ---------------------------------------------------------------------------
@@ -100,6 +99,7 @@ async def test_variance_warning_on_non_deterministic_tool() -> None:
     """When a deterministic=True tool returns different values for the same args
     within a short window, a variance_warning is logged."""
     import asyncio
+
     calls = [0]
 
     @protect(entity_param="symbol", ttl=0.01)
@@ -165,6 +165,7 @@ def test_sync_deterministic_false_never_caches() -> None:
 
 def test_sync_variance_warning_on_non_deterministic_tool() -> None:
     import time
+
     from mycelium.protect import _session_var
 
     calls = [0]

@@ -29,7 +29,8 @@ Custom format:
 
 import hashlib
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from mycelium.protect import _session_var
 
@@ -42,13 +43,12 @@ class StreamCutOffError(Exception):
 # Format adapters
 # ---------------------------------------------------------------------------
 
+
 class _OpenAIAdapter:
     @staticmethod
     def is_stop(chunk: Any) -> bool:
         choices = (
-            chunk.get("choices", [])
-            if isinstance(chunk, dict)
-            else getattr(chunk, "choices", [])
+            chunk.get("choices", []) if isinstance(chunk, dict) else getattr(chunk, "choices", [])
         )
         if not choices:
             return False
@@ -78,18 +78,12 @@ class _OpenAIAdapter:
 class _AnthropicAdapter:
     @staticmethod
     def is_stop(chunk: Any) -> bool:
-        chunk_type = (
-            chunk.get("type")
-            if isinstance(chunk, dict)
-            else getattr(chunk, "type", "")
-        )
+        chunk_type = chunk.get("type") if isinstance(chunk, dict) else getattr(chunk, "type", "")
         if chunk_type == "message_stop":
             return True
         if chunk_type == "message_delta":
             delta = (
-                chunk.get("delta", {})
-                if isinstance(chunk, dict)
-                else getattr(chunk, "delta", None)
+                chunk.get("delta", {}) if isinstance(chunk, dict) else getattr(chunk, "delta", None)
             )
             stop_reason = (
                 delta.get("stop_reason")
@@ -101,11 +95,7 @@ class _AnthropicAdapter:
 
     @staticmethod
     def content(chunk: Any) -> str:
-        chunk_type = (
-            chunk.get("type")
-            if isinstance(chunk, dict)
-            else getattr(chunk, "type", "")
-        )
+        chunk_type = chunk.get("type") if isinstance(chunk, dict) else getattr(chunk, "type", "")
         if chunk_type != "content_block_delta":
             return ""
         if isinstance(chunk, dict):
@@ -126,6 +116,7 @@ _ADAPTERS: dict[str, type] = {
 # ---------------------------------------------------------------------------
 # StreamGuard
 # ---------------------------------------------------------------------------
+
 
 def _content_hash(text: str) -> str:
     return hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()
@@ -190,11 +181,13 @@ class StreamGuard:
         # Stop-signal check runs before dedup so we never swallow a stop chunk.
         if self._can_detect_stop and self._is_stop(chunk):
             self._stop_seen = True
-            self._audit.append({
-                "event": "stream_stop",
-                "chunk_index": self._chunk_count,
-                "ts": now,
-            })
+            self._audit.append(
+                {
+                    "event": "stream_stop",
+                    "chunk_index": self._chunk_count,
+                    "ts": now,
+                }
+            )
             self._log_to_session({"event": "stream_stop", "ts": now})
 
         content = self._extract_content(chunk)
@@ -204,28 +197,34 @@ class StreamGuard:
             h = _content_hash(content)
             if h in self._seen_hashes:
                 self._duplicate_count += 1
-                self._audit.append({
-                    "event": "stream_duplicate",
-                    "chunk_index": self._chunk_count,
-                    "content_preview": content[:60],
-                    "ts": now,
-                })
-                self._log_to_session({
-                    "event": "stream_duplicate",
-                    "content_preview": content[:60],
-                    "ts": now,
-                })
+                self._audit.append(
+                    {
+                        "event": "stream_duplicate",
+                        "chunk_index": self._chunk_count,
+                        "content_preview": content[:60],
+                        "ts": now,
+                    }
+                )
+                self._log_to_session(
+                    {
+                        "event": "stream_duplicate",
+                        "content_preview": content[:60],
+                        "ts": now,
+                    }
+                )
                 return None
             self._seen_hashes.add(h)
 
         # Only count content-bearing chunks — stop-only chunks are metadata.
         if content:
             self._chunk_count += 1
-            self._audit.append({
-                "event": "stream_chunk",
-                "chunk_index": self._chunk_count,
-                "ts": now,
-            })
+            self._audit.append(
+                {
+                    "event": "stream_chunk",
+                    "chunk_index": self._chunk_count,
+                    "ts": now,
+                }
+            )
 
         return chunk
 
@@ -260,34 +259,42 @@ class StreamGuard:
             # Stream raised — don't stack StreamCutOffError on top of it.
             return
         if self._can_detect_stop and not self._stop_seen:
-            self._audit.append({
-                "event": "stream_cutoff",
-                "chunks_received": self._chunk_count,
-                "ts": now,
-            })
-            self._log_to_session({
-                "event": "stream_cutoff",
-                "tool": "StreamGuard",
-                "chunks_received": self._chunk_count,
-                "ts": now,
-            })
+            self._audit.append(
+                {
+                    "event": "stream_cutoff",
+                    "chunks_received": self._chunk_count,
+                    "ts": now,
+                }
+            )
+            self._log_to_session(
+                {
+                    "event": "stream_cutoff",
+                    "tool": "StreamGuard",
+                    "chunks_received": self._chunk_count,
+                    "ts": now,
+                }
+            )
             raise StreamCutOffError(
                 f"Stream ended after {self._chunk_count} chunk(s) without a "
                 f"stop signal. The response is likely incomplete."
             )
-        self._audit.append({
-            "event": "stream_complete",
-            "chunks_received": self._chunk_count,
-            "duplicates_dropped": self._duplicate_count,
-            "ts": now,
-        })
-        self._log_to_session({
-            "event": "stream_complete",
-            "tool": "StreamGuard",
-            "chunks_received": self._chunk_count,
-            "duplicates_dropped": self._duplicate_count,
-            "ts": now,
-        })
+        self._audit.append(
+            {
+                "event": "stream_complete",
+                "chunks_received": self._chunk_count,
+                "duplicates_dropped": self._duplicate_count,
+                "ts": now,
+            }
+        )
+        self._log_to_session(
+            {
+                "event": "stream_complete",
+                "tool": "StreamGuard",
+                "chunks_received": self._chunk_count,
+                "duplicates_dropped": self._duplicate_count,
+                "ts": now,
+            }
+        )
 
     # ------------------------------------------------------------------
     # Internals

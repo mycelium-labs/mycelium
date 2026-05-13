@@ -178,55 +178,6 @@ def _guard_response(response: httpx.Response) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Streaming response wrappers
-# ---------------------------------------------------------------------------
-
-
-class _AsyncStreamWrapper:
-    """Wraps an httpx streaming response and validates after the body is consumed."""
-
-    def __init__(self, response: httpx.Response) -> None:
-        self._response = response
-        self._buffer: list[str] = []
-
-    async def aiter_text(self) -> Any:
-        async for chunk in self._response.aiter_text():
-            self._buffer.append(chunk)
-            yield chunk
-        _guard_response(self._response)
-
-    async def aread(self) -> bytes:
-        data = await self._response.aread()
-        _guard_response(self._response)
-        return data
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._response, name)
-
-
-class _SyncStreamWrapper:
-    """Wraps an httpx streaming response and validates after the body is consumed."""
-
-    def __init__(self, response: httpx.Response) -> None:
-        self._response = response
-        self._buffer: list[str] = []
-
-    def iter_text(self) -> Any:
-        for chunk in self._response.iter_text():
-            self._buffer.append(chunk)
-            yield chunk
-        _guard_response(self._response)
-
-    def read(self) -> bytes:
-        data = self._response.read()
-        _guard_response(self._response)
-        return data
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._response, name)
-
-
-# ---------------------------------------------------------------------------
 # Async client
 # ---------------------------------------------------------------------------
 
@@ -246,19 +197,14 @@ class AsyncClient:
         async with AsyncClient() as client:
             resp = await client.get("https://api.example.com/data")
             data = resp.json()
-
-    Streaming responses are also guarded — validation runs after the stream is
-    fully consumed (e.g. after ``aread()`` or the final ``aiter_text()`` chunk).
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._client = httpx.AsyncClient(*args, **kwargs)
 
     async def request(self, method: str, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
-        stream = kwargs.pop("stream", False)
-        response = await self._client.request(method, url, *args, stream=stream, **kwargs)
-        if stream:
-            return _AsyncStreamWrapper(response)  # type: ignore[return-value]
+        kwargs.pop("stream", None)  # not supported by httpx 0.28+ request()
+        response = await self._client.request(method, url, *args, **kwargs)
         _guard_response(response)
         return response
 
@@ -277,7 +223,7 @@ class AsyncClient:
     async def delete(self, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
         return await self.request("DELETE", url, *args, **kwargs)
 
-    async def __aenter__(self) -> "AsyncClient":
+    async def __aenter__(self) -> AsyncClient:
         return self
 
     async def __aexit__(self, *exc: Any) -> None:
@@ -300,10 +246,8 @@ class Client:
         self._client = httpx.Client(*args, **kwargs)
 
     def request(self, method: str, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
-        stream = kwargs.pop("stream", False)
-        response = self._client.request(method, url, *args, stream=stream, **kwargs)
-        if stream:
-            return _SyncStreamWrapper(response)  # type: ignore[return-value]
+        kwargs.pop("stream", None)  # not supported by httpx 0.28+ request()
+        response = self._client.request(method, url, *args, **kwargs)
         _guard_response(response)
         return response
 
@@ -322,7 +266,7 @@ class Client:
     def delete(self, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
         return self.request("DELETE", url, *args, **kwargs)
 
-    def __enter__(self) -> "Client":
+    def __enter__(self) -> Client:
         return self
 
     def __exit__(self, *exc: Any) -> None:

@@ -44,8 +44,12 @@ class MessageValidationError(Exception):
 _VALID_ROLES = {"system", "user", "assistant", "tool", "function"}
 
 # Violations that repair() can fix automatically.
-_REPAIRABLE = {"duplicate_tool_call_blocks", "duplicate_tool_call_ids",
-               "nonzero_tool_call_index", "parsed_artifact"}
+_REPAIRABLE = {
+    "duplicate_tool_call_blocks",
+    "duplicate_tool_call_ids",
+    "nonzero_tool_call_index",
+    "parsed_artifact",
+}
 
 
 def _get_tool_calls(message: dict) -> list:
@@ -81,6 +85,7 @@ def _is_call_final(tc: Any) -> bool:
 # ---------------------------------------------------------------------------
 # MessageValidator
 # ---------------------------------------------------------------------------
+
 
 class MessageValidator:
     """
@@ -128,7 +133,9 @@ class MessageValidator:
             MessageValidationError: on the first structural violation found.
         """
         now = time.monotonic()
-        self._audit.append({"event": "validation_started", "message_count": len(messages), "ts": now})
+        self._audit.append(
+            {"event": "validation_started", "message_count": len(messages), "ts": now}
+        )
 
         for i, msg in enumerate(messages):
             if not isinstance(msg, dict):
@@ -169,7 +176,11 @@ class MessageValidator:
                     )
 
                 if self._check_indices:
-                    indices = [_tool_call_index(tc) for tc in tool_calls if _tool_call_index(tc) is not None]
+                    indices = [
+                        _tool_call_index(tc)
+                        for tc in tool_calls
+                        if _tool_call_index(tc) is not None
+                    ]
                     if indices and indices[0] != 0:
                         self._record_violation("nonzero_tool_call_index", i)
                         raise MessageValidationError(
@@ -273,8 +284,13 @@ class MessageValidator:
                 if has_fc and has_call:
                     cleaned = [tc for tc in tool_calls if not _is_fc_partial(tc)]
                     msg["tool_calls"] = cleaned
-                    repairs.append({"repair": "duplicate_tool_call_blocks", "message_index": i,
-                                    "dropped": len(tool_calls) - len(cleaned)})
+                    repairs.append(
+                        {
+                            "repair": "duplicate_tool_call_blocks",
+                            "message_index": i,
+                            "dropped": len(tool_calls) - len(cleaned),
+                        }
+                    )
                     tool_calls = cleaned
 
                 # Repair: deduplicate by id (keep last occurrence)
@@ -291,14 +307,23 @@ class MessageValidator:
 
                 # Repair: re-number indices from 0
                 if self._check_indices:
-                    indices = [_tool_call_index(tc) for tc in tool_calls if _tool_call_index(tc) is not None]
+                    indices = [
+                        _tool_call_index(tc)
+                        for tc in tool_calls
+                        if _tool_call_index(tc) is not None
+                    ]
                     if indices and indices[0] != 0:
                         offset = indices[0]
                         for tc in tool_calls:
                             if isinstance(tc, dict) and tc.get("index") is not None:
                                 tc["index"] = tc["index"] - offset
-                        repairs.append({"repair": "nonzero_tool_call_index", "message_index": i,
-                                        "offset_removed": offset})
+                        repairs.append(
+                            {
+                                "repair": "nonzero_tool_call_index",
+                                "message_index": i,
+                                "offset_removed": offset,
+                            }
+                        )
 
             # Unrecoverable: missing tool_call_id
             if role == "tool" and not msg.get("tool_call_id"):
@@ -320,8 +345,14 @@ class MessageValidator:
             self._audit.append({"event": "repaired", "ts": now, **r})
 
         if repairs:
-            self._audit.append({"event": "repair_ok", "repairs": len(repairs),
-                                 "message_count": len(result), "ts": now})
+            self._audit.append(
+                {
+                    "event": "repair_ok",
+                    "repairs": len(repairs),
+                    "message_count": len(result),
+                    "ts": now,
+                }
+            )
         else:
             self._audit.append({"event": "validation_ok", "message_count": len(result), "ts": now})
 
@@ -335,9 +366,11 @@ class MessageValidator:
     # ------------------------------------------------------------------
 
     def _record_violation(self, violation: str, index: int) -> None:
-        self._audit.append({
-            "event": "validation_error",
-            "violation": violation,
-            "message_index": index,
-            "ts": time.monotonic(),
-        })
+        self._audit.append(
+            {
+                "event": "validation_error",
+                "violation": violation,
+                "message_index": index,
+                "ts": time.monotonic(),
+            }
+        )

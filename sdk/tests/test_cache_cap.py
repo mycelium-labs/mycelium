@@ -84,6 +84,7 @@ async def test_max_entries_does_not_evict_expired_entries() -> None:
         await get(uid="u1")
         await get(uid="u2")
         import asyncio
+
         await asyncio.sleep(0.11)
         # Both expired; adding u3 should not trigger eviction
         await get(uid="u3")
@@ -121,6 +122,7 @@ async def test_max_entries_sync_path() -> None:
         return uid
 
     from mycelium.protect import _session_var
+
     token = _session_var.set(s)
     try:
         get(uid="u1")

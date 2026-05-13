@@ -853,7 +853,7 @@ async def test_integration_ttl_protect_more_backend_reads_than_never_expiring_na
 @pytest.mark.asyncio
 async def test_write_grace_bypasses_cache_for_same_entity() -> None:
     """After a write, reads for the same entity bypass cache during grace period."""
-    state = {"balance": 100}
+    state = {"balance": 100.0}
     read_calls = [0]
 
     @protect(entity_param="customer_id", ttl=60, mark_as_write=True)
@@ -881,7 +881,7 @@ async def test_write_grace_bypasses_cache_for_same_entity() -> None:
 @pytest.mark.asyncio
 async def test_write_grace_expires_then_cache_hit_allowed() -> None:
     """After grace period expires, reads can hit the cache again."""
-    state = {"balance": 100}
+    state = {"balance": 100.0}
     read_calls = [0]
 
     @protect(entity_param="customer_id", ttl=60, mark_as_write=True)
@@ -909,7 +909,7 @@ async def test_write_grace_expires_then_cache_hit_allowed() -> None:
 @pytest.mark.asyncio
 async def test_write_grace_only_affects_same_entity() -> None:
     """Write to c1 does not force grace bypass for c2 reads."""
-    store = {"c1": 100, "c2": 200}
+    store = {"c1": 100.0, "c2": 200.0}
     read_calls = [0]
 
     @protect(entity_param="customer_id", ttl=60, mark_as_write=True)
@@ -937,7 +937,7 @@ async def test_write_grace_only_affects_same_entity() -> None:
 @pytest.mark.asyncio
 async def test_mark_as_write_without_grace_does_not_affect_reads() -> None:
     """mark_as_write=True with read_after_write_grace=0 does not force fresh reads."""
-    state = {"balance": 100}
+    state = {"balance": 100.0}
     read_calls = [0]
 
     @protect(entity_param="customer_id", ttl=60, mark_as_write=True)
@@ -964,7 +964,7 @@ async def test_mark_as_write_without_grace_does_not_affect_reads() -> None:
 @pytest.mark.asyncio
 async def test_critical_write_tracked_for_grace_bypass() -> None:
     """critical=True + mark_as_write=True still records write for grace bypass."""
-    state = {"balance": 100}
+    state = {"balance": 100.0}
     read_calls = [0]
 
     @protect(entity_param="customer_id", critical=True, mark_as_write=True)
