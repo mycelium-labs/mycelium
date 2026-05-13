@@ -350,10 +350,13 @@ class StreamGuard:
 
     def _extract_sequence(self, chunk: Any) -> int | None:
         """Pull sequence number from *chunk* using *sequence_field*."""
+        field = self._sequence_field
+        if field is None:
+            return None
         if isinstance(chunk, dict):
-            val = chunk.get(self._sequence_field)
+            val = chunk.get(field)
         else:
-            val = getattr(chunk, self._sequence_field, None)
+            val = getattr(chunk, field, None)
         if val is not None:
             try:
                 return int(val)

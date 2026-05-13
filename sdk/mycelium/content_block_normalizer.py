@@ -134,6 +134,25 @@ class ContentBlockNormalizer:
             {"event": "normalize_started", "message_count": len(messages), "ts": now}
         )
 
+        # Auto-detect provider format mismatch
+        if self._target is not None:
+            detected = self.detect_format(messages)
+            if detected is not None and detected != self._target:
+                event = {
+                    "event": "provider_format_mismatch",
+                    "detected": detected,
+                    "target": self._target,
+                    "ts": now,
+                }
+                self._audit.append(event)
+                self._log_to_session(event)
+                if self._strict:
+                    raise ContentBlockError(
+                        f"Message format detected as {detected!r} but target_provider "
+                        f"is {self._target!r}. Normalization may not handle all differences.",
+                        violation="provider_format_mismatch",
+                    )
+
         result = deepcopy(messages)
 
         for i, msg in enumerate(result):
@@ -240,6 +259,60 @@ class ContentBlockNormalizer:
 
         self._audit.append({"event": "normalize_ok", "message_count": len(result), "ts": now})
         return result
+
+    def detect_format(self, messages: list) -> str | None:
+        """
+        Auto-detect the provider format of a message list based on structure.
+
+        Returns ``"openai"``, ``"anthropic"``, ``"deepseek"``, or ``None`` if
+        the format cannot be determined. Useful for catching provider schema
+        drift before normalization.
+
+            normalizer = ContentBlockNormalizer(target_provider="anthropic")
+            detected = normalizer.detect_format(messages)
+            if detected and detected != "anthropic":
+                print(f"WARNING: messages appear to be in {detected} format")
+        """
+        has_thinking = False
+        has_tool_use = False
+        has_openai_tool_calls = False
+        has_deepseek_think = False
+        has_reasoning_content = False
+
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+
+            # Check for Anthropic thinking blocks
+            content = msg.get("content")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        bt = block.get("type")
+                        if bt in ("thinking", "redacted_thinking"):
+                            has_thinking = True
+                        if bt == "tool_use":
+                            has_tool_use = True
+
+            # Check for OpenAI-style tool_calls
+            if msg.get("tool_calls") or msg.get("function_call"):
+                has_openai_tool_calls = True
+
+            # Check for DeepSeek <think> tags in text content
+            if isinstance(content, str) and _DEEPSEEK_THINK_RE.search(content):
+                has_deepseek_think = True
+
+            # Check for reasoning_content field
+            if msg.get("reasoning_content") is not None:
+                has_reasoning_content = True
+
+        if has_deepseek_think or has_reasoning_content:
+            return "deepseek"
+        if has_thinking or has_tool_use:
+            return "anthropic"
+        if has_openai_tool_calls:
+            return "openai"
+        return None
 
     def has_thinking_blocks(self, messages: list) -> bool:
         """Return True if any message contains Anthropic thinking blocks."""

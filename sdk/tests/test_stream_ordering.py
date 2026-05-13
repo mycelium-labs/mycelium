@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from mycelium import StreamCutOffError, StreamGuard
+from mycelium import StreamGuard
 
 
 @pytest.mark.asyncio
