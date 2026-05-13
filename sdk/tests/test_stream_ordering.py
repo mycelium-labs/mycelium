@@ -83,6 +83,7 @@ async def test_no_sequence_field_no_check() -> None:
 @pytest.mark.asyncio
 async def test_sequence_with_object_chunks() -> None:
     """Sequence detection works with object-style chunks too."""
+
     class FakeChunk:
         def __init__(self, seq: int, text: str):
             self.seq = seq
