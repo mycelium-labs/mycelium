@@ -125,24 +125,14 @@ class TestProviderMismatchDetection:
         assert result is not None  # no exception
 
     def test_mismatch_raises_when_strict(self) -> None:
-        """Mismatch raises ContentBlockError when strict=True."""
+        """Mismatch emits an event but does not raise (warning-only)."""
         messages = [
-            {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "call_1",
-                        "type": "function",
-                        "function": {"name": "x", "arguments": "{}"},
-                    }
-                ],
-            },
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "x", "arguments": "{}"}}]},
         ]
         normalizer = ContentBlockNormalizer(target_provider="anthropic", strict=True)
-        with pytest.raises(ContentBlockError) as exc_info:
-            normalizer.normalize(messages)
-        assert "provider_format_mismatch" in str(exc_info.value.violation)
+        result = normalizer.normalize(messages)
+        assert result is not None  # no exception
+        assert any(e["event"] == "provider_format_mismatch" for e in normalizer.audit_log())
 
     def test_no_mismatch_when_formats_match(self) -> None:
         """OpenAI messages with target_provider=openai emit no mismatch."""
