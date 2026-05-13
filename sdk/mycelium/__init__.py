@@ -4,7 +4,13 @@ from mycelium.content_block_normalizer import ContentBlockError, ContentBlockNor
 from mycelium.history_guard import HistoryGuard, HistoryTruncatedError
 from mycelium.http import AsyncClient, Client, PayloadIncompleteError
 from mycelium.message_validator import MessageValidationError, MessageValidator
-from mycelium.protect import Session, TenancyMismatchError, protect, protect_sync
+from mycelium.protect import (
+    EntityPatternError,
+    Session,
+    TenancyMismatchError,
+    protect,
+    protect_sync,
+)
 from mycelium.stream_guard import StreamCutOffError, StreamGuard
 
 __version__ = "0.1.0"
@@ -25,5 +31,6 @@ __all__ = [
     "Client",
     "PayloadIncompleteError",
     "TenancyMismatchError",
+    "EntityPatternError",
     "__version__",
 ]

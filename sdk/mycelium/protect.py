@@ -16,6 +16,7 @@ Usage:
 """
 
 import functools
+import re
 import time
 from collections.abc import Callable
 from contextvars import ContextVar
@@ -41,6 +42,22 @@ class TenancyMismatchError(Exception):
         self.field = field
 
 
+class EntityPatternError(Exception):
+    """Raised when an entity_id does not match the expected pattern.
+
+    This catches bugs where the wrong parameter name or value format is used.
+    """
+
+    def __init__(self, entity_id: str, pattern: str, param: str) -> None:
+        super().__init__(
+            f"Entity pattern mismatch: {param}={entity_id!r} does not match "
+            f"pattern {pattern!r}. The value may be from the wrong context."
+        )
+        self.entity_id = entity_id
+        self.pattern = pattern
+        self.param = param
+
+
 def _extract_field(result: Any, field: str) -> Any:
     """Pull *field* out of a dict or object."""
     if isinstance(result, dict):
@@ -59,6 +76,17 @@ def _is_empty_result(value: Any) -> bool:
     if value == "":
         return True
     return False
+
+
+def _validate_entity_pattern(
+    entity_id: Any, entity_pattern: re.Pattern[str] | None, param: str
+) -> None:
+    """Raise EntityPatternError if entity_id doesn't match the pattern."""
+    if entity_pattern is not None and isinstance(entity_id, str):
+        if not entity_pattern.search(entity_id):
+            raise EntityPatternError(
+                entity_id=entity_id, pattern=entity_pattern.pattern, param=param
+            )
 
 
 # Per-async-context session, falls back to a global session
@@ -377,6 +405,7 @@ def protect(
     cache_empty: float | None = None,
     mark_as_write: bool = False,
     read_after_write_grace: float = 0.0,
+    entity_pattern: str | None = None,
 ) -> Callable:
     """
     Decorator that adds context protection to any async tool function.
@@ -405,13 +434,21 @@ def protect(
                        seconds will bypass the cache and fetch fresh data.
         read_after_write_grace: Seconds after a write during which reads for the
                                 same entity bypass the cache. Default 0 (disabled).
+        entity_pattern: Regex pattern that the entity_id must match. Catches bugs
+                        where the wrong parameter or value is passed. E.g.
+                        ``r"^c\\d+$"`` for customer IDs like "c123".
     """
 
     def decorator(func: Callable) -> Callable:
         tool_name = func.__name__
+        _pattern = re.compile(entity_pattern) if entity_pattern else None
 
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if entity_param is not None:
+                entity_id = kwargs.get(entity_param)
+                _validate_entity_pattern(entity_id, _pattern, entity_param)
+
             if critical:
                 result = await func(*args, **kwargs)
                 if entity_field is not None and entity_param is not None:
@@ -467,6 +504,7 @@ def protect_sync(
     cache_empty: float | None = None,
     mark_as_write: bool = False,
     read_after_write_grace: float = 0.0,
+    entity_pattern: str | None = None,
 ) -> Callable:
     """
     Decorator for synchronous tool functions (e.g. smolagents Tool.forward).
@@ -481,9 +519,14 @@ def protect_sync(
 
     def decorator(func: Callable) -> Callable:
         tool_name = func.__name__
+        _pattern = re.compile(entity_pattern) if entity_pattern else None
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if entity_param is not None:
+                entity_id = kwargs.get(entity_param)
+                _validate_entity_pattern(entity_id, _pattern, entity_param)
+
             if critical:
                 result = func(*args, **kwargs)
                 if entity_field is not None and entity_param is not None:
