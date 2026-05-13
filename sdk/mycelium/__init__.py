@@ -13,6 +13,7 @@ from mycelium.protect import (
 )
 from mycelium.scratchpad_guard import ScratchpadGuard
 from mycelium.stream_guard import StreamCutOffError, StreamGuard
+from mycelium.tool_sequencer import ToolSequencer
 
 __version__ = "0.1.0"
 
@@ -34,5 +35,6 @@ __all__ = [
     "TenancyMismatchError",
     "EntityPatternError",
     "ScratchpadGuard",
+    "ToolSequencer",
     "__version__",
 ]
