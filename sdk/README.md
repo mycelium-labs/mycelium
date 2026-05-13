@@ -114,6 +114,10 @@ async with Session() as s:
 | `critical` | `bool` | `False` | Skip caching entirely — always call the real function. Use for tools where staleness is never acceptable. |
 | `mark_as_write` | `bool` | `False` | Record this call as a write operation. Enables `read_after_write_grace` bypass for subsequent reads. |
 | `read_after_write_grace` | `float` | `0.0` | Seconds after a write during which reads for the same entity bypass the cache. Use `2.0` to guard against read-replica lag. |
+| `entity_pattern` | `str \| None` | `None` | Regex pattern the entity_id must match. Raises `EntityPatternError` on mismatch. E.g. `r"^c\d+$"` for customer IDs. |
+| `cache_empty` | `float \| None` | `None` | Special TTL for empty results (`[]`, `{}`, `None`, `""`). `0` = never cache empties. |
+| `deterministic` | `bool` | `True` | If `False`, skip caching (for non-deterministic tools like stock prices). |
+| `max_entries` | `int \| None` | `None` | Hard cache cap on `Session`. LRU eviction when exceeded. |
 
 ### `Session`
 
@@ -125,17 +129,49 @@ async with Session() as s:
 
 ## What it protects against
 
-All 7 AF-006 manifestations:
+All AF-006 (context corruption) manifestations:
 
-| Manifestation | How Mycelium prevents it |
-|---|---|
-| Stale data | TTL expiry — real function called after `ttl` seconds |
-| Cross-entity leakage | Separate cache entry per `entity_param` value |
-| Cross-source mixing | Separate cache entry per tool name |
-| Behavioral drift | TTL forces re-fetch — drift surfaces on next call |
-| Unbounded growth | Expired entries evicted automatically |
-| Race conditions | Per-entity cache keys — concurrent calls never overwrite each other |
-| Error invalidation | Any exception clears the entry — next call always gets fresh data |
+| Layer | Manifestation | How Mycelium prevents it |
+|-------|--------------|-------------------------|
+| **Tool cache** | Stale data | TTL expiry — refetches after `ttl` seconds |
+| | Cross-entity leakage | Separate cache entry per `entity_param` value |
+| | Cross-source mixing | Separate cache entry per function name |
+| | Read-replica lag | `mark_as_write` + `read_after_write_grace` — forces fresh reads after writes |
+| | Non-deterministic tools | `deterministic=False` skips caching |
+| | Negative caching | `cache_empty` controls caching of empty results |
+| | Error invalidation | Exceptions clear the cache entry automatically |
+| | Unbounded growth | `Session(max_entries=N)` with LRU eviction |
+| | Entity validation | `entity_pattern` regex validation raises `EntityPatternError` |
+| | Tenancy mismatch | `entity_field` validates response matches request entity |
+| **Streaming** | Cut-off stream | `StreamGuard` raises `StreamCutOffError` if stop signal missing |
+| | Duplicate chunks | Content-hash deduplication |
+| | Out-of-order chunks | `sequence_field` validates monotonic ordering |
+| **Conversation history** | Token overflow | `HistoryGuard.validate()` raises before LLM call |
+| | Silent drops | `HistoryGuard.check_for_drops()` fingerprint comparison |
+| | Duplicate turns | `detect_duplicates=True` catches repeated messages |
+| | Summary keyword loss | `track_keywords` + `check_summary_fidelity()` |
+| | Excessive compaction | `max_compaction_ratio` detects aggressive summarization |
+| **Message structure** | Orphaned tool results | `MessageValidator` catches missing/unmatched `tool_call_id` |
+| | Misplaced tool results | Detects tool results appearing after subsequent assistant messages |
+| | Duplicate tool-call blocks | `repair()` drops `fc_*` partials |
+| | Non-zero tool-call indices | Auto-repairs to 0-based |
+| | Structured-output artifacts | `repair()` strips `parsed` fields |
+| | Invalid roles | Rejects unknown message roles |
+| **Content blocks** | Provider format mismatch | `detect_format()` warns when messages don't match `target_provider` |
+| | Thinking-block preservation | Flags Anthropic thinking blocks sent to OpenAI |
+| | DeepSeek think extraction | Strips `<think>` tags from response text |
+| | OpenAI function_call→tool_calls | Normalizes legacy format for Anthropic/Bedrock |
+| | OpenAI reasoning blocks | Strips `reasoning` content blocks for Anthropic |
+| **Multi-agent state** | Uncoordinated overwrites | `ScratchpadGuard` logs cross-agent key writes, reads, deletes |
+| **Parallelism** | Out-of-order results | `ToolSequencer` flags results completing after later-started calls |
+
+### Other guards
+
+| Guard | What it does |
+|-------|-------------|
+| `AsyncClient` / `Client` | HTTP transport payload completeness (Content-Length, JSON truncation, empty body) |
+| `Session` | Per-run cache isolation via `ContextVar` |
+| `Audit log` | Every cache decision, stream event, and guard activity recorded |
 
 ## Audit log
 
