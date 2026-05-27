@@ -321,11 +321,19 @@ async def example_protected_agent(runtime: AgentRuntimeWithContextProtection):
     3. Error handling
     4. Cache hits/misses
     """
-    from examples.context_corruption_usage import (
-        fetch_user_profile,
-        get_api_quota,
-        search_documents,
-    )
+    from mycelium.protections.decorators import tool
+
+    @tool(critical=True, entity_param="user_id", invalidate_after_steps=5)
+    async def fetch_user_profile(user_id: str) -> dict:
+        return {"id": user_id, "name": f"User {user_id}", "status": "active"}
+
+    @tool(critical=False, invalidate_after_steps=10)
+    async def search_documents(query: str, max_results: int = 5) -> list[dict]:
+        return [{"id": f"doc_{i}", "title": f"Doc {i}"} for i in range(max_results)]
+
+    @tool(critical=True, invalidate_after_steps=1)
+    async def get_api_quota() -> dict:
+        return {"requests_remaining": 1000}
 
     runtime.register_tools([fetch_user_profile, search_documents, get_api_quota])
 
