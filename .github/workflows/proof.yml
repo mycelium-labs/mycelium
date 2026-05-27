@@ -1,0 +1,55 @@
+name: AF-006 proof
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly regression against agent-test-AF006 @ main
+    - cron: "0 12 * * 1"
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Mycelium
+        uses: actions/checkout@v4
+
+      - name: Checkout agent-test-AF006
+        uses: actions/checkout@v4
+        with:
+          repository: mycelium-labs/agent-test-AF006
+          path: agent-test-AF006
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install SDK (editable)
+        run: uv sync --dev
+        working-directory: sdk
+
+      - name: Install proof test dependencies
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install -e "${{ github.workspace }}/sdk"
+          uv pip install pytest pytest-asyncio hypothesis psutil
+        working-directory: agent-test-AF006
+
+      - name: Run AF-006 proof suite
+        env:
+          MYCELIUM_SDK: ${{ github.workspace }}/sdk
+        working-directory: agent-test-AF006
+        run: |
+          export PYTHONPATH="${MYCELIUM_SDK}${PYTHONPATH:+:$PYTHONPATH}"
+          .venv/bin/python -m pytest \
+            tests/test_af006_*.py \
+            tests/real_issues/ \
+            -q --tb=short
+
+      - name: Note on skipped tests
+        if: always()
+        run: |
+          echo "HF corpus tests skip without .cache/predictions (expected on CI)."
+          echo "framework_e2e/ is not run here; install langgraph etc. locally for full matrix."
