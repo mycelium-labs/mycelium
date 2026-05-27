@@ -1,0 +1,3 @@
+[submodule "proof/agent-test-AF006"]
+	path = proof/agent-test-AF006
+	url = https://github.com/mycelium-labs/agent-test-AF006.git
