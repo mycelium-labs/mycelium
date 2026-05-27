@@ -26,6 +26,8 @@ async def get_inventory(sku: str) -> dict:
 
 That's it. Call your tools normally in any framework — Mycelium intercepts at the function level.
 
+Integration recipe (Session, `@protect`, `MessageValidator`, optional guards): [docs/af006-integration.md](../docs/af006-integration.md).
+
 ```python
 # LangGraph — no changes to how you use the graph
 tool_node = ToolNode([fetch_customer, get_inventory])
@@ -204,7 +206,7 @@ The decorator adds a dict lookup and a `time.monotonic()` call on the hot path. 
 
 ## Real-world validation
 
-- **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** — test suite with 507 real failure cases, AutoGen #6789 and LiveKit #5408 real reproductions, and all 7 AF-006 manifestations tested end-to-end
+- **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** — proof suite (FM1–FM7, guards, named issues). The **507** HF issues are **classified and mapped** to mechanisms when the corpus cache is present — not 507 full agent reproductions per run. See [docs/af006-integration.md](../docs/af006-integration.md).
 
 ## Synchronous frameworks
 
