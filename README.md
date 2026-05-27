@@ -62,7 +62,7 @@ async with Session():
     inventory = await get_inventory(sku="SKU-99")
 ```
 
-See [sdk/README.md](sdk/README.md) for full documentation.
+See [sdk/README.md](sdk/README.md) for API reference and [docs/af006-integration.md](docs/af006-integration.md) for the integration recipe (prevent vs flag vs repair).
 
 ---
 
@@ -84,12 +84,16 @@ See [sdk/README.md](sdk/README.md) for full documentation.
 
 ## Real-world validation
 
-**[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** contains:
+Evidence lives in **[agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006)** (also run on every PR via [proof.yml](.github/workflows/proof.yml)):
 
-- **AutoGen #6789** — real `TokenLimitedChatCompletionContext` reproduction. Middle-deletion removes `AssistantMessage(FunctionCall)` while `FunctionExecutionResultMessage` survives, producing the orphaned tool_result that causes 400 API errors. 10 tests, all using real `autogen_core` classes.
-- **LiveKit #5408** — real redundant-signal and transcript-discard bug pattern. 10 tests.
-- **507 real failures** loaded from `ndileep/mycelium-agent-failures` on HuggingFace — real GitHub issues from LangGraph, CrewAI, AutoGen, Cline, OpenHands and others.
-- **All 7 manifestations** tested end-to-end with the `@protect` decorator.
+| What | What it means |
+|------|----------------|
+| **507 AF-006 issues** (HuggingFace `ndileep/mycelium-agent-failures`) | Real GitHub issues — **classified** and mapped to mechanisms when the corpus cache is present. **Not** 507 full agent reproductions on every CI run. |
+| **~367 addressable** by `@protect` / guards | Stale cache, entity isolation, error invalidation (keyword + manual review in proof repo). |
+| **~140 out of scope** for tool cache alone | Streaming/format/history bugs — need `MessageValidator` / `StreamGuard` / framework fixes. See [integration doc](docs/af006-integration.md#out-of-scope-for-this-recipe-140507-corpus-issues). |
+| **FM1–FM7 + guards** | Automated mechanism tests (`test_af006_*`, `sdk/tests/`). |
+| **Named issues** | e.g. LiveKit #5408 pattern tests; AutoGen #6789 with real `autogen_core` when installed. |
+| **Framework e2e** | LangGraph, CrewAI, etc. — optional; run locally with frameworks installed. |
 
 ---
 
@@ -109,6 +113,17 @@ Confirmed end-to-end with real framework invocation paths:
 | Pydantic AI | `FunctionSchema.call()` → `await function(**kwargs)` |
 
 DSPy and Haystack follow the same async function call pattern — tests not yet written.
+
+---
+
+## CI
+
+| Workflow | What runs |
+|----------|-----------|
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Ruff, pyright, `sdk/tests/` (223 tests) |
+| [`.github/workflows/proof.yml`](.github/workflows/proof.yml) | Clones [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006), installs this repo’s `sdk/` editable, runs `tests/test_af006_*.py` + `tests/real_issues/` on every PR/push and weekly |
+
+HF corpus classification tests skip on CI when `.cache/predictions` is absent (expected). Framework e2e (`framework_e2e/`) is optional — run locally with LangGraph/CrewAI/etc. installed.
 
 ---
 
