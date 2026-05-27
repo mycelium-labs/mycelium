@@ -5,8 +5,12 @@ on:
   push:
     branches: [main]
   schedule:
-    # Weekly regression against agent-test-AF006 @ main
+    # Weekly regression against pinned agent-test-AF006 ref
     - cron: "0 12 * * 1"
+
+# Bump when intentionally picking up new proof tests from agent-test-AF006.
+env:
+  AGENT_TEST_AF006_REF: b472e27f5ce967400436d710cf6e311e827a6bf6
 
 jobs:
   proof:
@@ -19,6 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: mycelium-labs/agent-test-AF006
+          ref: ${{ env.AGENT_TEST_AF006_REF }}
           path: agent-test-AF006
 
       - name: Install uv

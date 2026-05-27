@@ -121,7 +121,7 @@ DSPy and Haystack follow the same async function call pattern — tests not yet 
 | Workflow | What runs |
 |----------|-----------|
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Ruff, pyright, `sdk/tests/` (223 tests) |
-| [`.github/workflows/proof.yml`](.github/workflows/proof.yml) | Clones [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006), installs this repo’s `sdk/` editable, runs `tests/test_af006_*.py` + `tests/real_issues/` on every PR/push and weekly |
+| [`.github/workflows/proof.yml`](.github/workflows/proof.yml) | Clones [agent-test-AF006](https://github.com/mycelium-labs/agent-test-AF006) at a **pinned SHA**, installs this repo’s `sdk/` editable, runs `tests/test_af006_*.py` + `tests/real_issues/` on every PR/push and weekly |
 
 HF corpus classification tests skip on CI when `.cache/predictions` is absent (expected). Framework e2e (`framework_e2e/`) is optional — run locally with LangGraph/CrewAI/etc. installed.
 

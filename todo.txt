@@ -5,8 +5,8 @@ AF-006 ship checklist (done):
 ✅ docs/af006-integration.md — Session + @protect + MessageValidator recipe; 140 OOS documented
 ✅ examples/ cleaned — stale adapters/runtime removed; integration_recipe.py added
 ✅ README wording — 507 = classification + mechanisms, not 507 e2e repros
+✅ Pin agent-test-AF006 SHA in proof.yml (b472e27)
 
 Optional next:
-- Pin agent-test-AF006 SHA in proof.yml
 - Framework e2e job (langgraph + autogen-core)
 - Release tag 0.1.0 / PyPI
