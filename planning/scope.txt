@@ -1,0 +1,6 @@
+problem statement : identify agent failures, prevent them before happening, or raise a flag 
+usr persona - anyone who is building reliable ai agents
+evidence - we have our github issues in huggingface 
+what we are not building: (?) will not fix after failure. 
+                    only reducing the chances of failure. 
+wedge - right now - only for context corruption 
