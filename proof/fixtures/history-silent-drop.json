@@ -1,0 +1,21 @@
+{
+  "id": "history-silent-drop",
+  "source_url": "https://github.com/cline/cline/issues/7462",
+  "source_title": "Cline doesn't recognize that Act mode is active",
+  "component": "HistoryGuard",
+  "pattern": "Long-running agents hit context limits; frameworks silently drop earlier messages. Agent continues as if full history is present.",
+  "violation": "history_drop_detected",
+  "repairable": false,
+  "messages_before_trim": [
+    {"role": "system", "content": "You are a coding agent in Act mode."},
+    {"role": "user", "content": "Refactor the auth module in src/auth/login.ts"},
+    {"role": "assistant", "content": "Reading src/auth/login.ts and related tests."},
+    {"role": "tool", "tool_call_id": "call_read_login", "content": "export function login(user: string) { ... }"},
+    {"role": "assistant", "content": "I'll update login.ts and add a regression test."},
+    {"role": "user", "content": "Also keep backward compatibility for legacy tokens."}
+  ],
+  "messages_after_trim": [
+    {"role": "system", "content": "You are a coding agent in Act mode."},
+    {"role": "user", "content": "Also keep backward compatibility for legacy tokens."}
+  ]
+}
