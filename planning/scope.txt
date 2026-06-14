@@ -4,3 +4,65 @@ evidence - we have our github issues in huggingface
 what we are not building: (?) will not fix after failure. 
                     only reducing the chances of failure. 
 wedge - right now - only for context corruption 
+
+
+Here's a practical playbook for a solo founder, broken into phases. I'll keep it concrete since you're already building (Mycelium looks like a dev-tool/SDK play, so I'll lean examples that way).
+
+## Phase 0 — Problem & Scope (1–2 weeks, not months)
+
+1. **Write the problem statement in one sentence.** Who hurts, when, and how badly. ("Agent pipelines silently corrupt context and devs find out in prod.")
+2. **Pick ONE user persona.** Not "developers" — something like "engineers running LangGraph/CrewAI agents in production."
+3. **Evidence collection.** 10–20 real instances of the problem (GitHub issues, Discord threads, your own incidents — you already have an `incidents/` corpus pattern for this).
+4. **Define what you're NOT building.** Scope cuts matter more than scope. Write them down.
+5. **Decide your wedge.** The single narrowest thing you can be the best at (e.g., one failure mode, not nine).
+
+## Phase 1 — Validation (before/during MVP)
+
+1. Talk to 10–15 people who have the problem. Don't pitch — ask about their last incident, what they did, what it cost them.
+2. Look for the "hair on fire" signal: did they build an internal hack? Are they paying for a workaround?
+3. Kill criteria: if nobody describes the problem unprompted, change the problem, not the pitch.
+
+## Phase 2 — MVP (v0.1, 2–6 weeks)
+
+1. **One persona, one problem, one workflow.** For an SDK: install → one decorator/wrapper → visible value in <10 minutes.
+2. Build only the happy path plus the failure mode you're protecting against.
+3. **Proof artifact:** a reproducible demo showing the failure happening *without* you and prevented *with* you. This is your best sales asset.
+4. README + quickstart is part of the MVP, not an afterthought.
+5. Instrument it — even crude telemetry/opt-in counters so you know if anyone actually runs it.
+
+## Phase 3 — First users (v0.x, "do things that don't scale")
+
+1. Hand-deliver to 5–10 design partners. Onboard them personally, on a call if needed.
+2. Weekly check-ins. Fix their bugs same-day. You're trading white-glove service for brutal feedback.
+3. Track one metric: **retention/usage**, not signups. Do they still use it in week 3?
+4. Iterate the API surface now, while breaking changes are cheap.
+
+## Phase 4 — GTM (v1.0)
+
+1. **Positioning doc:** one-liner, who it's for, the alternative ("duct tape and prayer"), why now.
+2. Pick ONE channel and go deep:
+   - Dev tools: open source + content (write up real incidents/postmortems — your incident corpus is literally content), HN/Reddit/X launches, Discord communities.
+   - Avoid spreading across 5 channels at 20% effort each.
+3. Launch sequence: ship v1 → launch post → Show HN → follow up with every commenter.
+4. Define your conversion path early even if monetization comes later: OSS → hosted/cloud, or free tier → team tier.
+
+## Phase 5 — Monetization & repeatability (v1.x–v2)
+
+1. Charge before you think you're ready. First 3 paying customers can be hand-negotiated, weird deals.
+2. Price on value (incidents prevented, hours saved), not cost.
+3. Find the repeatable motion: where did your best users come from? Do 10x more of that one thing.
+4. Only now: dashboards, teams/SSO, enterprise features — pulled by paying customers, not pushed by roadmap fantasy.
+
+## Phase 6 — Scale decisions (v2+)
+
+1. Decide: lifestyle business, raise, or sell. Each changes what you build next.
+2. First hire only when something is repeatably working and you're the bottleneck.
+
+## Solo-founder operating rules (all phases)
+
+- **Timebox everything.** Solo means no one stops you from polishing v0 for 6 months.
+- 50/50 rule after MVP: half your time building, half talking to users/distributing. Solo founders almost always over-build and under-distribute.
+- Keep a public changelog/log — it compounds into marketing (you have a `LOG.md` habit already, that's the right instinct).
+- One metric per phase. Phase 2: time-to-value. Phase 3: retention. Phase 4: weekly actives. Phase 5: revenue.
+
+The most common failure sequence is: skip Phase 1, over-build Phase 2, then discover in Phase 4 that nobody wanted it. The phases are cheap insurance against that.
