@@ -1,0 +1,44 @@
+{
+  "id": "langgraph-7117",
+  "source_url": "https://github.com/langchain-ai/langgraph/issues/7117",
+  "source_title": "When invoking the tool-call subgraph, the main agent loses the memory of previous tool invocations",
+  "component": "MessageValidator",
+  "pattern": "Subgraph/tool-call isolation drops the assistant tool_call message but keeps tool results — orphan tool_call_id with no matching preceding call.",
+  "violation": "orphaned_tool_result",
+  "repairable": false,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Run the billing subgraph for invoice inv-90210"
+    },
+    {
+      "role": "assistant",
+      "content": "I'll check invoice inv-90210.",
+      "tool_calls": [
+        {
+          "id": "call_lookup_invoice",
+          "type": "function",
+          "index": 0,
+          "function": {
+            "name": "lookup_invoice",
+            "arguments": "{\"invoice_id\": \"inv-90210\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_lookup_invoice",
+      "content": "{\"invoice_id\": \"inv-90210\", \"status\": \"paid\", \"amount\": 1200}"
+    },
+    {
+      "role": "assistant",
+      "content": "Subgraph finished. Here is the summary."
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_subgraph_charge_fee",
+      "content": "{\"invoice_id\": \"inv-90210\", \"fee_applied\": 25}"
+    }
+  ]
+}
