@@ -1,5 +1,6 @@
 """Mycelium SDK — runtime failure prevention for AI agents."""
 
+from mycelium.history_guard import HistoryGuard, HistoryTruncatedError
 from mycelium.message_validator import MessageValidationError, MessageValidator
 from mycelium.protect import protect, protect_sync
 from mycelium.session import Session
@@ -12,5 +13,7 @@ __all__ = [
     "Session",
     "MessageValidator",
     "MessageValidationError",
+    "HistoryGuard",
+    "HistoryTruncatedError",
     "__version__",
 ]
