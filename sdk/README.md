@@ -67,3 +67,40 @@ guard.check_for_drops(processed_messages)  # after framework trimming
 ```
 
 Raises on token overflow, message count limits, duplicate turns, and silent message drops.
+
+## @bounded (AF-004 tool boundaries)
+
+Validate inputs, outputs, and scope before/after tool execution:
+
+```python
+from pydantic import BaseModel, Field
+from mycelium import ToolRegistry, ToolRunner, bounded
+
+class FetchCustomerInput(BaseModel):
+    customer_id: str = Field(pattern=r"^c\d+$")
+
+class CustomerRecord(BaseModel):
+    customer_id: str
+    name: str
+
+registry = ToolRegistry(allowed=["fetch_customer"])
+
+@registry.register
+@bounded(
+    schema=FetchCustomerInput,
+    output_schema=CustomerRecord,
+    allowed_paths=["/workspace/src/"],
+)
+async def fetch_customer(customer_id: str) -> dict:
+    return await db.get(customer_id)
+
+runner = ToolRunner(registry=registry)
+result = await runner.run_with_llm_retry(
+    fetch_customer,
+    messages=messages,
+    tool_call_id="call_1",
+    kwargs={"customer_id": "c1"},
+    invoke_llm=llm.ainvoke,
+    parse_tool_kwargs=extract_tool_args,
+)
+```
