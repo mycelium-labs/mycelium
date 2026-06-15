@@ -1,0 +1,14 @@
+{
+  "id": "langgraph-6431",
+  "source_url": "https://github.com/langchain-ai/langgraph/issues/6431",
+  "source_title": "ToolNode fails to execute tools with ToolRuntime parameter due to Pydantic validation error",
+  "component": "bounded",
+  "pattern": "Tool invoked with arguments that do not match its declared input schema.",
+  "violation": "type_mismatch",
+  "tool_name": "get_current_time",
+  "schema_fields": {
+    "timezone": {"type": "string", "required": true}
+  },
+  "bad_kwargs": {"timezone": null},
+  "good_kwargs": {"timezone": "UTC"}
+}

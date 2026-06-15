@@ -1,10 +1,10 @@
-# AF-006 proof artifact
+# Mycelium proof artifacts (AF-006 + AF-004)
 
 Legitimate proof means: **cite a real issue → reproduce its failure class → show Mycelium catches or fixes it.**
 
 This is not marketing copy or fake chat text. Each fixture links to a public GitHub issue and uses message/tool shapes that match the reported bug mechanism.
 
-## What's in here
+## AF-006 — context integrity (`fixtures/`)
 
 | Fixture | Real issue | Component | Proof |
 |---|---|---|---|
@@ -13,6 +13,17 @@ This is not marketing copy or fake chat text. Each fixture links to a public Git
 | `langgraph-7117-orphan-tool-result.json` | [langgraph#7117](https://github.com/langchain-ai/langgraph/issues/7117) | MessageValidator | orphan tool result → validate raises (unfixable) |
 | `stale-tool-result-ttl.json` | [cline#7462](https://github.com/cline/cline/issues/7462) | `@protect` | DB updates after cache → TTL expiry refetches fresh data |
 | `history-silent-drop.json` | [cline#7462](https://github.com/cline/cline/issues/7462) | HistoryGuard | framework trims history → `check_for_drops()` raises |
+
+## AF-004 — tool boundary (`fixtures/af004/`)
+
+| Fixture | Real issue | Component | Proof |
+|---|---|---|---|
+| `cline-10737-invalid-tool-args.json` | [cline#10737](https://github.com/cline/cline/issues/10737) | `@bounded` | missing required field → `ToolBoundaryError` before tool runs |
+| `langgraph-6431-invalid-input.json` | [langgraph#6431](https://github.com/langchain-ai/langgraph/issues/6431) | `@bounded` | null/invalid arg → input validation blocks dispatch |
+| `cline-8273-path-scope.json` | [cline#8273](https://github.com/cline/cline/issues/8273) | `@bounded` | path outside workspace → `scope_path` violation |
+| `langchain-34669-output-shape.json` | [langchain#34669](https://github.com/langchain-ai/langchain/issues/34669) | `@bounded` | MCP returns list not record → output validation fails |
+| `langchain-35320-allowlist.json` | [langchain#35320](https://github.com/langchain-ai/langchain/issues/35320) | `ToolRegistry` | tool not in allowlist → `not_in_allowlist` |
+| `cline-8779-llm-retry-recovery.json` | [cline#8779](https://github.com/cline/cline/issues/8779) | `ToolRunner` | bad args → tool error → LLM retry with corrected kwargs |
 
 ## Run the demo
 
@@ -27,7 +38,7 @@ python proof/run_demo.py
 ## Run the proof tests
 
 ```bash
-pytest proof/test_proof.py -v
+pytest proof/test_proof.py proof/test_proof_af004.py -v
 ```
 
 ## How to add a new legitimate case

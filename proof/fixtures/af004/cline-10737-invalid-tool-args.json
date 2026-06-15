@@ -1,0 +1,15 @@
+{
+  "id": "cline-10737",
+  "source_url": "https://github.com/cline/cline/issues/10737",
+  "source_title": "task_progress parameter incorrectly passed to Jira MCP tool calls, causing Pydantic ValidationError",
+  "component": "bounded",
+  "pattern": "LLM passes tool arguments that fail schema validation before the MCP tool executes.",
+  "violation": "missing_required_field",
+  "tool_name": "create_jira_issue",
+  "schema_fields": {
+    "project_key": {"type": "string", "required": true},
+    "summary": {"type": "string", "required": true}
+  },
+  "bad_kwargs": {"summary": "Agent context corruption in prod"},
+  "good_kwargs": {"project_key": "AF", "summary": "Agent context corruption in prod"}
+}
