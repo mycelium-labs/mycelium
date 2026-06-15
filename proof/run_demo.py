@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the AF-006 proof demo with citations to real GitHub issues."""
+"""Run AF-006 and AF-004 proof demos with citations to real GitHub issues."""
 
 from __future__ import annotations
 
@@ -11,20 +11,42 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "sdk"))
 
+from pydantic import BaseModel, Field, create_model  # noqa: E402
+
 from mycelium import (  # noqa: E402
     HistoryGuard,
     HistoryTruncatedError,
     MessageValidationError,
     MessageValidator,
+    ToolBoundaryError,
+    ToolRegistry,
+    ToolRunner,
+    bounded,
     protect,
     Session,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
+AF004_FIXTURES = FIXTURES / "af004"
 
 
 def load(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text())
+
+
+def load_af004(name: str) -> dict:
+    return json.loads((AF004_FIXTURES / name).read_text())
+
+
+def schema_from_fields(fields: dict, *, model_name: str) -> type[BaseModel]:
+    model_fields: dict = {}
+    for fname, spec in fields.items():
+        py_type = int if spec.get("type") == "integer" else str
+        if spec.get("required"):
+            model_fields[fname] = (py_type, Field(...))
+        else:
+            model_fields[fname] = (py_type | None, None)
+    return create_model(model_name, **model_fields)  # type: ignore[call-overload]
 
 
 def section(title: str) -> None:
@@ -132,8 +154,120 @@ def demo_history_drop() -> None:
         print(f"  → {len(before) - len(after)} message(s) silently removed from history")
 
 
+async def demo_bounded_input(fixture_name: str) -> None:
+    fixture = load_af004(fixture_name)
+    section(f"@bounded input — {fixture['id']}")
+    cite(fixture)
+
+    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
+    tool_name = fixture["tool_name"]
+
+    async def impl(**kwargs):
+        return {"ok": True}
+
+    impl.__name__ = tool_name
+    tool = bounded(schema=schema)(impl)
+
+    try:
+        await tool(**fixture["bad_kwargs"])
+        print("WITHOUT Mycelium: invalid args would reach the tool")
+    except ToolBoundaryError as exc:
+        print(f"WITH Mycelium: blocked {exc.violation!r} — tool never ran")
+        print(f"  → LLM message: {exc.llm_message[:120]}...")
+
+    await tool(**fixture["good_kwargs"])
+    print("WITH Mycelium: valid args pass through")
+
+
+async def demo_bounded_scope() -> None:
+    fixture = load_af004("cline-8273-path-scope.json")
+    section(f"@bounded scope — {fixture['id']}")
+    cite(fixture)
+
+    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
+
+    @bounded(
+        schema=schema,
+        allowed_paths=fixture["allowed_paths"],
+        path_param=fixture["path_param"],
+    )
+    async def delete_file(path: str) -> dict:
+        return {"deleted": path}
+
+    try:
+        await delete_file(**fixture["bad_kwargs"])
+    except ToolBoundaryError as exc:
+        print(f"WITH Mycelium: blocked {exc.violation!r} on {exc.field!r}")
+        print(f"  → path {exc.actual!r} is outside allowed workspace")
+
+    result = await delete_file(**fixture["good_kwargs"])
+    print(f"WITH Mycelium: allowed path deleted: {result['deleted']}")
+
+
+async def demo_bounded_output() -> None:
+    fixture = load_af004("langchain-34669-output-shape.json")
+    section(f"@bounded output — {fixture['id']}")
+    cite(fixture)
+
+    input_schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
+    output_schema = schema_from_fields(fixture["output_schema_fields"], model_name="Output")
+
+    @bounded(schema=input_schema, output_schema=output_schema)
+    async def mcp_search(query: str):
+        return fixture["bad_output"]
+
+    try:
+        await mcp_search(query="rate limits")
+    except ToolBoundaryError as exc:
+        print(f"WITH Mycelium: blocked {exc.violation!r} after tool returned list")
+        print("  → downstream would have crashed on wrong shape")
+
+
+def demo_allowlist() -> None:
+    fixture = load_af004("langchain-35320-allowlist.json")
+    section(f"ToolRegistry — {fixture['id']}")
+    cite(fixture)
+
+    registry = ToolRegistry(allowed=fixture["allowed_tools"])
+    try:
+        registry.validate_call(fixture["blocked_tool"])
+    except ToolBoundaryError as exc:
+        print(f"WITH Mycelium: {exc.violation!r} for {fixture['blocked_tool']!r}")
+        print(f"  → agent must use: {', '.join(fixture['allowed_tools'])}")
+
+
+async def demo_llm_retry() -> None:
+    fixture = load_af004("cline-8779-llm-retry-recovery.json")
+    section(f"ToolRunner LLM retry — {fixture['id']}")
+    cite(fixture)
+
+    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
+
+    @bounded(schema=schema)
+    async def replace_in_file(path: str, search: str, replace: str) -> dict:
+        return {"path": path, "replaced": True}
+
+    async def invoke_llm(messages):
+        return messages
+
+    def parse_tool_kwargs(messages, tool_name):
+        return dict(fixture["corrected_kwargs"])
+
+    runner = ToolRunner(max_llm_retries=1)
+    result, messages = await runner.run_with_llm_retry(
+        replace_in_file,
+        messages=[{"role": "user", "content": "fix file"}],
+        tool_call_id="call_1",
+        kwargs=fixture["initial_kwargs"],
+        invoke_llm=invoke_llm,
+        parse_tool_kwargs=parse_tool_kwargs,
+    )
+    print(f"First call missing 'replace' → tool error appended → LLM retry")
+    print(f"WITH Mycelium: recovered and returned {result}")
+
+
 def main() -> None:
-    print("Mycelium AF-006 proof demo")
+    print("Mycelium proof demo (AF-006 + AF-004)")
     print("Each case cites a real GitHub issue and reproduces its failure class.")
 
     demo_message_validator_repair("langchain-36984-fc-call-duplicate.json")
@@ -142,8 +276,20 @@ def main() -> None:
     asyncio.run(demo_stale_tool_result())
     demo_history_drop()
 
+    print()
+    print("#" * 72)
+    print("# AF-004 — tool boundary")
+    print("#" * 72)
+
+    asyncio.run(demo_bounded_input("cline-10737-invalid-tool-args.json"))
+    asyncio.run(demo_bounded_input("langgraph-6431-invalid-input.json"))
+    asyncio.run(demo_bounded_scope())
+    asyncio.run(demo_bounded_output())
+    demo_allowlist()
+    asyncio.run(demo_llm_retry())
+
     section("Done")
-    print("Run tests: pytest proof/test_proof.py -v")
+    print("Run tests: pytest proof/test_proof.py proof/test_proof_af004.py -v")
 
 
 if __name__ == "__main__":
