@@ -47,9 +47,9 @@ pytest proof/test_proof.py proof/test_proof_af004.py -v
 2. **Extract the failure class** — not the whole conversation, just the structural bug (orphan tool result, stale cache, etc.).
 3. **Add a fixture JSON** with:
    - `source_url`, `source_title`, `pattern`
-   - `messages` or scenario data that reproduces the class
+   - `messages` or scenario data that reproduces the class (AF-006), or `schema_fields` / `bad_kwargs` / `good_kwargs` (AF-004)
    - `violation` expected from Mycelium
-4. **Add a parametrized test** in `test_proof.py` that proves catch/fix.
+4. **Add a parametrized test** in `test_proof.py` (AF-006) or `test_proof_af004.py` (AF-004) that proves catch/fix.
 5. **Optional:** add a line to `run_demo.py` for human-readable output.
 
 ## What makes it legitimate vs fake

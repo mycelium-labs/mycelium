@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic import BaseModel, Field, create_model
 
 from mycelium import (
     ToolBoundaryError,
@@ -24,20 +23,6 @@ def load_fixture(name: str) -> dict[str, Any]:
     return json.loads((FIXTURES_DIR / name).read_text())
 
 
-def schema_from_fields(fields: dict[str, dict[str, Any]], *, model_name: str) -> type[BaseModel]:
-    model_fields: dict[str, Any] = {}
-    for name, spec in fields.items():
-        if spec.get("type") == "integer":
-            py_type = int
-        else:
-            py_type = str
-        if spec.get("required"):
-            model_fields[name] = (py_type, Field(...))
-        else:
-            model_fields[name] = (py_type | None, None)
-    return create_model(model_name, **model_fields)  # type: ignore[call-overload]
-
-
 @pytest.mark.parametrize(
     "fixture_name",
     [
@@ -48,14 +33,13 @@ def schema_from_fields(fields: dict[str, dict[str, Any]], *, model_name: str) ->
 @pytest.mark.asyncio
 async def test_bounded_blocks_invalid_input_from_real_issues(fixture_name: str) -> None:
     fixture = load_fixture(fixture_name)
-    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
     tool_name = fixture["tool_name"]
 
     async def impl(**kwargs: Any) -> dict:
         return {"ok": True}
 
     impl.__name__ = tool_name
-    tool = bounded(schema=schema)(impl)
+    tool = bounded(schema=fixture["schema_fields"])(impl)
 
     with pytest.raises(ToolBoundaryError) as exc:
         await tool(**fixture["bad_kwargs"])
@@ -71,10 +55,9 @@ async def test_bounded_blocks_invalid_input_from_real_issues(fixture_name: str) 
 @pytest.mark.asyncio
 async def test_bounded_blocks_path_outside_scope_cline_8273() -> None:
     fixture = load_fixture("cline-8273-path-scope.json")
-    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
 
     @bounded(
-        schema=schema,
+        schema=fixture["schema_fields"],
         allowed_paths=fixture["allowed_paths"],
         path_param=fixture["path_param"],
     )
@@ -95,10 +78,11 @@ async def test_bounded_blocks_path_outside_scope_cline_8273() -> None:
 @pytest.mark.asyncio
 async def test_bounded_blocks_wrong_output_shape_langchain_34669() -> None:
     fixture = load_fixture("langchain-34669-output-shape.json")
-    input_schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
-    output_schema = schema_from_fields(fixture["output_schema_fields"], model_name="Output")
 
-    @bounded(schema=input_schema, output_schema=output_schema)
+    @bounded(
+        schema=fixture["schema_fields"],
+        output_schema=fixture["output_schema_fields"],
+    )
     async def mcp_search(query: str) -> Any:
         return fixture["bad_output"]
 
@@ -108,7 +92,10 @@ async def test_bounded_blocks_wrong_output_shape_langchain_34669() -> None:
     assert exc.value.violation == "output_validation_failed"
     assert exc.value.tool_name == "mcp_search"
 
-    @bounded(schema=input_schema, output_schema=output_schema)
+    @bounded(
+        schema=fixture["schema_fields"],
+        output_schema=fixture["output_schema_fields"],
+    )
     async def mcp_search_ok(query: str) -> Any:
         return fixture["good_output"]
 
@@ -134,10 +121,9 @@ def test_registry_blocks_tool_not_in_allowlist_langchain_35320() -> None:
 @pytest.mark.asyncio
 async def test_tool_runner_llm_retry_recovers_cline_8779() -> None:
     fixture = load_fixture("cline-8779-llm-retry-recovery.json")
-    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
     attempts: list[dict[str, Any]] = []
 
-    @bounded(schema=schema)
+    @bounded(schema=fixture["schema_fields"])
     async def replace_in_file(path: str, search: str, replace: str) -> dict:
         return {"path": path, "replaced": True}
 
@@ -174,9 +160,8 @@ async def test_tool_runner_llm_retry_recovers_cline_8779() -> None:
 @pytest.mark.asyncio
 async def test_tool_runner_exhausts_when_llm_never_corrects() -> None:
     fixture = load_fixture("cline-8779-llm-retry-recovery.json")
-    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
 
-    @bounded(schema=schema)
+    @bounded(schema=fixture["schema_fields"])
     async def replace_in_file(path: str, search: str, replace: str) -> dict:
         return {"replaced": True}
 

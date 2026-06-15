@@ -11,8 +11,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "sdk"))
 
-from pydantic import BaseModel, Field, create_model  # noqa: E402
-
 from mycelium import (  # noqa: E402
     HistoryGuard,
     HistoryTruncatedError,
@@ -36,17 +34,6 @@ def load(name: str) -> dict:
 
 def load_af004(name: str) -> dict:
     return json.loads((AF004_FIXTURES / name).read_text())
-
-
-def schema_from_fields(fields: dict, *, model_name: str) -> type[BaseModel]:
-    model_fields: dict = {}
-    for fname, spec in fields.items():
-        py_type = int if spec.get("type") == "integer" else str
-        if spec.get("required"):
-            model_fields[fname] = (py_type, Field(...))
-        else:
-            model_fields[fname] = (py_type | None, None)
-    return create_model(model_name, **model_fields)  # type: ignore[call-overload]
 
 
 def section(title: str) -> None:
@@ -159,14 +146,13 @@ async def demo_bounded_input(fixture_name: str) -> None:
     section(f"@bounded input — {fixture['id']}")
     cite(fixture)
 
-    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
     tool_name = fixture["tool_name"]
 
     async def impl(**kwargs):
         return {"ok": True}
 
     impl.__name__ = tool_name
-    tool = bounded(schema=schema)(impl)
+    tool = bounded(schema=fixture["schema_fields"])(impl)
 
     try:
         await tool(**fixture["bad_kwargs"])
@@ -184,10 +170,8 @@ async def demo_bounded_scope() -> None:
     section(f"@bounded scope — {fixture['id']}")
     cite(fixture)
 
-    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
-
     @bounded(
-        schema=schema,
+        schema=fixture["schema_fields"],
         allowed_paths=fixture["allowed_paths"],
         path_param=fixture["path_param"],
     )
@@ -209,10 +193,10 @@ async def demo_bounded_output() -> None:
     section(f"@bounded output — {fixture['id']}")
     cite(fixture)
 
-    input_schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
-    output_schema = schema_from_fields(fixture["output_schema_fields"], model_name="Output")
-
-    @bounded(schema=input_schema, output_schema=output_schema)
+    @bounded(
+        schema=fixture["schema_fields"],
+        output_schema=fixture["output_schema_fields"],
+    )
     async def mcp_search(query: str):
         return fixture["bad_output"]
 
@@ -241,9 +225,7 @@ async def demo_llm_retry() -> None:
     section(f"ToolRunner LLM retry — {fixture['id']}")
     cite(fixture)
 
-    schema = schema_from_fields(fixture["schema_fields"], model_name="Input")
-
-    @bounded(schema=schema)
+    @bounded(schema=fixture["schema_fields"])
     async def replace_in_file(path: str, search: str, replace: str) -> dict:
         return {"path": path, "replaced": True}
 
