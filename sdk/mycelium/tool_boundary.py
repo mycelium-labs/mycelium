@@ -11,6 +11,8 @@ from typing import Any, ParamSpec, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from mycelium.schema import ToolSchema, fields_to_model
+
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -262,9 +264,9 @@ def tool_error_message(tool_call_id: str, llm_message: str) -> dict[str, str]:
 
 
 def bounded(
-    schema: type[BaseModel],
     *,
-    output_schema: type[BaseModel] | None = None,
+    schema: ToolSchema,
+    output_schema: ToolSchema | None = None,
     entity_param: str | None = None,
     entity_pattern: str | None = None,
     allowed_paths: list[str] | None = None,
@@ -273,13 +275,18 @@ def bounded(
     """
     Validate tool inputs (and optionally outputs and scope) around an async tool.
 
+    Pass field specs as plain dicts — no Pydantic types required in user code.
     Input/scope failures prevent the function from running.
     Output failures raise after the function returns; result is not propagated.
     """
 
     config = BoundedConfig(
-        input_schema=schema,
-        output_schema=output_schema,
+        input_schema=fields_to_model(schema, model_name="BoundedInput"),
+        output_schema=(
+            fields_to_model(output_schema, model_name="BoundedOutput")
+            if output_schema is not None
+            else None
+        ),
         entity_param=entity_param,
         entity_pattern=entity_pattern,
         allowed_paths=tuple(allowed_paths) if allowed_paths else None,
@@ -304,9 +311,9 @@ def bounded(
 
 
 def bounded_sync(
-    schema: type[BaseModel],
     *,
-    output_schema: type[BaseModel] | None = None,
+    schema: ToolSchema,
+    output_schema: ToolSchema | None = None,
     entity_param: str | None = None,
     entity_pattern: str | None = None,
     allowed_paths: list[str] | None = None,
@@ -315,8 +322,12 @@ def bounded_sync(
     """Sync variant of @bounded."""
 
     config = BoundedConfig(
-        input_schema=schema,
-        output_schema=output_schema,
+        input_schema=fields_to_model(schema, model_name="BoundedInput"),
+        output_schema=(
+            fields_to_model(output_schema, model_name="BoundedOutput")
+            if output_schema is not None
+            else None
+        ),
         entity_param=entity_param,
         entity_pattern=entity_pattern,
         allowed_paths=tuple(allowed_paths) if allowed_paths else None,

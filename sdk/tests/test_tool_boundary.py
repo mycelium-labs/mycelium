@@ -1,22 +1,30 @@
 import pytest
-from pydantic import BaseModel, Field
 
 from mycelium import ToolBoundaryError, bounded, bounded_sync
 
+FETCH_CUSTOMER_SCHEMA = {
+    "customer_id": {
+        "type": "string",
+        "required": True,
+        "min_length": 1,
+        "pattern": r"^c\d+$",
+    },
+}
 
-class FetchCustomerInput(BaseModel):
-    customer_id: str = Field(min_length=1, pattern=r"^c\d+$")
+CUSTOMER_RECORD_SCHEMA = {
+    "customer_id": {"type": "string", "required": True},
+    "name": {"type": "string", "required": True},
+}
 
-
-class CustomerRecord(BaseModel):
-    customer_id: str
-    name: str
+DELETE_FILE_SCHEMA = {
+    "path": {"type": "string", "required": True},
+}
 
 
 async def test_bounded_accepts_valid_input() -> None:
     calls = 0
 
-    @bounded(schema=FetchCustomerInput)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         nonlocal calls
         calls += 1
@@ -31,7 +39,7 @@ async def test_bounded_accepts_valid_input() -> None:
 async def test_bounded_raises_on_missing_field() -> None:
     calls = 0
 
-    @bounded(schema=FetchCustomerInput)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         nonlocal calls
         calls += 1
@@ -50,7 +58,7 @@ async def test_bounded_raises_on_missing_field() -> None:
 async def test_bounded_raises_on_null_value() -> None:
     calls = 0
 
-    @bounded(schema=FetchCustomerInput)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         nonlocal calls
         calls += 1
@@ -65,7 +73,7 @@ async def test_bounded_raises_on_null_value() -> None:
 
 
 async def test_bounded_raises_on_pattern_mismatch() -> None:
-    @bounded(schema=FetchCustomerInput)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         return {"customer_id": customer_id}
 
@@ -79,7 +87,7 @@ async def test_bounded_raises_on_pattern_mismatch() -> None:
 def test_bounded_sync_validates_before_call() -> None:
     calls = 0
 
-    @bounded_sync(schema=FetchCustomerInput)
+    @bounded_sync(schema=FETCH_CUSTOMER_SCHEMA)
     def fetch_customer(customer_id: str) -> dict:
         nonlocal calls
         calls += 1
@@ -94,7 +102,7 @@ def test_bounded_sync_validates_before_call() -> None:
 
 
 async def test_llm_message_is_actionable() -> None:
-    @bounded(schema=FetchCustomerInput)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         return {}
 
@@ -107,14 +115,10 @@ async def test_llm_message_is_actionable() -> None:
     assert "Expected:" in msg
 
 
-class DeleteFileInput(BaseModel):
-    path: str
-
-
 async def test_scope_gate_blocks_disallowed_path() -> None:
     calls = 0
 
-    @bounded(schema=DeleteFileInput, allowed_paths=["/workspace/src/"])
+    @bounded(schema=DELETE_FILE_SCHEMA, allowed_paths=["/workspace/src/"])
     async def delete_file(path: str) -> dict:
         nonlocal calls
         calls += 1
@@ -132,7 +136,7 @@ async def test_scope_gate_blocks_disallowed_path() -> None:
 
 async def test_entity_pattern_scope_gate() -> None:
     @bounded(
-        schema=FetchCustomerInput,
+        schema=FETCH_CUSTOMER_SCHEMA,
         entity_param="customer_id",
         entity_pattern=r"^c\d+$",
     )
@@ -148,7 +152,7 @@ async def test_entity_pattern_scope_gate() -> None:
 async def test_output_validation_blocks_bad_return() -> None:
     calls = 0
 
-    @bounded(schema=FetchCustomerInput, output_schema=CustomerRecord)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA, output_schema=CUSTOMER_RECORD_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         nonlocal calls
         calls += 1

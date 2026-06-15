@@ -1,5 +1,4 @@
 import pytest
-from pydantic import BaseModel, Field
 
 from mycelium import (
     ToolBoundaryError,
@@ -9,20 +8,25 @@ from mycelium import (
     bounded,
 )
 
+FETCH_CUSTOMER_SCHEMA = {
+    "customer_id": {
+        "type": "string",
+        "required": True,
+        "min_length": 1,
+        "pattern": r"^c\d+$",
+    },
+}
 
-class FetchCustomerInput(BaseModel):
-    customer_id: str = Field(min_length=1, pattern=r"^c\d+$")
-
-
-class CustomerRecord(BaseModel):
-    customer_id: str
-    name: str
+CUSTOMER_RECORD_SCHEMA = {
+    "customer_id": {"type": "string", "required": True},
+    "name": {"type": "string", "required": True},
+}
 
 
 async def test_runner_retries_output_validation() -> None:
     calls = 0
 
-    @bounded(schema=FetchCustomerInput, output_schema=CustomerRecord)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA, output_schema=CUSTOMER_RECORD_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         nonlocal calls
         calls += 1
@@ -38,7 +42,7 @@ async def test_runner_retries_output_validation() -> None:
 
 
 async def test_runner_enforces_allowlist() -> None:
-    @bounded(schema=FetchCustomerInput)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         return {"customer_id": customer_id}
 
@@ -55,7 +59,7 @@ async def test_runner_llm_retry_recovers_from_bad_input() -> None:
     calls = 0
     llm_calls = 0
 
-    @bounded(schema=FetchCustomerInput)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         nonlocal calls
         calls += 1
@@ -89,7 +93,7 @@ async def test_runner_llm_retry_recovers_from_bad_input() -> None:
 
 
 async def test_runner_exhausts_llm_retries() -> None:
-    @bounded(schema=FetchCustomerInput)
+    @bounded(schema=FETCH_CUSTOMER_SCHEMA)
     async def fetch_customer(customer_id: str) -> dict:
         return {"customer_id": customer_id}
 
