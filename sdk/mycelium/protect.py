@@ -4,22 +4,19 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Awaitable, Callable
-from typing import Any, ParamSpec, TypeVar
+from typing import Any
 
 from mycelium.cache import ToolCache
 from mycelium.session import get_cache
 
 _DEFAULT_TTL = 300.0
 
-P = ParamSpec("P")
-R = TypeVar("R")
-
 
 def _entity_id(entity_param: str | None, kwargs: dict[str, Any]) -> Any | None:
     return kwargs.get(entity_param) if entity_param else None
 
 
-def _run_cached(
+def _run_cached[**P, R](
     func: Callable[P, R],
     tool_name: str,
     tool_cache: ToolCache,
@@ -44,7 +41,7 @@ def _run_cached(
     return result
 
 
-async def _run_cached_async(
+async def _run_cached_async[**P, R](
     func: Callable[P, Awaitable[R]],
     tool_name: str,
     tool_cache: ToolCache,
@@ -79,7 +76,7 @@ def _mark_protected(
     wrapper._mycelium_ttl = ttl  # type: ignore[attr-defined]
 
 
-def protect(
+def protect[**P, R](
     entity_param: str | None = None,
     ttl: float = _DEFAULT_TTL,
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
@@ -107,7 +104,7 @@ def protect(
     return decorator
 
 
-def protect_sync(
+def protect_sync[**P, R](
     entity_param: str | None = None,
     ttl: float = _DEFAULT_TTL,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
