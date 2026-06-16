@@ -9,6 +9,7 @@ description = "Mycelium SDK — runtime failure prevention for AI agents"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2,<3",
+    "pyyaml>=6",
 ]
 
 [project.optional-dependencies]

@@ -151,3 +151,77 @@ result, messages = await runner.run_with_llm_retry(
 - Input, allowlist, and scope failures → append tool error to messages → LLM retry
 - Output failures → retry the tool up to `max_tool_retries` → then LLM retry
 - Raises `ToolBoundaryExhaustedError` when retries are used up
+
+## YAML configuration
+
+Declare guards in `mycelium.yaml` instead of sprinkling decorators through your code:
+
+```yaml
+# mycelium.yaml
+tools:
+  fetch_customer:
+    protect:
+      entity_param: customer_id
+      ttl: 60
+    bounded:
+      schema:
+        customer_id:
+          type: string
+          required: true
+          pattern: "^c\\d+$"
+      output_schema:
+        customer_id: {type: string, required: true}
+        name: {type: string, required: true}
+      allowed_paths:
+        - /workspace/src/
+
+  search_docs:
+    bounded:
+      schema:
+        query: {type: string, required: true}
+
+registry:
+  allowed:
+    - fetch_customer
+    - search_docs
+
+runner:
+  max_llm_retries: 2
+  max_tool_retries: 3
+
+history_guard:
+  max_tokens: 100000
+  max_messages: 1000
+
+message_validator:
+  enabled: true
+```
+
+Load it once and apply guards to your plain functions:
+
+```python
+from mycelium import load_config
+
+config = load_config("mycelium.yaml")
+
+@config.apply
+async def fetch_customer(customer_id: str) -> dict:
+    return await db.get(customer_id)
+
+@config.apply
+def search_docs(query: str) -> list[str]:
+    return docs.search(query)
+
+# Or wrap every configured tool in a module at once:
+import my_tools
+namespace = config.wrap_module(my_tools)
+
+# Registry, runner, and guards are built from the same config:
+registry = config.registry
+runner = config.build_runner()
+guard = config.build_history_guard()
+validator = config.build_message_validator()
+```
+
+Mycelium matches tools by function name, detects sync vs async automatically, and
+applies validation outside caching so invalid args never pollute the cache.

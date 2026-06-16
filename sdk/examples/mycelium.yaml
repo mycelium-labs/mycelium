@@ -1,0 +1,59 @@
+# Example Mycelium configuration.
+# Load with:
+#     from mycelium import load_config
+#     config = load_config("examples/mycelium.yaml")
+
+tools:
+  fetch_customer:
+    protect:
+      entity_param: customer_id
+      ttl: 60
+    bounded:
+      schema:
+        customer_id:
+          type: string
+          required: true
+          pattern: "^c\\d+$"
+      output_schema:
+        customer_id:
+          type: string
+          required: true
+        name:
+          type: string
+          required: true
+      allowed_paths:
+        - /workspace/src/
+      path_param: path
+
+  search_docs:
+    bounded:
+      schema:
+        query:
+          type: string
+          required: true
+
+  delete_file:
+    bounded:
+      schema:
+        path:
+          type: string
+          required: true
+      allowed_paths:
+        - /workspace/src/
+      path_param: path
+
+registry:
+  allowed:
+    - fetch_customer
+    - search_docs
+
+runner:
+  max_llm_retries: 2
+  max_tool_retries: 3
+
+history_guard:
+  max_tokens: 100000
+  max_messages: 1000
+
+message_validator:
+  enabled: true

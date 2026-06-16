@@ -1,5 +1,11 @@
 """Mycelium SDK — runtime failure prevention for AI agents."""
 
+from mycelium.config import (
+    ConfigError,
+    MyceliumConfig,
+    load_config,
+    load_config_from_string,
+)
 from mycelium.history_guard import HistoryGuard, HistoryTruncatedError
 from mycelium.message_validator import MessageValidationError, MessageValidator
 from mycelium.protect import protect, protect_sync
@@ -17,6 +23,10 @@ from mycelium.tool_runner import ToolRunner
 __version__ = "0.1.0"
 
 __all__ = [
+    "ConfigError",
+    "MyceliumConfig",
+    "load_config",
+    "load_config_from_string",
     "protect",
     "protect_sync",
     "Session",
