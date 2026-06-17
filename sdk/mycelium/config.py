@@ -10,6 +10,13 @@ from typing import Any
 
 import yaml
 
+from mycelium.action_ledger import (
+    FileLedgerStorage,
+    InMemoryLedgerStorage,
+    LedgerStorage,
+    ledger,
+    ledger_sync,
+)
 from mycelium.history_guard import HistoryGuard
 from mycelium.message_validator import MessageValidator
 from mycelium.protect import protect, protect_sync
@@ -29,9 +36,10 @@ class ToolConfig:
     name: str
     protect: dict[str, Any] | None = None
     bounded: dict[str, Any] | None = None
+    ledger: dict[str, Any] | None = None
 
     def is_noop(self) -> bool:
-        return self.protect is None and self.bounded is None
+        return self.protect is None and self.bounded is None and self.ledger is None
 
 
 @dataclass(frozen=True)
@@ -51,8 +59,8 @@ class MyceliumConfig:
         Looks up the tool by ``func.__name__``. If no config exists, the
         function is returned unchanged.
 
-        Guards are applied so that validation runs before caching:
-        ``@bounded`` is outermost and ``@protect`` is innermost.
+        Guard order (outermost first):
+        ``@ledger`` -> ``@bounded`` -> ``@protect`` -> ``func``
         """
         name = func.__name__
         tool_config = self.tools.get(name)
@@ -74,6 +82,13 @@ class MyceliumConfig:
                 func = bounded(**bounded_kwargs)(func)
             else:
                 func = bounded_sync(**bounded_kwargs)(func)
+
+        if tool_config.ledger is not None:
+            storage = self._build_ledger_storage(tool_config.ledger)
+            if is_async:
+                func = ledger(storage=storage)(func)
+            else:
+                func = ledger_sync(storage=storage)(func)
 
         return func
 
@@ -100,6 +115,19 @@ class MyceliumConfig:
         if not self.message_validator:
             return None
         return MessageValidator()
+
+    @staticmethod
+    def _build_ledger_storage(raw: dict[str, Any]) -> LedgerStorage:
+        """Build a LedgerStorage from tool ledger config."""
+        storage_type = raw.get("storage", "memory")
+        if storage_type == "file":
+            path = raw.get("path")
+            if not path:
+                raise ConfigError("ledger storage 'file' requires a 'path'")
+            return FileLedgerStorage(path)
+        if storage_type == "memory":
+            return InMemoryLedgerStorage()
+        raise ConfigError(f"unknown ledger storage type: {storage_type!r}")
 
     def wrap_module(self, module: Any) -> Any:
         """
@@ -135,13 +163,27 @@ def _parse_tool_config(name: str, raw: dict[str, Any] | None) -> ToolConfig:
 
     protect = raw.get("protect")
     bounded = raw.get("bounded")
+    ledger_raw = raw.get("ledger")
 
     if protect is not None and not isinstance(protect, dict):
         raise ConfigError(f"tool '{name}'.protect must be a mapping")
     if bounded is not None and not isinstance(bounded, dict):
         raise ConfigError(f"tool '{name}'.bounded must be a mapping")
 
-    return ToolConfig(name=name, protect=protect, bounded=bounded)
+    ledger = _normalize_ledger_config(name, ledger_raw)
+
+    return ToolConfig(name=name, protect=protect, bounded=bounded, ledger=ledger)
+
+
+def _normalize_ledger_config(name: str, raw: Any) -> dict[str, Any] | None:
+    """Convert user-friendly ledger config into a normalized dict."""
+    if raw is None or raw is False:
+        return None
+    if raw is True:
+        return {"storage": "memory"}
+    if isinstance(raw, dict):
+        return dict(raw)
+    raise ConfigError(f"tool '{name}'.ledger must be a bool or a mapping")
 
 
 def _parse_config(data: dict[str, Any]) -> MyceliumConfig:

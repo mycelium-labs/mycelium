@@ -1,4 +1,4 @@
-# Mycelium proof artifacts (AF-006 + AF-004)
+# Mycelium proof artifacts (AF-006 + AF-004 + AF-002 in research)
 
 Legitimate proof means: **cite a real issue → reproduce its failure class → show Mycelium catches or fixes it.**
 
@@ -25,6 +25,17 @@ This is not marketing copy or fake chat text. Each fixture links to a public Git
 | `langchain-35320-allowlist.json` | [langchain#35320](https://github.com/langchain-ai/langchain/issues/35320) | `ToolRegistry` | tool not in allowlist → `not_in_allowlist` |
 | `cline-8779-llm-retry-recovery.json` | [cline#8779](https://github.com/cline/cline/issues/8779) | `ToolRunner` | bad args → tool error → LLM retry with corrected kwargs |
 
+## AF-002 — observability black hole (`fixtures/af002/`)
+
+Next failure mode. Fixtures capture the real issues that v2 will prevent.
+
+| Fixture | Real issue | Component | Pattern |
+|---|---|---|---|
+| `langgraph-7417-duplicate-tool-execution.json` | [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417) | `ActionLedger` | long tool call redispatched because no durable in-flight record exists |
+| `crewai-5802-retry-idempotency.json` | [crewAI#5802](https://github.com/crewAIInc/crewAI/issues/5802) | `ActionLedger` | task retry re-executes already-completed side-effect tools |
+| `langgraph-5672-cancelled-state-loss.json` | [langgraph#5672](https://github.com/langchain-ai/langgraph/issues/5672) | `StateFlush` | streamed state lost on cancel because it was never checkpointed |
+| `autogen-7353-missing-audit-receipt.json` | [autogen#7353](https://github.com/microsoft/autogen/issues/7353) | `AuditReceipt` | traces/logs exist but are not auditor-verifiable |
+
 ## Run the demo
 
 ```bash
@@ -38,7 +49,7 @@ python proof/run_demo.py
 ## Run the proof tests
 
 ```bash
-pytest proof/test_proof.py proof/test_proof_af004.py -v
+pytest proof/test_proof.py proof/test_proof_af004.py proof/test_proof_af002.py -v
 ```
 
 ## How to add a new legitimate case

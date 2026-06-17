@@ -1,0 +1,16 @@
+{
+  "id": "langgraph-7417-duplicate-execution",
+  "source_url": "https://github.com/langchain-ai/langgraph/issues/7417",
+  "source_title": "Long tool calls (~180s+) silently re-executed from checkpoint on LangGraph Cloud",
+  "component": "ActionLedger",
+  "pattern": "A long-running tool call is redispatched because the runtime has no durable record that the original is still in flight; both complete, producing duplicate side effects and cost.",
+  "violation": "duplicate_execution",
+  "scenario": {
+    "tool_name": "subagent_task",
+    "tool_call_id": "call_subagent_1",
+    "args": {"task": "analyze_market", "duration_seconds": 300},
+    "runtime": "langgraph-cloud",
+    "redispatch_after_seconds": 180
+  },
+  "expected_guard": "Before invoking a side-effect tool, claim a durable execution idempotency key; if the same key is already marked in-flight, return the pending result instead of re-executing."
+}

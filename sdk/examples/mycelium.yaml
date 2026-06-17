@@ -33,6 +33,12 @@ tools:
           required: true
 
   delete_file:
+    # Ledger records every destructive side effect so retries/redispatches
+    # execute only once. Use `ledger: true` for in-memory, or file-backed
+    # persistence for cross-process/cross-run idempotency.
+    ledger:
+      storage: file
+      path: ./mycelium-ledger.json
     bounded:
       schema:
         path:
