@@ -1,5 +1,17 @@
 """Mycelium SDK — runtime failure prevention for AI agents."""
 
+from mycelium.action_ledger import (
+    ActionLedger,
+    FileLedgerStorage,
+    InMemoryLedgerStorage,
+    LedgerEntry,
+    LedgerError,
+    LedgerPendingError,
+    LedgerStorage,
+    get_ledger,
+    ledger,
+    ledger_sync,
+)
 from mycelium.config import (
     ConfigError,
     MyceliumConfig,
@@ -23,6 +35,16 @@ from mycelium.tool_runner import ToolRunner
 __version__ = "0.1.0"
 
 __all__ = [
+    "ActionLedger",
+    "FileLedgerStorage",
+    "InMemoryLedgerStorage",
+    "LedgerEntry",
+    "LedgerError",
+    "LedgerPendingError",
+    "LedgerStorage",
+    "get_ledger",
+    "ledger",
+    "ledger_sync",
     "ConfigError",
     "MyceliumConfig",
     "load_config",

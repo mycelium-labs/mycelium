@@ -30,11 +30,11 @@ Anyone building reliable AI agents — from solo developers shipping side projec
 | ID | Failure Mode | Description | Status |
 |---|---|---|---|
 | AF-001 | Hallucination cascade | Agent confidently acts on fabricated facts, compounding errors across tool calls | Future |
-| AF-002 | Observability black hole | Consequential actions leave no trace — auditing/debugging impossible | Future |
+| AF-002 | Observability black hole | Consequential actions leave no trace — auditing/debugging impossible | **v2** |
 | AF-003 | Infinite reasoning loops | Same reasoning cycle repeats; no progress, token burn | Future |
-| AF-004 | Tool misuse | Tool calls with invalid inputs or outside intended scope; silent failure or wrong side effects | Future |
+| AF-004 | Tool misuse | Tool calls with invalid inputs or outside intended scope; silent failure or wrong side effects | **v1 / shipped** |
 | AF-005 | Goal misalignment | Optimizes for a proxy objective, not user intent | Future |
-| AF-006 | Context corruption | Stale, truncated, or poisoned context → false picture of the world | **v0** |
+| AF-006 | Context corruption | Stale, truncated, or poisoned context → false picture of the world | **v0 / shipped** |
 | AF-007 | Premature termination | Stops before done; presents partial state as final | Future |
 | AF-008 | Cascading permission | Narrow permissions escalate transitively beyond intent | Future |
 | AF-009 | Instruction injection | Untrusted content hijacks instructions | Future |
@@ -104,21 +104,36 @@ response = await llm.ainvoke(messages)
 
 ## Post-v0 Roadmap
 
-### v1 — Tool Boundary Enforcement (AF-004)
+### v1 — Tool Boundary Enforcement (AF-004) [shipped]
 
 Tool misuse is the #1 failure mode by corpus frequency (575 occurrences). v1 adds:
 
 - **Typed tool boundaries** — validate tool inputs against schema before calling
 - **Scope enforcement** — tools declare what they're allowed to access, violations raise
 - **Output validation** — check tool returns match expected shape
+- **Tool registry / allowlists** — block calls to tools the agent is not authorized to invoke
+- **LLM retry recovery** — when a tool call is rejected, surface a structured error back to the LLM and retry with corrected arguments
 
-### v2 — Observability Hooks (AF-002)
+Shipped in SDK modules: `tool_boundary.py`, `tool_registry.py`, `tool_runner.py`. Proof suite: `proof/test_proof_af004.py`.
+
+### v2 — Observability Hooks (AF-002) [next]
 
 Agents take consequential actions with no trace. v2 adds:
 
 - **Audit trail** — every tool call, cache decision, and guard check logged
 - **Action verification** — confirm side effects actually happened
 - **Structured logging** — emit events that plug into existing observability stacks
+
+#### Top AF-002 cases to prove (grounded in real issues)
+
+| # | Case | Source | Failure pattern | What Mycelium prevents |
+|---|---|---|---|---|
+| 1 | Long tool calls silently re-executed from checkpoint | [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417) | Cloud runtime redispatches a still-running tool call because there's no durable "in-flight" execution record; both original and duplicate complete, causing 2-3x duplicate work/cost. | Durable action receipt / idempotency guard keyed before execution starts. |
+| 2 | Task retry re-executes already-completed tools | [crewAI#5802](https://github.com/crewAIInc/crewAI/issues/5802) | A tool succeeds, then a later failure triggers task retry; the framework has no record that the tool already ran, so payment/email/trade tools fire again. | Stable idempotency key + execution ledger; retries return the original result without re-invoking the side effect. |
+| 3 | Run cancellation loses streamed state | [langgraph#5672](https://github.com/langchain-ai/langgraph/issues/5672) | Streaming output is shown to the user but not yet checkpointed; on cancel, the backend rolls back to the last persisted checkpoint and the streamed output disappears. | Flush/persist in-progress state as a partial/aborted record on cancel or disconnect. |
+| 4 | No verifiable audit trail for multi-agent actions | [autogen#7353](https://github.com/microsoft/autogen/issues/7353) | Enterprise deployments need proof of which agent executed what, consumed/produced what data, and whether outputs were tampered with; current traces are not auditor-verifiable. | Tamper-evident, structured action receipts signed at execution time. |
+
+These four map directly to v2 components: **action ledger** (1, 2), **state flush on abort** (3), and **signed audit receipts** (4).
 
 ### v3 — Loop Detection (AF-003)
 
@@ -162,10 +177,12 @@ from mycelium import HistoryGuard               # if history grows large
 
 ### 5. Extensible failure mode registry
 
-Each failure mode is a module. v0 ships AF-006. Future versions slot in AF-001 through AF-009 without changing the core API.
+Each failure mode is a module. v0 ships AF-006, v1 ships AF-004, and v2 will ship AF-002. Future versions slot in AF-001, AF-003, and AF-005 through AF-009 without changing the core API.
 
 ## Wedge
 
-**Right now: only context corruption (AF-006).**
+**Shipped: AF-006 (context corruption) + AF-004 (tool boundary enforcement).**
 
-We start narrow and deep. Context corruption is the most common, most actionable, and most proven failure mode. We nail this first. Then we expand.
+**Next: AF-002 (observability black hole).**
+
+We start narrow and deep. Context corruption was the most common, most actionable, and most proven failure mode, so we nailed it first. Tool boundaries followed because every prevention decision (cache hit, validation failure, scope block) needs to be observable. Now we make those decisions auditable.

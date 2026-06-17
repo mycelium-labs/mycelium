@@ -1,6 +1,6 @@
 # Mycelium SDK
 
-Runtime failure prevention for AI agents. v0 covers context corruption (AF-006) and tool boundary enforcement (AF-004).
+Runtime failure prevention for AI agents. v0 covers context corruption (AF-006), v1 covers tool boundary enforcement (AF-004), and v2 covers the observability black hole (AF-002).
 
 ## Install
 
@@ -152,6 +152,46 @@ result, messages = await runner.run_with_llm_retry(
 - Output failures → retry the tool up to `max_tool_retries` → then LLM retry
 - Raises `ToolBoundaryExhaustedError` when retries are used up
 
+## Quickstart — AF-002
+
+```python
+from mycelium import ledger_sync
+
+@ledger_sync()
+def send_payment(amount: float, recipient: str) -> dict:
+    return gateway.charge(amount, recipient)
+
+# Same logical call executes only once.
+send_payment(amount=100.0, recipient="acct_123", request_id="invoice-42")
+send_payment(amount=100.0, recipient="acct_123", request_id="invoice-42")
+```
+
+Async tools:
+
+```python
+from mycelium import ledger
+
+@ledger()
+async def send_payment(amount: float, recipient: str) -> dict:
+    return await gateway.charge(amount, recipient)
+```
+
+## What `@ledger` / `ledger_sync` do
+
+- Record every tool invocation in a durable `ActionLedger`
+- Deduplicate retries and redispatches by `request_id` or LLM `tool_call_id`
+- Allow legitimate repeats when the request id differs
+- Persist failed attempts for audit and debugging
+
+Storage backends:
+
+```python
+from mycelium import ActionLedger, FileLedgerStorage, InMemoryLedgerStorage
+
+ledger = ActionLedger(storage=InMemoryLedgerStorage())
+ledger = ActionLedger(storage=FileLedgerStorage("./mycelium-ledger.json"))
+```
+
 ## YAML configuration
 
 Declare guards in `mycelium.yaml` instead of sprinkling decorators through your code:
@@ -179,6 +219,11 @@ tools:
     bounded:
       schema:
         query: {type: string, required: true}
+
+  send_payment:
+    ledger:
+      storage: file
+      path: ./mycelium-ledger.json
 
 registry:
   allowed:

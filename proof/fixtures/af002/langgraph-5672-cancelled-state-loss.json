@@ -1,0 +1,16 @@
+{
+  "id": "langgraph-5672-cancelled-state-loss",
+  "source_url": "https://github.com/langchain-ai/langgraph/issues/5672",
+  "source_title": "Run Cancellation Causes Loss of Streamed State Not Yet Persisted as a Checkpoint",
+  "component": "StateFlush",
+  "pattern": "Streaming output is rendered to the user but not yet checkpointed; cancellation rolls the thread back to the last persisted checkpoint and the streamed output vanishes.",
+  "violation": "state_lost_on_cancel",
+  "scenario": {
+    "streaming": true,
+    "last_checkpoint_seconds_ago": 5,
+    "streamed_content": "The answer is approximately 3.14159...",
+    "cancel_event": "user_abort",
+    "observed_after_resume": "last_checkpoint_content_only"
+  },
+  "expected_guard": "On cancel, disconnect, or fatal error, flush the current in-memory state to the ledger as a partial/aborted checkpoint so the thread resumes from what the user actually saw."
+}

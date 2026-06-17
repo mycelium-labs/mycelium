@@ -1,0 +1,16 @@
+{
+  "id": "crewai-5802-retry-idempotency",
+  "source_url": "https://github.com/crewAIInc/crewAI/issues/5802",
+  "source_title": "Tool re-execution on task retry has no idempotency guard — duplicate payments, emails, trades possible",
+  "component": "ActionLedger",
+  "pattern": "A tool executes successfully, a downstream failure triggers a task retry, and the framework re-invokes the tool because it never recorded that the call already completed.",
+  "violation": "duplicate_execution",
+  "scenario": {
+    "tool_name": "send_payment",
+    "args": {"amount": 100.0, "recipient": "acct_123"},
+    "first_result": "payment sent",
+    "retry_trigger": "downstream_validation_error",
+    "consequence": "double_charge"
+  },
+  "expected_guard": "Record every completed side-effect tool call in a durable ledger keyed by stable request id; on retry, return the ledgered result and skip execution."
+}

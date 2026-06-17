@@ -6,7 +6,9 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import tempfile
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "sdk"))
@@ -63,7 +65,7 @@ def demo_message_validator_repair(fixture_name: str) -> None:
         print("WITHOUT Mycelium: validate passed (unexpected)")
     except MessageValidationError as exc:
         print(f"WITHOUT Mycelium: validate raises {exc.violation!r} at message {exc.message_index}")
-        print(f"  → broken transcript would reach the LLM/API")
+        print("  → broken transcript would reach the LLM/API")
 
     repaired = validator.repair(messages)
     validator.validate(repaired)
@@ -244,12 +246,39 @@ async def demo_llm_retry() -> None:
         invoke_llm=invoke_llm,
         parse_tool_kwargs=parse_tool_kwargs,
     )
-    print(f"First call missing 'replace' → tool error appended → LLM retry")
+    print("First call missing 'replace' → tool error appended → LLM retry")
     print(f"WITH Mycelium: recovered and returned {result}")
 
 
+def demo_ledger_idempotency() -> None:
+    from mycelium import FileLedgerStorage, ledger_sync
+
+    section("AF-002 — durable action ledger")
+    print("Source: langgraph#7417 / crewAI#5802")
+    print("Pattern: retry/redispatch of a side-effect tool executes only once\n")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = FileLedgerStorage(Path(tmpdir) / "ledger.json")
+
+        @ledger_sync(storage=storage)
+        def send_payment(amount: float, recipient: str) -> dict[str, Any]:
+            print(f"  [EXECUTING] send_payment {amount} -> {recipient}")
+            return {"status": "sent"}
+
+        # Cloud redispatches the same logical tool call.
+        r1 = send_payment(
+            amount=100.0, recipient="acct_123", request_id="txn-42"
+        )
+        r2 = send_payment(
+            amount=100.0, recipient="acct_123", request_id="txn-42"
+        )
+        print(f"First call:  {r1}")
+        print(f"Redispatch:  {r2}")
+        print("WITH Mycelium: only one execution, duplicate prevented")
+
+
 def main() -> None:
-    print("Mycelium proof demo (AF-006 + AF-004)")
+    print("Mycelium proof demo (AF-006 + AF-004 + AF-002)")
     print("Each case cites a real GitHub issue and reproduces its failure class.")
 
     demo_message_validator_repair("langchain-36984-fc-call-duplicate.json")
@@ -270,8 +299,15 @@ def main() -> None:
     demo_allowlist()
     asyncio.run(demo_llm_retry())
 
+    print()
+    print("#" * 72)
+    print("# AF-002 — observability black hole")
+    print("#" * 72)
+
+    demo_ledger_idempotency()
+
     section("Done")
-    print("Run tests: pytest proof/test_proof.py proof/test_proof_af004.py -v")
+    print("Run tests: pytest proof/test_proof.py proof/test_proof_af004.py proof/test_proof_af002.py -v")
 
 
 if __name__ == "__main__":
