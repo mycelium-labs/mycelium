@@ -277,6 +277,28 @@ def demo_ledger_idempotency() -> None:
         print("WITH Mycelium: only one execution, duplicate prevented")
 
 
+def demo_task_ledger_idempotency() -> None:
+    from mycelium import TaskFileLedgerStorage, task_ledger_sync
+
+    section("AF-002 — task-level ledger")
+    print("Pattern: framework retries an entire completed task from scratch\n")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = TaskFileLedgerStorage(Path(tmpdir) / "tasks.json")
+
+        @task_ledger_sync(storage=storage, id_from=["invoice_id"])
+        def process_invoice(invoice_id: str) -> dict[str, Any]:
+            print(f"  [EXECUTING] process_invoice {invoice_id}")
+            return {"invoice_id": invoice_id, "status": "paid"}
+
+        # Framework retries the same task.
+        r1 = process_invoice(invoice_id="inv-42")
+        r2 = process_invoice(invoice_id="inv-42")
+        print(f"First run:  {r1}")
+        print(f"Retry:      {r2}")
+        print("WITH Mycelium: task body ran once, retry returned stored result")
+
+
 def main() -> None:
     print("Mycelium proof demo (AF-006 + AF-004 + AF-002)")
     print("Each case cites a real GitHub issue and reproduces its failure class.")
@@ -305,9 +327,13 @@ def main() -> None:
     print("#" * 72)
 
     demo_ledger_idempotency()
+    demo_task_ledger_idempotency()
 
     section("Done")
-    print("Run tests: pytest proof/test_proof.py proof/test_proof_af004.py proof/test_proof_af002.py -v")
+    print(
+        "Run tests: pytest proof/test_proof.py proof/test_proof_af004.py "
+        "proof/test_proof_af002.py proof/test_proof_af002_task.py -v"
+    )
 
 
 if __name__ == "__main__":
