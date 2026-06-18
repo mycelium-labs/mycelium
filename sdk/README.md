@@ -192,6 +192,45 @@ ledger = ActionLedger(storage=InMemoryLedgerStorage())
 ledger = ActionLedger(storage=FileLedgerStorage("./mycelium-ledger.json"))
 ```
 
+## Quickstart — AF-002 task-level ledger
+
+Stop entire tasks from re-running on framework-level retries:
+
+```python
+from mycelium import task_ledger_sync
+
+@task_ledger_sync()
+def process_invoice(invoice_id: str) -> dict:
+    customer = fetch_customer(customer_id=...)
+    payment = send_payment(...)
+    return {"invoice_id": invoice_id, "status": "paid"}
+
+# Framework retries the task with the same task_id
+process_invoice(invoice_id="inv-42", task_id="invoice-42")  # executes
+process_invoice(invoice_id="inv-42", task_id="invoice-42")  # returns stored result
+```
+
+Use `id_from` to derive the task id from business keys automatically:
+
+```python
+@task_ledger_sync(id_from=["invoice_id"])
+def process_invoice(invoice_id: str, amount: float) -> dict:
+    ...
+
+# Both calls map to the same task id because invoice_id is the same.
+process_invoice(invoice_id="inv-42", amount=100.0)
+process_invoice(invoice_id="inv-42", amount=200.0)  # returns first result
+```
+
+### Correction retries
+
+If a completed task produced a bad result and the LLM/agent needs to re-attempt it, use a **new task id**. The framework will normally generate fresh tool call ids for the new attempt, so the task re-executes cleanly.
+
+```python
+r1 = process_invoice(invoice_id="inv-42", task_id="invoice-42-attempt-1")  # bad result
+r2 = process_invoice(invoice_id="inv-42", task_id="invoice-42-attempt-2")  # fresh attempt
+```
+
 ## YAML configuration
 
 Declare guards in `mycelium.yaml` instead of sprinkling decorators through your code:
@@ -270,3 +309,5 @@ validator = config.build_message_validator()
 
 Mycelium matches tools by function name, detects sync vs async automatically, and
 applies validation outside caching so invalid args never pollute the cache.
+
+A complete commented template is available at `sdk/examples/mycelium.template.yaml`.

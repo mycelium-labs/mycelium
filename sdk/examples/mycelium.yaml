@@ -48,6 +48,14 @@ tools:
         - /workspace/src/
       path_param: path
 
+tasks:
+  process_invoice:
+    ledger:
+      storage: file
+      path: ./mycelium-task-ledger.json
+      id_from:
+        - invoice_id
+
 registry:
   allowed:
     - fetch_customer
