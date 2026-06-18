@@ -22,6 +22,18 @@ from mycelium.history_guard import HistoryGuard, HistoryTruncatedError
 from mycelium.message_validator import MessageValidationError, MessageValidator
 from mycelium.protect import protect, protect_sync
 from mycelium.session import Session
+from mycelium.task_ledger import (
+    TaskFileLedgerStorage,
+    TaskInMemoryLedgerStorage,
+    TaskLedger,
+    TaskLedgerEntry,
+    TaskLedgerError,
+    TaskLedgerPendingError,
+    TaskLedgerStorage,
+    get_task_ledger,
+    task_ledger,
+    task_ledger_sync,
+)
 from mycelium.tool_boundary import (
     ToolBoundaryError,
     ToolBoundaryExhaustedError,
@@ -45,6 +57,16 @@ __all__ = [
     "get_ledger",
     "ledger",
     "ledger_sync",
+    "TaskFileLedgerStorage",
+    "TaskInMemoryLedgerStorage",
+    "TaskLedger",
+    "TaskLedgerEntry",
+    "TaskLedgerError",
+    "TaskLedgerPendingError",
+    "TaskLedgerStorage",
+    "get_task_ledger",
+    "task_ledger",
+    "task_ledger_sync",
     "ConfigError",
     "MyceliumConfig",
     "load_config",

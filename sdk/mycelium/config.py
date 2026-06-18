@@ -20,6 +20,13 @@ from mycelium.action_ledger import (
 from mycelium.history_guard import HistoryGuard
 from mycelium.message_validator import MessageValidator
 from mycelium.protect import protect, protect_sync
+from mycelium.task_ledger import (
+    TaskFileLedgerStorage,
+    TaskInMemoryLedgerStorage,
+    TaskLedgerStorage,
+    task_ledger,
+    task_ledger_sync,
+)
 from mycelium.tool_boundary import bounded, bounded_sync
 from mycelium.tool_registry import ToolRegistry
 from mycelium.tool_runner import ToolRunner
@@ -43,6 +50,17 @@ class ToolConfig:
 
 
 @dataclass(frozen=True)
+class TaskConfig:
+    """Parsed configuration for a single task."""
+
+    name: str
+    ledger: dict[str, Any] | None = None
+
+    def is_noop(self) -> bool:
+        return self.ledger is None
+
+
+@dataclass(frozen=True)
 class MyceliumConfig:
     """Loaded Mycelium YAML configuration."""
 
@@ -51,6 +69,7 @@ class MyceliumConfig:
     runner_settings: dict[str, Any]
     history_guard: dict[str, Any] | None = None
     message_validator: bool = False
+    tasks: dict[str, TaskConfig] | None = None
 
     def apply(self, func: Callable[..., Any]) -> Callable[..., Any]:
         """
@@ -92,6 +111,23 @@ class MyceliumConfig:
 
         return func
 
+    def apply_task(self, func: Callable[..., Any]) -> Callable[..., Any]:
+        """Decorator that applies configured task-level guards to a function."""
+        name = func.__name__
+        if self.tasks is None:
+            return func
+        task_config = self.tasks.get(name)
+        if task_config is None or task_config.is_noop():
+            return func
+
+        is_async = inspect.iscoroutinefunction(func)
+        storage = self._build_task_ledger_storage(task_config.ledger)
+        id_from = list(task_config.ledger.get("id_from", [])) if task_config.ledger else []
+
+        if is_async:
+            return task_ledger(storage=storage, id_from=id_from)(func)
+        return task_ledger_sync(storage=storage, id_from=id_from)(func)
+
     @property
     def registry(self) -> ToolRegistry:
         """Build a ToolRegistry from the configured allowlist."""
@@ -128,6 +164,21 @@ class MyceliumConfig:
         if storage_type == "memory":
             return InMemoryLedgerStorage()
         raise ConfigError(f"unknown ledger storage type: {storage_type!r}")
+
+    @staticmethod
+    def _build_task_ledger_storage(raw: dict[str, Any] | None) -> TaskLedgerStorage:
+        """Build a TaskLedgerStorage from task ledger config."""
+        if raw is None:
+            return TaskInMemoryLedgerStorage()
+        storage_type = raw.get("storage", "memory")
+        if storage_type == "file":
+            path = raw.get("path")
+            if not path:
+                raise ConfigError("task ledger storage 'file' requires a 'path'")
+            return TaskFileLedgerStorage(path)
+        if storage_type == "memory":
+            return TaskInMemoryLedgerStorage()
+        raise ConfigError(f"unknown task ledger storage type: {storage_type!r}")
 
     def wrap_module(self, module: Any) -> Any:
         """
@@ -175,6 +226,17 @@ def _parse_tool_config(name: str, raw: dict[str, Any] | None) -> ToolConfig:
     return ToolConfig(name=name, protect=protect, bounded=bounded, ledger=ledger)
 
 
+def _parse_task_config(name: str, raw: dict[str, Any] | None) -> TaskConfig:
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"task '{name}' config must be a mapping")
+
+    ledger_raw = raw.get("ledger")
+    ledger = _normalize_ledger_config(name, ledger_raw)
+    return TaskConfig(name=name, ledger=ledger)
+
+
 def _normalize_ledger_config(name: str, raw: Any) -> dict[str, Any] | None:
     """Convert user-friendly ledger config into a normalized dict."""
     if raw is None or raw is False:
@@ -197,6 +259,14 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
     tools = {
         name: _parse_tool_config(name, cfg)
         for name, cfg in tools_raw.items()
+    }
+
+    tasks_raw = data.get("tasks", {})
+    if not isinstance(tasks_raw, dict):
+        raise ConfigError("'tasks' must be a mapping")
+    tasks = {
+        name: _parse_task_config(name, cfg)
+        for name, cfg in tasks_raw.items()
     }
 
     registry_raw = data.get("registry", {})
@@ -222,6 +292,7 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
 
     return MyceliumConfig(
         tools=tools,
+        tasks=tasks,
         registry_allowed=registry_allowed,
         runner_settings=runner_raw,
         history_guard=history_guard_raw,
