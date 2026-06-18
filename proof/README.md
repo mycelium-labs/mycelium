@@ -49,7 +49,7 @@ python proof/run_demo.py
 ## Run the proof tests
 
 ```bash
-pytest proof/test_proof.py proof/test_proof_af004.py proof/test_proof_af002.py -v
+pytest proof/test_proof.py proof/test_proof_af004.py proof/test_proof_af002.py proof/test_proof_af002_task.py -v
 ```
 
 ## How to add a new legitimate case
