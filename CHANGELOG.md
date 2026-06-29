@@ -4,6 +4,9 @@
 
 First production release. Ships three failure modes with YAML-first integration.
 
+### Requirements
+- Python **3.10+** (tested on 3.10, 3.11, 3.12, 3.13)
+
 ### AF-006 — Context corruption
 - `@protect` / `protect_sync` — TTL cache with per-entity keys
 - `Session` — per-run cache isolation

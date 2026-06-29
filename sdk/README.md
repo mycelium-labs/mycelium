@@ -2,9 +2,13 @@
 
 Runtime failure prevention for AI agents.
 
-**v1.0** ships three failure modes: context corruption (AF-006), tool boundary enforcement (AF-004), and observability black hole prevention (AF-002).
+**v1.0** ships three failure modes: context corruption (AF-006), tool boundary enforcement (AF-004), and **action traceability prevention** (AF-002).
+
+> **AF-002 is not an observability platform.** The failure mode is called "observability black hole" because agents act without durable records. Mycelium **prevents** that — via idempotency ledgers, state flush on cancel, and signed receipts — not via traces, spans, or dashboards. For post-hoc tracing, use Langfuse, Helicone, or Opik alongside Mycelium.
 
 ## Install
+
+**Requires Python 3.10+** (3.11+ recommended).
 
 ```bash
 pip install ./sdk
@@ -154,7 +158,11 @@ result, messages = await runner.run_with_llm_retry(
 - Output failures → retry the tool up to `max_tool_retries` → then LLM retry
 - Raises `ToolBoundaryExhaustedError` when retries are used up
 
-## Quickstart — AF-002
+## Quickstart — AF-002 (action traceability prevention)
+
+AF-002 prevents the "observability black hole" failure class: duplicate side effects, lost state on cancel, and actions that can't be audited. This is **not** distributed tracing — see the note at the top of this README.
+
+### Tool-level idempotency
 
 ```python
 from mycelium import ledger_sync

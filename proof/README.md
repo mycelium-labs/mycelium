@@ -27,6 +27,8 @@ This is not marketing copy or fake chat text. Each fixture links to a public Git
 
 ## AF-002 — observability black hole (`fixtures/af002/`)
 
+**Note:** This names the *failure class*, not a tracing product. Proofs show prevention guards (ledger, flush, receipt) — not dashboard-style observability.
+
 Shipped guards: `ActionLedger`, `TaskLedger`, `StateFlush`, `AuditReceipt`.
 
 Next failure mode. Fixtures capture the real issues that v2 prevents.

@@ -292,7 +292,7 @@ def _emit_tool_receipt(
         audit_emitter.emit_from_tool_entry(entry)
 
 
-def _run_ledgered[**P, R](
+def _run_ledgered(
     func: Callable[P, R],
     tool_name: str,
     ledger: ActionLedger,
@@ -318,7 +318,7 @@ def _run_ledgered[**P, R](
     return result
 
 
-async def _run_ledgered_async[**P, R](
+async def _run_ledgered_async(
     func: Callable[P, Awaitable[R]],
     tool_name: str,
     ledger: ActionLedger,

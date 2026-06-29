@@ -294,7 +294,7 @@ def _emit_task_receipt(
         audit_emitter.emit_from_task_entry(entry)
 
 
-def _run_task_ledgered[**P, R](
+def _run_task_ledgered(
     func: Callable[P, R],
     task_name: str,
     ledger: TaskLedger,
@@ -320,7 +320,7 @@ def _run_task_ledgered[**P, R](
     return result
 
 
-async def _run_task_ledgered_async[**P, R](
+async def _run_task_ledgered_async(
     func: Callable[P, Awaitable[R]],
     task_name: str,
     ledger: TaskLedger,
