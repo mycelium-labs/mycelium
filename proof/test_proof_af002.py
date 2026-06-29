@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import tempfile
 from pathlib import Path
@@ -11,12 +12,16 @@ import pytest
 
 from mycelium import (
     ActionLedger,
+    AuditReceiptEmitter,
     FileLedgerStorage,
+    FileStateFlushStorage,
     InMemoryLedgerStorage,
     LedgerPendingError,
     Session,
+    StateFlush,
     ledger,
     ledger_sync,
+    verify_receipt,
 )
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "af002"
@@ -163,3 +168,56 @@ def test_ledger_session_dedup_for_code_called_tools() -> None:
 
     assert len(executions) == 1
     assert r1 == r2
+
+
+def test_state_flush_preserves_streamed_content_on_cancel_langgraph_5672() -> None:
+    """Streamed state lost on cancel is flushed and available on resume."""
+    fixture = load_fixture("langgraph-5672-cancelled-state-loss.json")
+    scenario = fixture["scenario"]
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        flush = StateFlush(
+            storage=FileStateFlushStorage(Path(tmpdir) / "state.json"),
+            flush_on=["cancel"],
+        )
+
+        with pytest.raises(asyncio.CancelledError):
+            with flush.run("thread-cancel", use_session=False) as run:
+                run.record(
+                    {
+                        "streamed": scenario["streamed_content"],
+                        "messages": [{"role": "assistant", "content": scenario["streamed_content"]}],
+                    }
+                )
+                raise asyncio.CancelledError()
+
+        snapshot = flush.load("thread-cancel")
+        assert snapshot is not None
+        assert snapshot.status == "aborted"
+        assert snapshot.state["streamed"] == scenario["streamed_content"]
+        assert flush.resume("thread-cancel")["streamed"] == scenario["streamed_content"]
+
+
+def test_audit_receipt_emits_verifiable_record_autogen_7353() -> None:
+    """Ledgered side effects emit signed receipts suitable for external audit."""
+    fixture = load_fixture("autogen-7353-missing-audit-receipt.json")
+    scenario = fixture["scenario"]
+    emitter = AuditReceiptEmitter(agent_id=scenario["agents"][0], signing_key="audit-test-key")
+
+    @ledger_sync(audit_emitter=emitter)
+    def payment_authorization(amount: float, recipient: str) -> dict[str, Any]:
+        return {"authorized": True, "recipient": recipient, "amount": amount}
+
+    payment_authorization(
+        amount=100.0,
+        recipient="acct_enterprise",
+        request_id="delegation-1",
+    )
+
+    receipts = emitter.storage.list_all()
+    assert len(receipts) == 1
+    receipt = receipts[0]
+    assert receipt.action_kind == "tool"
+    assert receipt.status == "completed"
+    assert verify_receipt(receipt, "audit-test-key")
+    assert receipt.inputs["kwargs"]["recipient"] == "acct_enterprise"

@@ -4,3 +4,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 *.egg-info/
+dist/
+.env
+.env.*
+!.env.example
+.cache/
+proof/fixtures/af002/_hf_af002_index.json

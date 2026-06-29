@@ -4,13 +4,20 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mycelium-sdk"
-version = "0.1.0"
-description = "Mycelium SDK — runtime failure prevention for AI agents"
+version = "1.0.0"
+description = "Mycelium SDK — runtime failure prevention for AI agents (AF-006, AF-004, AF-002)"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2,<3",
     "pyyaml>=6",
 ]
+
+[project.urls]
+Homepage = "https://github.com/mycelium-labs/mycelium"
+Repository = "https://github.com/mycelium-labs/mycelium"
+Issues = "https://github.com/mycelium-labs/mycelium/issues"
 
 [project.optional-dependencies]
 dev = [

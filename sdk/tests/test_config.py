@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -263,3 +264,182 @@ tools:
 def test_load_config_missing_file_raises() -> None:
     with pytest.raises(ConfigError):
         load_config("/nonexistent/mycelium.yaml")
+
+
+def test_state_flush_and_audit_receipt_factories() -> None:
+    yaml_text = """
+state_flush:
+  storage: memory
+  flush_on:
+    - cancel
+    - error
+
+audit_receipt:
+  agent_id: payment-agent
+  signing_key: test-key
+  storage: memory
+"""
+    config = load_config_from_string(yaml_text)
+    state_flush = config.build_state_flush()
+    audit = config.build_audit_receipt()
+
+    assert state_flush is not None
+    assert audit is not None
+    assert audit.agent_id == "payment-agent"
+
+
+def test_apply_tool_with_audit_receipt_from_yaml() -> None:
+    yaml_text = """
+action_ledger:
+  storage: memory
+  tools:
+    - send_payment
+
+audit_receipt:
+  agent_id: payment-agent
+  signing_key: test-key
+  storage: memory
+  auto: true
+
+tools:
+  send_payment: {}
+"""
+    config = load_config_from_string(yaml_text)
+
+    @config.apply
+    def send_payment(amount: float, recipient: str) -> dict[str, str]:
+        return {"status": "sent"}
+
+    send_payment(amount=10.0, recipient="acct_1", request_id="pay-1")
+    audit = config.build_audit_receipt()
+    assert audit is not None
+    assert len(audit.storage.list_all()) == 1
+
+
+def test_global_action_ledger_and_ledger_true() -> None:
+    yaml_text = """
+action_ledger:
+  storage: file
+  path: /tmp/ledger.json
+
+tools:
+  send_payment:
+    ledger: true
+"""
+    config = load_config_from_string(yaml_text)
+    tool = config.tools["send_payment"]
+    assert tool.ledger == {"storage": "file", "path": "/tmp/ledger.json"}
+
+
+def test_registry_auto_from_tools() -> None:
+    yaml_text = """
+tools:
+  fetch_customer:
+    bounded:
+      schema:
+        customer_id: {type: string, required: true}
+  search_docs:
+    bounded:
+      schema:
+        query: {type: string, required: true}
+
+registry:
+  auto: true
+"""
+    config = load_config_from_string(yaml_text)
+    assert set(config.registry_allowed) == {"fetch_customer", "search_docs"}
+
+
+def test_instrument_applies_tools_and_tasks() -> None:
+    yaml_text = """
+action_ledger:
+  storage: memory
+  tools:
+    - send_payment
+
+task_ledger:
+  storage: memory
+  tasks:
+    - process_invoice
+
+tools:
+  send_payment: {}
+
+tasks:
+  process_invoice:
+    ledger: true
+    id_from:
+      - invoice_id
+"""
+    config = load_config_from_string(yaml_text)
+
+    class FakeModule:
+        def send_payment(self, amount: float, recipient: str) -> dict[str, str]:
+            return {"status": "sent"}
+
+        def process_invoice(self, invoice_id: str) -> dict[str, str]:
+            return {"invoice_id": invoice_id, "status": "paid"}
+
+    namespace = config.instrument(FakeModule())
+    namespace.send_payment(amount=1.0, recipient="a", request_id="x")
+    r1 = namespace.process_invoice(invoice_id="inv-1")
+    r2 = namespace.process_invoice(invoice_id="inv-1")
+    assert r1 == r2
+
+
+def test_task_id_from_top_level_yaml() -> None:
+    yaml_text = """
+task_ledger:
+  storage: memory
+
+tasks:
+  process_invoice:
+    ledger: true
+    id_from:
+      - invoice_id
+"""
+    config = load_config_from_string(yaml_text)
+    task = config.tasks["process_invoice"]
+    assert task.ledger is not None
+    assert task.ledger.get("id_from") == ["invoice_id"]
+
+
+def test_prepare_messages_records_active_state_flush() -> None:
+    yaml_text = """
+state_flush:
+  storage: memory
+
+message_validator:
+  enabled: true
+"""
+    config = load_config_from_string(yaml_text)
+    messages = [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "hi"},
+    ]
+
+    with config.run("thread-100") as run:
+        prepared = config.prepare_messages(messages)
+        assert prepared[0]["role"] == "user"
+        assert run.state["messages"] == prepared
+
+
+def test_config_run_scope_with_state_flush() -> None:
+    yaml_text = """
+state_flush:
+  storage: memory
+  flush_on:
+    - cancel
+"""
+    config = load_config_from_string(yaml_text)
+
+    with pytest.raises(asyncio.CancelledError):
+        with config.run("thread-99") as run:
+            run.record({"streamed": "chunk"})
+            raise asyncio.CancelledError()
+
+    state_flush = config.build_state_flush()
+    assert state_flush is not None
+    snapshot = state_flush.load("thread-99")
+    assert snapshot is not None
+    assert snapshot.state["streamed"] == "chunk"

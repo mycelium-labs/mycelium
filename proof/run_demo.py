@@ -299,6 +299,54 @@ def demo_task_ledger_idempotency() -> None:
         print("WITH Mycelium: task body ran once, retry returned stored result")
 
 
+def demo_state_flush_cancel() -> None:
+    import asyncio
+
+    from mycelium import FileStateFlushStorage, StateFlush
+
+    section("AF-002 — state flush on cancel")
+    print("Source: langgraph#5672")
+    print("Pattern: streamed output lost on cancel because it was never checkpointed\n")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        flush = StateFlush(
+            storage=FileStateFlushStorage(Path(tmpdir) / "state.json"),
+            flush_on=["cancel"],
+        )
+
+        try:
+            with flush.run("thread-42", use_session=False) as run:
+                run.record({"streamed": "The answer is approximately 3.14159..."})
+                raise asyncio.CancelledError()
+        except asyncio.CancelledError:
+            pass
+
+        resumed = flush.resume("thread-42")
+        print(f"After cancel/resume: {resumed}")
+        print("WITH Mycelium: user-visible streamed content survives cancel")
+
+
+def demo_audit_receipt() -> None:
+    from mycelium import AuditReceiptEmitter, ledger_sync, verify_receipt
+
+    section("AF-002 — signed audit receipt")
+    print("Source: autogen#7353")
+    print("Pattern: traces exist but are not auditor-verifiable\n")
+
+    emitter = AuditReceiptEmitter(agent_id="agent_a", signing_key="demo-key")
+
+    @ledger_sync(audit_emitter=emitter)
+    def payment_authorization(amount: float, recipient: str) -> dict[str, Any]:
+        print(f"  [EXECUTING] authorize {amount} for {recipient}")
+        return {"authorized": True}
+
+    payment_authorization(amount=100.0, recipient="acct_123", request_id="pay-99")
+    receipt = emitter.storage.list_all()[0]
+    print(f"Receipt id: {receipt.receipt_id}")
+    print(f"Verified:   {verify_receipt(receipt, 'demo-key')}")
+    print("WITH Mycelium: tamper-evident receipt emitted for audit/compliance")
+
+
 def main() -> None:
     print("Mycelium proof demo (AF-006 + AF-004 + AF-002)")
     print("Each case cites a real GitHub issue and reproduces its failure class.")
@@ -328,6 +376,8 @@ def main() -> None:
 
     demo_ledger_idempotency()
     demo_task_ledger_idempotency()
+    demo_state_flush_cancel()
+    demo_audit_receipt()
 
     section("Done")
     print(

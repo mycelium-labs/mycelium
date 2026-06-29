@@ -27,7 +27,9 @@ This is not marketing copy or fake chat text. Each fixture links to a public Git
 
 ## AF-002 — observability black hole (`fixtures/af002/`)
 
-Next failure mode. Fixtures capture the real issues that v2 will prevent.
+Shipped guards: `ActionLedger`, `TaskLedger`, `StateFlush`, `AuditReceipt`.
+
+Next failure mode. Fixtures capture the real issues that v2 prevents.
 
 | Fixture | Real issue | Component | Pattern |
 |---|---|---|---|
