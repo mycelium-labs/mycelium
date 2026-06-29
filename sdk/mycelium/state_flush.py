@@ -134,7 +134,13 @@ class _FlushRun:
     def state(self) -> dict[str, Any]:
         return dict(self._state)
 
-    def flush(self, status: SnapshotStatus, *, reason: str | None = None, error: str | None = None) -> StateSnapshot:
+    def flush(
+        self,
+        status: SnapshotStatus,
+        *,
+        reason: str | None = None,
+        error: str | None = None,
+    ) -> StateSnapshot:
         snapshot = StateSnapshot(
             run_id=self._run_id,
             status=status,
@@ -217,7 +223,12 @@ class _StateFlushContext(AbstractContextManager[_FlushRun]):
         self._token = _active_flush_run.set(self._run)
         return self._run
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, *_: Any) -> bool:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        *_: Any,
+    ) -> bool:
         try:
             if self._run is not None and not self._run._flushed:
                 if exc is None:
@@ -228,7 +239,8 @@ class _StateFlushContext(AbstractContextManager[_FlushRun]):
                         self._run.flush("aborted", reason="cancel", error=str(exc))
                 else:
                     if self._flush._should_flush("error"):
-                        self._run.flush("error", reason="error", error=f"{exc_type.__name__}: {exc}")
+                        error_msg = f"{exc_type.__name__}: {exc}"
+                        self._run.flush("error", reason="error", error=error_msg)
         finally:
             if self._session is not None:
                 self._session.__exit__(exc_type, exc, None)
