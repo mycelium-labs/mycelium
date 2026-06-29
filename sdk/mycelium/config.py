@@ -20,9 +20,9 @@ from mycelium.action_ledger import (
 )
 from mycelium.audit_receipt import (
     AuditReceiptEmitter,
+    AuditReceiptStorage,
     FileAuditReceiptStorage,
     InMemoryAuditReceiptStorage,
-    AuditReceiptStorage,
     resolve_signing_key,
 )
 from mycelium.history_guard import HistoryGuard

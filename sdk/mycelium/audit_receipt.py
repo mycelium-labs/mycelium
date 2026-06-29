@@ -8,7 +8,7 @@ import json
 import os
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -222,7 +222,9 @@ class AuditReceiptEmitter:
         return receipt
 
 
-def resolve_signing_key(*, signing_key: str | None = None, signing_key_env: str | None = None) -> str:
+def resolve_signing_key(
+    *, signing_key: str | None = None, signing_key_env: str | None = None
+) -> str:
     if signing_key:
         return signing_key
     if signing_key_env:
