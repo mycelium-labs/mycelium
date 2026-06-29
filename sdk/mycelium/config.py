@@ -98,6 +98,7 @@ class MyceliumConfig:
     action_ledger: dict[str, Any] | None = None
     task_ledger_defaults: dict[str, Any] | None = None
     _audit_emitter: AuditReceiptEmitter | None = None
+    _state_flush: StateFlush | None = None
     _audit_auto: bool = False
 
     def apply(self, func: Callable[..., Any]) -> Callable[..., Any]:
@@ -195,21 +196,26 @@ class MyceliumConfig:
         """Build a StateFlush if the config declares one."""
         if self.state_flush is None:
             return None
+        if self._state_flush is not None:
+            return self._state_flush
         storage = self._build_state_flush_storage(self.state_flush)
         flush_on = self.state_flush.get("flush_on")
         if flush_on is not None and not isinstance(flush_on, list):
             raise ConfigError("'state_flush.flush_on' must be a list")
         flush_on_complete = bool(self.state_flush.get("flush_on_complete", True))
-        return StateFlush(
+        self._state_flush = StateFlush(
             storage=storage,
             flush_on=list(flush_on) if flush_on is not None else None,
             flush_on_complete=flush_on_complete,
         )
+        return self._state_flush
 
     def build_audit_receipt(self) -> AuditReceiptEmitter | None:
         """Build an AuditReceiptEmitter if the config declares one."""
         if self.audit_receipt is None:
             return None
+        if self._audit_emitter is not None:
+            return self._audit_emitter
         agent_id = self.audit_receipt.get("agent_id")
         if not agent_id:
             raise ConfigError("'audit_receipt.agent_id' is required")
@@ -218,11 +224,12 @@ class MyceliumConfig:
             signing_key_env=self.audit_receipt.get("signing_key_env"),
         )
         storage = self._build_audit_receipt_storage(self.audit_receipt)
-        return AuditReceiptEmitter(
+        self._audit_emitter = AuditReceiptEmitter(
             agent_id=str(agent_id),
             signing_key=signing_key,
             storage=storage,
         )
+        return self._audit_emitter
 
     def prepare_messages(self, messages: list[Any]) -> list[Any]:
         """
@@ -279,15 +286,13 @@ class MyceliumConfig:
         return self._shared_audit_emitter()
 
     def _shared_audit_emitter(self) -> AuditReceiptEmitter:
-        if self._audit_emitter is None:
-            emitter = self.build_audit_receipt()
-            if emitter is None:
-                raise ConfigError(
-                    "audit_receipt is enabled for a tool/task but no global "
-                    "'audit_receipt' section is configured"
-                )
-            self._audit_emitter = emitter
-        return self._audit_emitter
+        emitter = self.build_audit_receipt()
+        if emitter is None:
+            raise ConfigError(
+                "audit_receipt is enabled for a tool/task but no global "
+                "'audit_receipt' section is configured"
+            )
+        return emitter
 
     @staticmethod
     def _build_ledger_storage(raw: dict[str, Any]) -> LedgerStorage:
