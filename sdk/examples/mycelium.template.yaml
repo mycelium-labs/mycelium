@@ -1,37 +1,69 @@
 # Mycelium configuration template.
-# Copy this file to mycelium.yaml, uncomment the sections you need, and edit
-# the values for your agent.
 #
-# Load with:
-#     from mycelium import load_config
-#     config = load_config("mycelium.yaml")
+# Minimum integration (3 steps):
+#   1. Copy to mycelium.yaml and edit the global sections below.
+#   2. List your tool/task function names under tools/tasks (or use
+#      action_ledger.tools / task_ledger.tasks to auto-apply ledgers).
+#   3. In code:
+#        config = load_config("mycelium.yaml")
+#        tools = config.instrument(my_tools)
+#        with config.run(thread_id):
+#            messages = config.prepare_messages(messages)
+#            ...
 #
-# Then apply guards to your plain tool functions:
-#     @config.apply
-#     async def fetch_customer(customer_id: str) -> dict:
-#         ...
-#
-# Apply task-level guards to task functions:
-#     @config.apply_task
-#     def process_invoice(invoice_id: str) -> dict:
-#         ...
+# Separate sections per failure mode — globals inherit into per-tool `ledger: true`.
 
 # ---------------------------------------------------------------------------
-# tools
+# action_ledger  (AF-002 — tool-level idempotency)
 # ---------------------------------------------------------------------------
-# Each key is the exact name of a Python function. Mycelium matches the
-# function by __name__ and applies the configured guards automatically.
+action_ledger:
+  storage: file
+  path: ./mycelium-ledger.json
+  # Auto-apply ledger to side-effect tools without repeating storage config:
+  tools:
+    - send_payment
+    - delete_file
 
+# ---------------------------------------------------------------------------
+# task_ledger  (AF-002 — task-level idempotency)
+# ---------------------------------------------------------------------------
+task_ledger:
+  storage: file
+  path: ./mycelium-task-ledger.json
+  tasks:
+    - process_invoice
+
+# ---------------------------------------------------------------------------
+# state_flush  (AF-002 — cancel/disconnect safety)
+# ---------------------------------------------------------------------------
+state_flush:
+  storage: file
+  path: ./mycelium-state.json
+  flush_on:
+    - cancel
+    - disconnect
+    - error
+
+# ---------------------------------------------------------------------------
+# audit_receipt  (AF-002 — signed receipts)
+# ---------------------------------------------------------------------------
+# When present, all ledgered tools/tasks get receipts unless opted out with
+# `audit_receipt: false`.
+audit_receipt:
+  agent_id: payment-agent
+  signing_key_env: MYCELIUM_SIGNING_KEY
+  storage: file
+  path: ./mycelium-receipts.jsonl
+  auto: true
+
+# ---------------------------------------------------------------------------
+# tools  (AF-004 + AF-006 per-tool; AF-002 via action_ledger above)
+# ---------------------------------------------------------------------------
 tools:
-  # Example read-only lookup tool with caching and input validation.
   fetch_customer:
-    # AF-006: TTL cache. Refetch after ttl seconds. entity_param separates
-    # cache entries by entity id (e.g. customer_id).
     protect:
       entity_param: customer_id
       ttl: 60
-
-    # AF-004: Validate inputs/outputs and scope before/after the tool runs.
     bounded:
       schema:
         customer_id:
@@ -45,17 +77,9 @@ tools:
         name:
           type: string
           required: true
-      entity_param: customer_id
-      entity_pattern: "^c\\d+$"
 
-  # Example side-effect tool with idempotency guard.
   send_payment:
-    # AF-002: durable action ledger. Prevents duplicate side effects when the
-    # framework retries or redispatches the same logical tool call.
-    ledger:
-      storage: file
-      path: ./mycelium-ledger.json
-
+    # Inherits file ledger + audit receipt from global sections.
     bounded:
       schema:
         amount:
@@ -65,12 +89,7 @@ tools:
           type: string
           required: true
 
-  # Example file-system tool with path scope.
   delete_file:
-    ledger:
-      storage: file
-      path: ./mycelium-ledger.json
-
     bounded:
       schema:
         path:
@@ -80,7 +99,6 @@ tools:
         - /workspace/src/
       path_param: path
 
-  # Example simple search tool.
   search_docs:
     bounded:
       schema:
@@ -91,61 +109,34 @@ tools:
 # ---------------------------------------------------------------------------
 # tasks
 # ---------------------------------------------------------------------------
-# AF-002: task-level idempotency. Wraps an entire agent/task function so a
-# completed task is not re-run on framework-level retries.
-#
-# Same task id  -> returns stored result (no re-execution).
-# New task id   -> executes the task body.
-#
-# For correction retries after a bad result, use a NEW task id. The framework
-# will normally generate fresh tool call ids for the new attempt.
-
 tasks:
   process_invoice:
-    ledger:
-      storage: file
-      path: ./mycelium-task-ledger.json
-      # id_from builds the stable task id from these kwargs.
-      # e.g. process_invoice:invoice_id=42
-      id_from:
-        - invoice_id
+    ledger: true
+    id_from:
+      - invoice_id
 
 # ---------------------------------------------------------------------------
-# registry
+# registry  (AF-004)
 # ---------------------------------------------------------------------------
-# AF-004: allowlist of tool names the agent is permitted to call. Any tool
-# not in this list is blocked with ToolBoundaryError("not_in_allowlist").
-
 registry:
-  allowed:
-    - fetch_customer
-    - send_payment
-    - search_docs
-    # - delete_file
+  auto: true
 
 # ---------------------------------------------------------------------------
-# runner
+# runner  (AF-004)
 # ---------------------------------------------------------------------------
-# AF-004: retry behavior for ToolRunner. Only used if you explicitly build
-# a runner from the config.
-
 runner:
   max_llm_retries: 2
   max_tool_retries: 3
 
 # ---------------------------------------------------------------------------
-# history_guard
+# history_guard  (AF-006)
 # ---------------------------------------------------------------------------
-# AF-006: validate message history before it reaches the LLM.
-
 history_guard:
   max_tokens: 100000
   max_messages: 1000
 
 # ---------------------------------------------------------------------------
-# message_validator
+# message_validator  (AF-006)
 # ---------------------------------------------------------------------------
-# AF-006: repair/validate raw message lists before the LLM call.
-
 message_validator:
   enabled: true

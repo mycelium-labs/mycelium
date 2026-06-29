@@ -30,7 +30,7 @@ Anyone building reliable AI agents — from solo developers shipping side projec
 | ID | Failure Mode | Description | Status |
 |---|---|---|---|
 | AF-001 | Hallucination cascade | Agent confidently acts on fabricated facts, compounding errors across tool calls | Future |
-| AF-002 | Observability black hole | Consequential actions leave no trace — auditing/debugging impossible | **v2** |
+| AF-002 | Observability black hole | Consequential actions leave no trace — auditing/debugging impossible | **v1.0 / shipped** |
 | AF-003 | Infinite reasoning loops | Same reasoning cycle repeats; no progress, token burn | Future |
 | AF-004 | Tool misuse | Tool calls with invalid inputs or outside intended scope; silent failure or wrong side effects | **v1 / shipped** |
 | AF-005 | Goal misalignment | Optimizes for a proxy objective, not user intent | Future |
@@ -116,7 +116,7 @@ Tool misuse is the #1 failure mode by corpus frequency (575 occurrences). v1 add
 
 Shipped in SDK modules: `tool_boundary.py`, `tool_registry.py`, `tool_runner.py`. Proof suite: `proof/test_proof_af004.py`.
 
-### v2 — Observability Hooks (AF-002) [next]
+### v2 — Observability Hooks (AF-002) [shipped]
 
 Agents take consequential actions with no trace. v2 adds:
 
@@ -177,12 +177,12 @@ from mycelium import HistoryGuard               # if history grows large
 
 ### 5. Extensible failure mode registry
 
-Each failure mode is a module. v0 ships AF-006, v1 ships AF-004, and v2 will ship AF-002. Future versions slot in AF-001, AF-003, and AF-005 through AF-009 without changing the core API.
+Each failure mode is a module. v1.0 ships AF-006, AF-004, and AF-002. Future versions slot in AF-001, AF-003, and AF-005 through AF-009 without changing the core API.
 
 ## Wedge
 
-**Shipped: AF-006 (context corruption) + AF-004 (tool boundary enforcement).**
+**Shipped (v1.0): AF-006 + AF-004 + AF-002.**
 
-**Next: AF-002 (observability black hole).**
+Three failure modes, ~13 sub-patterns, YAML-first integration. Context corruption first (most common), tool boundaries second (most enforceable), observability/idempotency third (makes prevention auditable).
 
-We start narrow and deep. Context corruption was the most common, most actionable, and most proven failure mode, so we nailed it first. Tool boundaries followed because every prevention decision (cache hit, validation failure, scope block) needs to be observable. Now we make those decisions auditable.
+**Next:** AF-003 (infinite reasoning loops) or human audit of AF-004/AF-007 classifier noise.

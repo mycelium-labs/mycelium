@@ -12,9 +12,12 @@ import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 from mycelium.session import Session, _session_var
+
+if TYPE_CHECKING:
+    from mycelium.audit_receipt import AuditReceiptEmitter
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -277,12 +280,25 @@ def _drop_ledger_keys(kwargs: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in kwargs.items() if k not in ("request_id", "tool_call_id")}
 
 
+def _emit_tool_receipt(
+    audit_emitter: AuditReceiptEmitter | None,
+    ledger: ActionLedger,
+    request_id: str,
+) -> None:
+    if audit_emitter is None:
+        return
+    entry = ledger.get(request_id)
+    if entry is not None and entry.status in ("completed", "failed"):
+        audit_emitter.emit_from_tool_entry(entry)
+
+
 def _run_ledgered[**P, R](
     func: Callable[P, R],
     tool_name: str,
     ledger: ActionLedger,
     args: P.args,
     kwargs: P.kwargs,
+    audit_emitter: AuditReceiptEmitter | None = None,
 ) -> R:
     request_id = ledger.derive_request_id(tool_name, args, kwargs)
     clean_kwargs = _drop_ledger_keys(kwargs)
@@ -294,9 +310,11 @@ def _run_ledgered[**P, R](
         result = func(*args, **clean_kwargs)
     except Exception as exc:
         ledger.fail(request_id, exc)
+        _emit_tool_receipt(audit_emitter, ledger, request_id)
         raise
 
     ledger.complete(request_id, result)
+    _emit_tool_receipt(audit_emitter, ledger, request_id)
     return result
 
 
@@ -306,6 +324,7 @@ async def _run_ledgered_async[**P, R](
     ledger: ActionLedger,
     args: P.args,
     kwargs: P.kwargs,
+    audit_emitter: AuditReceiptEmitter | None = None,
 ) -> R:
     request_id = ledger.derive_request_id(tool_name, args, kwargs)
     clean_kwargs = _drop_ledger_keys(kwargs)
@@ -317,9 +336,11 @@ async def _run_ledgered_async[**P, R](
         result = await func(*args, **clean_kwargs)
     except Exception as exc:
         ledger.fail(request_id, exc)
+        _emit_tool_receipt(audit_emitter, ledger, request_id)
         raise
 
     ledger.complete(request_id, result)
+    _emit_tool_receipt(audit_emitter, ledger, request_id)
     return result
 
 
@@ -330,6 +351,7 @@ def _mark_ledgered(wrapper: Callable[..., Any], ledger: ActionLedger) -> None:
 
 def ledger(
     storage: LedgerStorage | None = None,
+    audit_emitter: AuditReceiptEmitter | None = None,
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Decorator that records async tool invocations in an ActionLedger."""
 
@@ -341,7 +363,7 @@ def ledger(
         @functools.wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             return await _run_ledgered_async(
-                func, tool_name, action_ledger, args, kwargs
+                func, tool_name, action_ledger, args, kwargs, audit_emitter
             )
 
         _mark_ledgered(wrapper, action_ledger)
@@ -352,6 +374,7 @@ def ledger(
 
 def ledger_sync(
     storage: LedgerStorage | None = None,
+    audit_emitter: AuditReceiptEmitter | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator that records sync tool invocations in an ActionLedger."""
 
@@ -362,7 +385,9 @@ def ledger_sync(
 
         @functools.wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            return _run_ledgered(func, tool_name, action_ledger, args, kwargs)
+            return _run_ledgered(
+                func, tool_name, action_ledger, args, kwargs, audit_emitter
+            )
 
         _mark_ledgered(wrapper, action_ledger)
         return wrapper

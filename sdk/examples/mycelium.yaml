@@ -1,7 +1,26 @@
-# Example Mycelium configuration.
-# Load with:
-#     from mycelium import load_config
-#     config = load_config("examples/mycelium.yaml")
+# Minimal example — global AF-002 sections + per-tool schemas only.
+
+action_ledger:
+  storage: file
+  path: ./mycelium-ledger.json
+  tools:
+    - delete_file
+
+task_ledger:
+  storage: file
+  path: ./mycelium-task-ledger.json
+  tasks:
+    - process_invoice
+
+state_flush:
+  storage: file
+  path: ./mycelium-state.json
+
+audit_receipt:
+  agent_id: demo-agent
+  signing_key: dev-only-key
+  storage: file
+  path: ./mycelium-receipts.jsonl
 
 tools:
   fetch_customer:
@@ -21,9 +40,6 @@ tools:
         name:
           type: string
           required: true
-      allowed_paths:
-        - /workspace/src/
-      path_param: path
 
   search_docs:
     bounded:
@@ -33,12 +49,6 @@ tools:
           required: true
 
   delete_file:
-    # Ledger records every destructive side effect so retries/redispatches
-    # execute only once. Use `ledger: true` for in-memory, or file-backed
-    # persistence for cross-process/cross-run idempotency.
-    ledger:
-      storage: file
-      path: ./mycelium-ledger.json
     bounded:
       schema:
         path:
@@ -50,16 +60,12 @@ tools:
 
 tasks:
   process_invoice:
-    ledger:
-      storage: file
-      path: ./mycelium-task-ledger.json
-      id_from:
-        - invoice_id
+    ledger: true
+    id_from:
+      - invoice_id
 
 registry:
-  allowed:
-    - fetch_customer
-    - search_docs
+  auto: true
 
 runner:
   max_llm_retries: 2

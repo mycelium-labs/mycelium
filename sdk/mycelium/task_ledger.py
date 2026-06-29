@@ -12,7 +12,10 @@ import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
+
+if TYPE_CHECKING:
+    from mycelium.audit_receipt import AuditReceiptEmitter
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -279,12 +282,25 @@ def _drop_task_keys(kwargs: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in kwargs.items() if k not in ("task_id", "run_id")}
 
 
+def _emit_task_receipt(
+    audit_emitter: AuditReceiptEmitter | None,
+    ledger: TaskLedger,
+    request_id: str,
+) -> None:
+    if audit_emitter is None:
+        return
+    entry = ledger.get(request_id)
+    if entry is not None and entry.status in ("completed", "failed"):
+        audit_emitter.emit_from_task_entry(entry)
+
+
 def _run_task_ledgered[**P, R](
     func: Callable[P, R],
     task_name: str,
     ledger: TaskLedger,
     args: P.args,
     kwargs: P.kwargs,
+    audit_emitter: AuditReceiptEmitter | None = None,
 ) -> R:
     request_id = ledger.derive_request_id(task_name, args, kwargs)
     clean_kwargs = _drop_task_keys(kwargs)
@@ -296,9 +312,11 @@ def _run_task_ledgered[**P, R](
         result = func(*args, **clean_kwargs)
     except Exception as exc:
         ledger.fail(request_id, exc)
+        _emit_task_receipt(audit_emitter, ledger, request_id)
         raise
 
     ledger.complete(request_id, result)
+    _emit_task_receipt(audit_emitter, ledger, request_id)
     return result
 
 
@@ -308,6 +326,7 @@ async def _run_task_ledgered_async[**P, R](
     ledger: TaskLedger,
     args: P.args,
     kwargs: P.kwargs,
+    audit_emitter: AuditReceiptEmitter | None = None,
 ) -> R:
     request_id = ledger.derive_request_id(task_name, args, kwargs)
     clean_kwargs = _drop_task_keys(kwargs)
@@ -319,9 +338,11 @@ async def _run_task_ledgered_async[**P, R](
         result = await func(*args, **clean_kwargs)
     except Exception as exc:
         ledger.fail(request_id, exc)
+        _emit_task_receipt(audit_emitter, ledger, request_id)
         raise
 
     ledger.complete(request_id, result)
+    _emit_task_receipt(audit_emitter, ledger, request_id)
     return result
 
 
@@ -334,6 +355,7 @@ def task_ledger(
     storage: TaskLedgerStorage | None = None,
     *,
     id_from: list[str] | None = None,
+    audit_emitter: AuditReceiptEmitter | None = None,
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Decorator that records async task executions in a TaskLedger."""
 
@@ -345,7 +367,7 @@ def task_ledger(
         @functools.wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             return await _run_task_ledgered_async(
-                func, task_name, task_ledger_instance, args, kwargs
+                func, task_name, task_ledger_instance, args, kwargs, audit_emitter
             )
 
         _mark_task_ledgered(wrapper, task_ledger_instance)
@@ -358,6 +380,7 @@ def task_ledger_sync(
     storage: TaskLedgerStorage | None = None,
     *,
     id_from: list[str] | None = None,
+    audit_emitter: AuditReceiptEmitter | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator that records sync task executions in a TaskLedger."""
 
@@ -368,7 +391,9 @@ def task_ledger_sync(
 
         @functools.wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            return _run_task_ledgered(func, task_name, task_ledger_instance, args, kwargs)
+            return _run_task_ledgered(
+                func, task_name, task_ledger_instance, args, kwargs, audit_emitter
+            )
 
         _mark_task_ledgered(wrapper, task_ledger_instance)
         return wrapper

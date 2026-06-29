@@ -1,6 +1,8 @@
 # Mycelium SDK
 
-Runtime failure prevention for AI agents. v0 covers context corruption (AF-006), v1 covers tool boundary enforcement (AF-004), and v2 covers the observability black hole (AF-002).
+Runtime failure prevention for AI agents.
+
+**v1.0** ships three failure modes: context corruption (AF-006), tool boundary enforcement (AF-004), and observability black hole prevention (AF-002).
 
 ## Install
 
@@ -233,81 +235,76 @@ r2 = process_invoice(invoice_id="inv-42", task_id="invoice-42-attempt-2")  # fre
 
 ## YAML configuration
 
-Declare guards in `mycelium.yaml` instead of sprinkling decorators through your code:
+Separate sections per failure mode. Global AF-002 settings inherit into tools/tasks
+so you do not repeat storage paths on every function.
+
+**Minimum integration (3 steps):**
 
 ```yaml
-# mycelium.yaml
+# mycelium.yaml — global sections (configure once)
+action_ledger:
+  storage: file
+  path: ./mycelium-ledger.json
+  tools: [send_payment]          # auto-ledger side-effect tools
+
+task_ledger:
+  storage: file
+  path: ./mycelium-task-ledger.json
+  tasks: [process_invoice]
+
+state_flush:
+  storage: file
+  path: ./mycelium-state.json
+
+audit_receipt:
+  agent_id: my-agent
+  signing_key_env: MYCELIUM_SIGNING_KEY
+  storage: file
+  path: ./mycelium-receipts.jsonl
+
+# Per-tool: only what differs (schemas, cache, etc.)
 tools:
   fetch_customer:
-    protect:
-      entity_param: customer_id
-      ttl: 60
+    protect: {entity_param: customer_id, ttl: 60}
     bounded:
       schema:
-        customer_id:
-          type: string
-          required: true
-          pattern: "^c\\d+$"
-      output_schema:
-        customer_id: {type: string, required: true}
-        name: {type: string, required: true}
-      allowed_paths:
-        - /workspace/src/
-
-  search_docs:
-    bounded:
-      schema:
-        query: {type: string, required: true}
+        customer_id: {type: string, required: true, pattern: "^c\\d+$"}
 
   send_payment:
-    ledger:
-      storage: file
-      path: ./mycelium-ledger.json
+    bounded:
+      schema:
+        amount: {type: number, required: true}
+        recipient: {type: string, required: true}
+
+tasks:
+  process_invoice:
+    ledger: true
+    id_from: [invoice_id]
 
 registry:
-  allowed:
-    - fetch_customer
-    - search_docs
-
-runner:
-  max_llm_retries: 2
-  max_tool_retries: 3
+  auto: true                     # allowlist = all configured tools
 
 history_guard:
   max_tokens: 100000
-  max_messages: 1000
 
 message_validator:
   enabled: true
 ```
 
-Load it once and apply guards to your plain functions:
-
 ```python
 from mycelium import load_config
+import my_tools
 
 config = load_config("mycelium.yaml")
+tools = config.instrument(my_tools)   # one call wraps tools + tasks
 
-@config.apply
-async def fetch_customer(customer_id: str) -> dict:
-    return await db.get(customer_id)
-
-@config.apply
-def search_docs(query: str) -> list[str]:
-    return docs.search(query)
-
-# Or wrap every configured tool in a module at once:
-import my_tools
-namespace = config.wrap_module(my_tools)
-
-# Registry, runner, and guards are built from the same config:
-registry = config.registry
-runner = config.build_runner()
-guard = config.build_history_guard()
-validator = config.build_message_validator()
+with config.run(thread_id):
+    messages = config.prepare_messages(messages)  # AF-006 + auto state flush
+    ...
 ```
 
-Mycelium matches tools by function name, detects sync vs async automatically, and
-applies validation outside caching so invalid args never pollute the cache.
+`ledger: true` inherits from `action_ledger` / `task_ledger`. When `audit_receipt`
+is configured with `auto: true` (default), all ledgered tools/tasks get signed
+receipts automatically.
 
-A complete commented template is available at `sdk/examples/mycelium.template.yaml`.
+Legacy per-tool style still works — see `sdk/examples/mycelium.template.yaml`.

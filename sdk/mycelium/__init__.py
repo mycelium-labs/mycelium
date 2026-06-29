@@ -12,6 +12,14 @@ from mycelium.action_ledger import (
     ledger,
     ledger_sync,
 )
+from mycelium.audit_receipt import (
+    AuditReceiptEmitter,
+    AuditReceiptError,
+    AuditReceiptRecord,
+    FileAuditReceiptStorage,
+    InMemoryAuditReceiptStorage,
+    verify_receipt,
+)
 from mycelium.config import (
     ConfigError,
     MyceliumConfig,
@@ -22,6 +30,13 @@ from mycelium.history_guard import HistoryGuard, HistoryTruncatedError
 from mycelium.message_validator import MessageValidationError, MessageValidator
 from mycelium.protect import protect, protect_sync
 from mycelium.session import Session
+from mycelium.state_flush import (
+    FileStateFlushStorage,
+    InMemoryStateFlushStorage,
+    StateFlush,
+    StateFlushError,
+    StateSnapshot,
+)
 from mycelium.task_ledger import (
     TaskFileLedgerStorage,
     TaskInMemoryLedgerStorage,
@@ -44,7 +59,7 @@ from mycelium.tool_boundary import (
 from mycelium.tool_registry import ToolRegistry
 from mycelium.tool_runner import ToolRunner
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "ActionLedger",
@@ -57,6 +72,12 @@ __all__ = [
     "get_ledger",
     "ledger",
     "ledger_sync",
+    "AuditReceiptEmitter",
+    "AuditReceiptError",
+    "AuditReceiptRecord",
+    "FileAuditReceiptStorage",
+    "InMemoryAuditReceiptStorage",
+    "verify_receipt",
     "TaskFileLedgerStorage",
     "TaskInMemoryLedgerStorage",
     "TaskLedger",
@@ -74,6 +95,11 @@ __all__ = [
     "protect",
     "protect_sync",
     "Session",
+    "StateFlush",
+    "StateFlushError",
+    "StateSnapshot",
+    "FileStateFlushStorage",
+    "InMemoryStateFlushStorage",
     "MessageValidator",
     "MessageValidationError",
     "HistoryGuard",
