@@ -120,6 +120,7 @@ class _FlushRun:
         self._flush = flush
         self._run_id = run_id
         self._state: dict[str, Any] = {}
+        self._flushed = False
 
     @property
     def run_id(self) -> str:
@@ -142,6 +143,7 @@ class _FlushRun:
             error=error,
         )
         self._flush._storage.set(snapshot)
+        self._flushed = True
         return snapshot
 
     def complete(self) -> StateSnapshot:
@@ -217,7 +219,7 @@ class _StateFlushContext(AbstractContextManager[_FlushRun]):
 
     def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, *_: Any) -> bool:
         try:
-            if self._run is not None:
+            if self._run is not None and not self._run._flushed:
                 if exc is None:
                     if self._flush._flush_on_complete:
                         self._run.complete()
