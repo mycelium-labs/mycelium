@@ -20,7 +20,7 @@ Anyone building reliable AI agents — from solo developers shipping side projec
 
 ## What We Are NOT Building
 
-- **Not an observability platform.** Langfuse, Helicone, and Opik already do post-hoc tracing. We prevent, not observe.
+- **Not an observability platform.** Langfuse, Helicone, and Opik do post-hoc tracing and dashboards. Mycelium prevents failures at runtime. AF-002 is named after the *failure mode* (actions leave no durable record), not the product category — we ship idempotency ledgers and signed receipts, not spans and trace UIs.
 - **Not a runtime monitor.** agentmw wraps clients and catches failures mid-flight. We prevent them from happening.
 - **Not a fixer.** We don't repair broken agents. We make sure context is healthy before it reaches the LLM.
 - **Not framework-specific.** We work with raw message lists. No LangChain, CrewAI, or AutoGen dependency.
@@ -116,13 +116,17 @@ Tool misuse is the #1 failure mode by corpus frequency (575 occurrences). v1 add
 
 Shipped in SDK modules: `tool_boundary.py`, `tool_registry.py`, `tool_runner.py`. Proof suite: `proof/test_proof_af004.py`.
 
-### v2 — Observability Hooks (AF-002) [shipped]
+### AF-002 — Action traceability prevention [shipped]
 
-Agents take consequential actions with no trace. v2 adds:
+The **failure** is called "observability black hole": agents take consequential actions with no durable, trustworthy record. Mycelium does **not** ship a tracing platform — it ships **prevention guards**:
 
-- **Audit trail** — every tool call, cache decision, and guard check logged
-- **Action verification** — confirm side effects actually happened
-- **Structured logging** — emit events that plug into existing observability stacks
+| Guard | Prevents |
+|-------|----------|
+| **ActionLedger / TaskLedger** | Duplicate side effects on retry or redispatch |
+| **StateFlush** | Streamed state lost when a run is cancelled before checkpoint |
+| **AuditReceipt** | Actions that exist in logs but can't be verified by an auditor |
+
+Receipts and ledgers are **tamper-evident prevention artifacts**, not a replacement for Langfuse/Helicone/Opik. Use those tools for post-hoc traces; use Mycelium to stop the failure from happening and leave a durable proof when it matters.
 
 #### Top AF-002 cases to prove (grounded in real issues)
 
@@ -183,6 +187,6 @@ Each failure mode is a module. v1.0 ships AF-006, AF-004, and AF-002. Future ver
 
 **Shipped (v1.0): AF-006 + AF-004 + AF-002.**
 
-Three failure modes, ~13 sub-patterns, YAML-first integration. Context corruption first (most common), tool boundaries second (most enforceable), observability/idempotency third (makes prevention auditable).
+Three failure modes, ~13 sub-patterns, YAML-first integration. Context corruption first (most common), tool boundaries second (most enforceable), action traceability third (idempotency + receipts — prevention, not tracing).
 
 **Next:** AF-003 (infinite reasoning loops) or human audit of AF-004/AF-007 classifier noise.
