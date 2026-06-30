@@ -159,28 +159,6 @@ mycelium/
 
 The PyPI wheel does not include `sdk/tests/`.
 
-## Develop
-
-```bash
-git clone https://github.com/mycelium-labs/mycelium.git
-cd mycelium/sdk
-pip install -e ".[dev]"
-pytest tests/ -v
-ruff check mycelium tests
-```
-
-Publish: tag `v*` triggers PyPI release via GitHub Actions.
-
-## Docs
-
-| Doc | Description |
-|-----|-------------|
-| [Handbook](docs/index.html) | Install, API, context/tools/actions examples, YAML |
-| [SDK reference](sdk/README.md) | Full API, storage backends, `ToolRunner` retry loop |
-| [Changelog](CHANGELOG.md) | Release history |
-
-**GitHub Pages:** Settings → Pages → source **main**, folder **/docs**. Serves `docs/index.html` at your repo URL.
-
 ## License
 
 MIT. See [LICENSE](LICENSE).
