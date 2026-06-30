@@ -17,7 +17,7 @@ from mycelium import ledger_sync
 def subagent_task(task: str) -> dict:
     return run_slow_subagent(task)
 
-# Pass tool_call_id from LangGraph — redispatch returns the cached result
+# Pass tool_call_id from LangGraph; redispatch returns the cached result
 subagent_task(task="analyze_market", tool_call_id=call["id"])
 ```
 
@@ -33,17 +33,13 @@ def subagent_task(task: str) -> dict:
     return run_slow_subagent(task)
 ```
 
-**LangGraph guide:** [`docs/integrations/langgraph.md`](https://github.com/mycelium-labs/mycelium/blob/main/docs/integrations/langgraph.md)
-
-> **Not observability.** Langfuse shows what happened *after*. Mycelium prevents duplicate execution *during* the run. Use both if you want traces and guards.
-
 ## What else it does
 
 | Problem | What Mycelium does |
 |---------|-------------------|
-| **Stale or broken context** | TTL cache, message repair, history limits — agent sees fresh, valid data |
-| **Bad or unauthorized tool calls** | Validate inputs/outputs, allowlists, scoped paths — block before execution |
-| **Duplicate side effects on retry** | Idempotency ledgers, state flush on cancel, signed receipts — pay once, not twice |
+| **Stale or broken context** | TTL cache, message repair, history limits; agent sees fresh, valid data |
+| **Bad or unauthorized tool calls** | Validate inputs/outputs, allowlists, scoped paths; block before execution |
+| **Duplicate side effects on retry** | Idempotency ledgers, state flush on cancel, signed receipts; pay once, not twice |
 
 Framework-agnostic. Raw message lists and plain Python functions (LangGraph, CrewAI, OpenAI tool loops, etc.).
 
@@ -58,7 +54,7 @@ mycelium init --full       # all guards, commented examples
 mycelium demo              # terminal demo of langgraph#7417
 ```
 
-## Quickstart — stale context & broken transcripts
+## Quickstart: stale context & broken transcripts
 
 ```python
 from mycelium import protect, Session
@@ -87,8 +83,8 @@ with Session():
 
 ## What `@protect` / `protect_sync` / `Session` do
 
-- `@protect` / `protect_sync` — TTL cache with per-entity keys; auto-refetch when stale; clear on error
-- `Session` — one cache per agent run; use in production to prevent cross-request leakage
+- `@protect` / `protect_sync`: TTL cache with per-entity keys; auto-refetch when stale; clear on error
+- `Session`: one cache per agent run; use in production to prevent cross-request leakage
 
 ## MessageValidator
 
@@ -118,7 +114,7 @@ guard.check_for_drops(processed_messages)  # after framework trimming
 
 Raises on token overflow, message count limits, duplicate turns, and silent message drops.
 
-## Quickstart — tool boundaries
+## Quickstart: tool boundaries
 
 ```python
 from mycelium import bounded, ToolRegistry, ToolRunner
@@ -157,14 +153,14 @@ def fetch_customer(customer_id: str) -> dict:
     return db.get(customer_id)
 ```
 
-Field spec keys: `type` (`string`, `integer`, `number`, `boolean`), `required`, `pattern`, `min_length`, `max_length`. You pass plain dicts — Mycelium validates internally; no Pydantic imports in your code.
+Field spec keys: `type` (`string`, `integer`, `number`, `boolean`), `required`, `pattern`, `min_length`, `max_length`. You pass plain dicts; Mycelium validates internally; no Pydantic imports in your code.
 
 ## What `@bounded` / `bounded_sync` do
 
-- `@bounded` / `bounded_sync` — validate tool args against your field spec **before** the function runs
-- `output_schema` — validate the return value **after** the function runs; bad results are not propagated
-- `allowed_paths` / `entity_pattern` — user-defined scope gates (path prefixes, entity ID format)
-- On failure, raises `ToolBoundaryError` with `llm_message` for the agent loop — does not retry by itself
+- `@bounded` / `bounded_sync`: validate tool args against your field spec **before** the function runs
+- `output_schema`: validate the return value **after** the function runs; bad results are not propagated
+- `allowed_paths` / `entity_pattern`: user-defined scope gates (path prefixes, entity ID format)
+- On failure, raises `ToolBoundaryError` with `llm_message` for the agent loop; does not retry by itself
 
 ## ToolRegistry
 
@@ -202,7 +198,7 @@ result, messages = await runner.run_with_llm_retry(
 - Output failures → retry the tool up to `max_tool_retries` → then LLM retry
 - Raises `ToolBoundaryExhaustedError` when retries are used up
 
-## Quickstart — idempotency & audit receipts
+## Quickstart: idempotency & audit receipts
 
 Stop duplicate payments, emails, and API calls when the framework retries. Persist state on cancel. This is **runtime prevention**, not distributed tracing.
 
@@ -258,7 +254,7 @@ ledger = ActionLedger(storage=PostgresLedgerStorage("postgresql://localhost/myce
 
 Optional extras: `pip install 'mycelium-runtime[redis]'` or `pip install 'mycelium-runtime[postgres]'`.
 
-## Quickstart — task-level idempotency
+## Quickstart: task-level idempotency
 
 Stop entire tasks from re-running on framework-level retries:
 
@@ -305,7 +301,7 @@ so you do not repeat storage paths on every function.
 **Minimum integration (3 steps):**
 
 ```yaml
-# mycelium.yaml — global sections (configure once)
+# mycelium.yaml: global sections (configure once)
 action_ledger:
   storage: file
   path: ./mycelium-ledger.json
@@ -371,7 +367,7 @@ with config.run(thread_id):
 is configured with `auto: true` (default), all ledgered tools/tasks get signed
 receipts automatically.
 
-Legacy per-tool style still works — run `mycelium init` for the full annotated template.
+Legacy per-tool style still works; run `mycelium init` for the full annotated template.
 
 ---
 

@@ -1,9 +1,9 @@
-# Mycelium quickstart — stop duplicate tool execution on LangGraph retry.
+# Mycelium quickstart: stop duplicate tool execution on LangGraph retry.
 #
 # Scaffolded with:  mycelium init
 # Full template:    mycelium init --full
 #
-# Real bug: langgraph#7417 — long tool calls redispatched while still running.
+# Real bug: langgraph#7417: long tool calls redispatched while still running.
 #
 # Next:
 #   1. Rename subagent_task to match your Python function.

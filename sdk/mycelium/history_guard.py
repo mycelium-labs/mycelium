@@ -1,5 +1,5 @@
 """
-HistoryGuard — validates message history before LLM calls.
+HistoryGuard: validates message history before LLM calls.
 
 Covers token overflow, silent message drops, and duplicate turns.
 """

@@ -1,4 +1,4 @@
-"""TaskLedger — AF-002 task-level durable records and idempotency guard."""
+"""TaskLedger: task-level durable records and idempotency guard."""
 
 from __future__ import annotations
 

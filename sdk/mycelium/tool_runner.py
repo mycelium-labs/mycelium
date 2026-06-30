@@ -1,4 +1,4 @@
-"""ToolRunner — AF-004 retry orchestration with optional LLM recovery."""
+"""ToolRunner: retry orchestration with optional LLM recovery."""
 
 from __future__ import annotations
 

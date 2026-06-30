@@ -233,7 +233,7 @@ class MyceliumConfig:
 
     def prepare_messages(self, messages: list[Any]) -> list[Any]:
         """
-        Run configured AF-006 guards on a message list before the LLM call.
+        Run configured message and history guards on a message list before the LLM call.
 
         When a StateFlush run is active, the validated messages are recorded
         automatically so developers do not need manual ``run.record()`` calls.
@@ -256,9 +256,9 @@ class MyceliumConfig:
         """
         Enter an agent run scope.
 
-        Nests Session (AF-006 cache isolation) and StateFlush (AF-002) when
-        configured. Returns the StateFlush run handle, or a no-op handle when
-        state_flush is not configured.
+        Nests Session (cache isolation) and StateFlush when configured.
+        Returns the StateFlush run handle, or a no-op handle when state_flush
+        is not configured.
         """
         state_flush = self.build_state_flush()
         if state_flush is not None:

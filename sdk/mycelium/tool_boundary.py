@@ -1,4 +1,4 @@
-"""@bounded — AF-004 tool boundary validation (input, output, scope)."""
+"""@bounded: tool boundary validation (input, output, scope)."""
 
 from __future__ import annotations
 
@@ -275,7 +275,7 @@ def bounded(
     """
     Validate tool inputs (and optionally outputs and scope) around an async tool.
 
-    Pass field specs as plain dicts — no Pydantic types required in user code.
+    Pass field specs as plain dicts: no Pydantic types required in user code.
     Input/scope failures prevent the function from running.
     Output failures raise after the function returns; result is not propagated.
     """

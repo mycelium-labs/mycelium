@@ -14,4 +14,4 @@ build/
 !.env.example
 .cache/
 proof/fixtures/af002/_hf_af002_index.json
-docs/launch/
+randm/
