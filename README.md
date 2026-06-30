@@ -33,72 +33,66 @@ Use Mycelium **with** your existing observability stack if you want both. Myceli
 
 **Requires Python 3.10+** (3.11+ recommended).
 
+**The bug:** LangGraph redispatches a tool call on retry while the original is still running → duplicate cost and side effects ([langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417)).
+
 ```bash
 pip install mycelium-runtime
-mycelium init                    # creates ./mycelium.yaml in your project
-# or: mycelium init --minimal
+mycelium init                    # quickstart config for your side-effect tool
+mycelium demo                    # see without / with Mycelium
 ```
 
 ```python
-from mycelium import load_config
-import my_tools
+from mycelium import ledger_sync
 
-config = load_config("mycelium.yaml")
-tools = config.instrument(my_tools)
-
-with config.run(thread_id):
-    messages = config.prepare_messages(messages)
-    ...
+@ledger_sync()
+def subagent_task(task: str) -> dict:
+    return run_slow_subagent(task)
 ```
 
-Edit `mycelium.yaml` — rename tools/tasks to match your Python functions.
+Full YAML setup and more guards: [`sdk/README.md`](sdk/README.md) · LangGraph: [`docs/integrations/langgraph.md`](docs/integrations/langgraph.md)
 
 ## Repo layout
 
-This is a **monorepo**: the public PyPI package lives under `sdk/`; proof and planning stay outside the wheel.
+Public monorepo — source, tests, and issue-linked proofs live here. The PyPI wheel ships only `sdk/mycelium/`.
 
 ```
-mycelium/                          ← git root (private GitHub repo)
+mycelium/                          ← git root (https://github.com/mycelium-labs/mycelium)
 ├── README.md                      ← you are here — product overview
 ├── CHANGELOG.md                   ← release notes
 ├── LICENSE                        ← MIT
-├── .env.example                   ← HF token, signing key templates
+├── .env.example                   ← optional local dev (HF corpus access)
 ├── .github/workflows/
 │   ├── ci.yml                     ← test matrix 3.10–3.13 + proof + ruff
 │   └── publish.yml                ← tag v* → PyPI (mycelium-runtime)
 │
 ├── sdk/                           ← **publishable Python package**
 │   ├── pyproject.toml             ← build config (hatchling)
-│   ├── uv.lock                    ← uv lockfile (dev)
 │   ├── README.md                  ← PyPI long description + API reference
 │   ├── mycelium/                  ← `import mycelium` (what ships on PyPI)
 │   │   ├── templates/             ← bundled YAML templates (`mycelium init`)
-│   │   ├── protect.py …           ← AF-006 guards
-│   │   ├── tool_*.py              ← AF-004 guards
-│   │   ├── *_ledger.py …          ← AF-002 guards
-│   │   ├── config.py              ← YAML loader
-│   │   └── storage/               ← file / redis / postgres backends
-│   ├── tests/                     ← unit tests (not published)
-│   └── examples/README.md         ← points to `mycelium init` (not published)
+│   │   └── …                      ← guards, config, storage backends
+│   └── tests/                     ← unit tests (not in the wheel)
 │
-├── proof/                         ← issue-linked integration proofs (not published)
+├── proof/                         ← issue-linked integration proofs
 │   ├── README.md                  ← fixture catalog
 │   ├── run_demo.py                ← human-readable demo
 │   ├── test_proof*.py             ← parametrized proof tests
 │   └── fixtures/                  ← real GitHub issue shapes (JSON)
 │
+├── docs/integrations/             ← framework guides (LangGraph, …)
+│
 └── planning/
     └── scope.md                   ← product scope, taxonomy, roadmap
 ```
 
-### What users install vs what stays in the repo
+### What `pip install` gets vs the repo
 
 | Audience | Gets | Does not get |
 |----------|------|--------------|
 | `pip install mycelium-runtime` | `mycelium/*.py` + `mycelium/templates/*.yaml` | `proof/`, `planning/`, `tests/` |
-| Repo collaborators | Full tree above | — |
+| GitHub clone | Full tree above | Private HF failure corpus (optional; see `.env.example`) |
 
-**Local dev junk** (never commit): `sdk/.venv/`, `sdk/dist/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`
+**Never commit:** `.env`, `sdk/.venv/`, `sdk/dist/`, `sdk/mycelium.yaml`, `__pycache__/`
 
 ## Proof
 
@@ -117,6 +111,5 @@ See [`proof/README.md`](proof/README.md).
 
 - SDK reference: [`sdk/README.md`](sdk/README.md)
 - **LangGraph integration:** [`docs/integrations/langgraph.md`](docs/integrations/langgraph.md)
-- **Launch post draft (Show HN):** [`docs/launch/show-hn.md`](docs/launch/show-hn.md)
 - Scope & roadmap: [`planning/scope.md`](planning/scope.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
