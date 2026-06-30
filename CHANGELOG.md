@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1 — 2026-06-30
+
+- PyPI description and README use plain language (no internal AF-00x taxonomy codes)
+
 ## 1.1.0 — 2026-06-30
 
 First public PyPI release as **`mycelium-runtime`** (`pip install mycelium-runtime`).

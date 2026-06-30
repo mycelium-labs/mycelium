@@ -2,13 +2,13 @@
 
 Runtime failure prevention for AI agents. Prevents predictable failures **before** they reach the LLM — not post-hoc observability.
 
-## Shipped failure modes (v1.1)
+## Shipped guards (v1.1)
 
-| ID | Mode | Guards |
-|----|------|--------|
-| AF-006 | Context corruption | `@protect`, `Session`, `MessageValidator`, `HistoryGuard` |
-| AF-004 | Tool misuse | `@bounded`, `ToolRegistry`, `ToolRunner` |
-| AF-002 | Observability black hole | `ActionLedger`, `TaskLedger`, `StateFlush`, `AuditReceipt` |
+| Problem | Guards |
+|---------|--------|
+| Stale or broken context | `@protect`, `Session`, `MessageValidator`, `HistoryGuard` |
+| Bad or unauthorized tool calls | `@bounded`, `ToolRegistry`, `ToolRunner` |
+| Duplicate side effects on retry | `ActionLedger`, `TaskLedger`, `StateFlush`, `AuditReceipt` |
 
 ## AF-002: prevention, not an observability platform
 
@@ -116,5 +116,7 @@ See [`proof/README.md`](proof/README.md).
 ## Docs
 
 - SDK reference: [`sdk/README.md`](sdk/README.md)
+- **LangGraph integration:** [`docs/integrations/langgraph.md`](docs/integrations/langgraph.md)
+- **Launch post draft (Show HN):** [`docs/launch/show-hn.md`](docs/launch/show-hn.md)
 - Scope & roadmap: [`planning/scope.md`](planning/scope.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
