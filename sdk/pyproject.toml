@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mycelium-sdk"
+name = "mycelium-runtime"
 version = "1.0.0"
-description = "Mycelium SDK — runtime failure prevention for AI agents (AF-006, AF-004, AF-002)"
+description = "Mycelium runtime — failure prevention for AI agents (AF-006, AF-004, AF-002)"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

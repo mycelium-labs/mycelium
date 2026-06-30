@@ -1,6 +1,8 @@
-# Mycelium SDK
+# Mycelium runtime
 
 Runtime failure prevention for AI agents.
+
+**PyPI:** `pip install mycelium-runtime` — **import:** `from mycelium import ...`
 
 **v1.0** ships three failure modes: context corruption (AF-006), tool boundary enforcement (AF-004), and **action traceability prevention** (AF-002).
 
@@ -11,6 +13,8 @@ Runtime failure prevention for AI agents.
 **Requires Python 3.10+** (3.11+ recommended).
 
 ```bash
+pip install mycelium-runtime
+# local dev:
 pip install ./sdk
 ```
 
@@ -212,7 +216,7 @@ ledger = ActionLedger(storage=RedisLedgerStorage("redis://localhost:6379/0"))
 ledger = ActionLedger(storage=PostgresLedgerStorage("postgresql://localhost/mycelium"))
 ```
 
-Optional extras: `pip install 'mycelium-sdk[redis]'` or `pip install 'mycelium-sdk[postgres]'`.
+Optional extras: `pip install 'mycelium-runtime[redis]'` or `pip install 'mycelium-runtime[postgres]'`.
 
 ## Quickstart — AF-002 task-level ledger
 
