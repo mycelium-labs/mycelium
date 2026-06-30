@@ -1,17 +1,16 @@
-# Mycelium configuration template.
+# Mycelium configuration (full template).
 #
-# Minimum integration (3 steps):
-#   1. Copy to mycelium.yaml and edit the global sections below.
-#   2. List your tool/task function names under tools/tasks (or use
-#      action_ledger.tools / task_ledger.tasks to auto-apply ledgers).
-#   3. In code:
+# Scaffolded with:  mycelium init
+# Minimal variant:  mycelium init --minimal
+#
+# Next steps:
+#   1. Edit tool/task names to match your Python functions.
+#   2. In code:
+#        from mycelium import load_config
 #        config = load_config("mycelium.yaml")
 #        tools = config.instrument(my_tools)
 #        with config.run(thread_id):
 #            messages = config.prepare_messages(messages)
-#            ...
-#
-# Separate sections per failure mode — globals inherit into per-tool `ledger: true`.
 
 # ---------------------------------------------------------------------------
 # action_ledger  (AF-002 — tool-level idempotency)
@@ -29,7 +28,6 @@ action_ledger:
   # storage: postgres
   # dsn_env: MYCELIUM_POSTGRES_DSN
   # table: mycelium_action_ledger
-  # Auto-apply ledger to side-effect tools without repeating storage config:
   tools:
     - send_payment
     - delete_file
@@ -57,8 +55,6 @@ state_flush:
 # ---------------------------------------------------------------------------
 # audit_receipt  (AF-002 — signed receipts)
 # ---------------------------------------------------------------------------
-# When present, all ledgered tools/tasks get receipts unless opted out with
-# `audit_receipt: false`.
 audit_receipt:
   agent_id: payment-agent
   signing_key_env: MYCELIUM_SIGNING_KEY
@@ -89,7 +85,6 @@ tools:
           required: true
 
   send_payment:
-    # Inherits file ledger + audit receipt from global sections.
     bounded:
       schema:
         amount:

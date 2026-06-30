@@ -34,8 +34,9 @@ Use Mycelium **with** your existing observability stack if you want both. Myceli
 **Requires Python 3.10+** (3.11+ recommended).
 
 ```bash
-pip install ./sdk
-# or: pip install mycelium-runtime   # PyPI (import: from mycelium import ...)
+pip install mycelium-runtime
+mycelium init                    # creates ./mycelium.yaml in your project
+# or: mycelium init --minimal
 ```
 
 ```python
@@ -50,7 +51,7 @@ with config.run(thread_id):
     ...
 ```
 
-Copy `sdk/examples/mycelium.template.yaml` → `mycelium.yaml` and edit the global sections.
+Edit `mycelium.yaml` — rename tools/tasks to match your Python functions.
 
 ## Repo layout
 
@@ -71,15 +72,14 @@ mycelium/                          ← git root (private GitHub repo)
 │   ├── uv.lock                    ← uv lockfile (dev)
 │   ├── README.md                  ← PyPI long description + API reference
 │   ├── mycelium/                  ← `import mycelium` (what ships on PyPI)
+│   │   ├── templates/             ← bundled YAML templates (`mycelium init`)
 │   │   ├── protect.py …           ← AF-006 guards
 │   │   ├── tool_*.py              ← AF-004 guards
 │   │   ├── *_ledger.py …          ← AF-002 guards
 │   │   ├── config.py              ← YAML loader
 │   │   └── storage/               ← file / redis / postgres backends
 │   ├── tests/                     ← unit tests (not published)
-│   └── examples/
-│       ├── mycelium.template.yaml ← copy this → your app's mycelium.yaml
-│       └── mycelium.yaml          ← minimal working example
+│   └── examples/README.md         ← points to `mycelium init` (not published)
 │
 ├── proof/                         ← issue-linked integration proofs (not published)
 │   ├── README.md                  ← fixture catalog
@@ -95,7 +95,7 @@ mycelium/                          ← git root (private GitHub repo)
 
 | Audience | Gets | Does not get |
 |----------|------|--------------|
-| `pip install mycelium-runtime` | `mycelium/*.py` only | `proof/`, `planning/`, `tests/`, `examples/` |
+| `pip install mycelium-runtime` | `mycelium/*.py` + `mycelium/templates/*.yaml` | `proof/`, `planning/`, `tests/` |
 | Repo collaborators | Full tree above | — |
 
 **Local dev junk** (never commit): `sdk/.venv/`, `sdk/dist/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`

@@ -1,4 +1,6 @@
-# Minimal example — global AF-002 sections + per-tool schemas only.
+# Mycelium configuration (minimal).
+#
+# Scaffolded with:  mycelium init --minimal
 
 action_ledger:
   storage: file
