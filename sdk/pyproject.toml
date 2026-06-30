@@ -40,6 +40,9 @@ dev = [
     "fakeredis",
 ]
 
+[project.scripts]
+mycelium = "mycelium.__main__:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["mycelium"]
 

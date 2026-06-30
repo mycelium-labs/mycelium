@@ -8,9 +8,10 @@ This directory is the **publishable package**. Only `mycelium/` ships on PyPI; e
 
 | Path | In PyPI wheel? |
 |------|----------------|
-| `mycelium/` | Yes |
+| `mycelium/` | Yes (code + `templates/*.yaml`) |
+| `mycelium/templates/` | Yes — use `mycelium init` to write into your project |
 | `tests/` | No — run with `pytest tests/` |
-| `examples/` | No — copy templates into your app |
+| `examples/` | No — see `mycelium init` |
 | `README.md` | PyPI project page only (not inside wheel) |
 | `pyproject.toml`, `uv.lock` | No |
 
@@ -24,8 +25,10 @@ This directory is the **publishable package**. Only `mycelium/` ships on PyPI; e
 
 ```bash
 pip install mycelium-runtime
-# local dev:
-pip install ./sdk
+mycelium init              # writes ./mycelium.yaml (full annotated template)
+mycelium init --minimal    # smaller starter config
+# local dev from repo:
+pip install -e ./sdk
 ```
 
 ## Quickstart — AF-006
@@ -341,4 +344,4 @@ with config.run(thread_id):
 is configured with `auto: true` (default), all ledgered tools/tasks get signed
 receipts automatically.
 
-Legacy per-tool style still works — see `examples/mycelium.template.yaml`.
+Legacy per-tool style still works — run `mycelium init` for the full annotated template.

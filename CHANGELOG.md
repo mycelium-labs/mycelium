@@ -44,6 +44,7 @@ First production release. Ships three failure modes with YAML-first integration.
 
 ### Developer experience
 - YAML config with global sections: `action_ledger`, `task_ledger`, `state_flush`, `audit_receipt`
+- `mycelium init` — scaffold `mycelium.yaml` from bundled templates (PyPI users)
 - `config.instrument(module)` — wrap tools and tasks in one call
 - `config.prepare_messages()` — AF-006 guards + auto state recording
 - `config.run(run_id)` — Session + StateFlush combined
