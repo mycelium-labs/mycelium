@@ -20,7 +20,7 @@
 action_ledger:
   storage: file
   path: ./mycelium-ledger.json
-  # Redis (multi-worker, atomic claim via SET + Lua):
+  # Redis (multi-worker, atomic claim via SET NX):
   # storage: redis
   # url_env: MYCELIUM_REDIS_URL
   # prefix: mycelium:action:

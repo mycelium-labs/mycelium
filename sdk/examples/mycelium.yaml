@@ -18,7 +18,7 @@ state_flush:
 
 audit_receipt:
   agent_id: demo-agent
-  signing_key: dev-only-key
+  signing_key_env: MYCELIUM_SIGNING_KEY
   storage: file
   path: ./mycelium-receipts.jsonl
 

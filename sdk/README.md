@@ -4,7 +4,17 @@ Runtime failure prevention for AI agents.
 
 **PyPI:** `pip install mycelium-runtime` — **import:** `from mycelium import ...`
 
-**v1.0** ships three failure modes: context corruption (AF-006), tool boundary enforcement (AF-004), and **action traceability prevention** (AF-002).
+This directory is the **publishable package**. Only `mycelium/` ships on PyPI; everything else here is for development and docs.
+
+| Path | In PyPI wheel? |
+|------|----------------|
+| `mycelium/` | Yes |
+| `tests/` | No — run with `pytest tests/` |
+| `examples/` | No — copy templates into your app |
+| `README.md` | PyPI project page only (not inside wheel) |
+| `pyproject.toml`, `uv.lock` | No |
+
+**v1.1** ships three failure modes: context corruption (AF-006), tool boundary enforcement (AF-004), and **action traceability prevention** (AF-002).
 
 > **AF-002 is not an observability platform.** The failure mode is called "observability black hole" because agents act without durable records. Mycelium **prevents** that — via idempotency ledgers, state flush on cancel, and signed receipts — not via traces, spans, or dashboards. For post-hoc tracing, use Langfuse, Helicone, or Opik alongside Mycelium.
 
@@ -331,4 +341,4 @@ with config.run(thread_id):
 is configured with `auto: true` (default), all ledgered tools/tasks get signed
 receipts automatically.
 
-Legacy per-tool style still works — see `sdk/examples/mycelium.template.yaml`.
+Legacy per-tool style still works — see `examples/mycelium.template.yaml`.

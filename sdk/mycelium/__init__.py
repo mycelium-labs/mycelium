@@ -1,4 +1,4 @@
-"""Mycelium SDK — runtime failure prevention for AI agents."""
+"""Mycelium runtime — failure prevention for AI agents."""
 
 from mycelium.action_ledger import (
     ActionLedger,

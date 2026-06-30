@@ -2,7 +2,7 @@
 
 Runtime failure prevention for AI agents. Prevents predictable failures **before** they reach the LLM — not post-hoc observability.
 
-## Shipped failure modes (v1.0)
+## Shipped failure modes (v1.1)
 
 | ID | Mode | Guards |
 |----|------|--------|
@@ -54,11 +54,51 @@ Copy `sdk/examples/mycelium.template.yaml` → `mycelium.yaml` and edit the glob
 
 ## Repo layout
 
-| Path | What |
-|------|------|
-| [`sdk/`](sdk/) | Python package (`mycelium-runtime` on PyPI, `import mycelium`) |
-| [`proof/`](proof/) | Issue-linked proof fixtures + tests |
-| [`planning/`](planning/) | Scope, taxonomy, roadmap |
+This is a **monorepo**: the public PyPI package lives under `sdk/`; proof and planning stay outside the wheel.
+
+```
+mycelium/                          ← git root (private GitHub repo)
+├── README.md                      ← you are here — product overview
+├── CHANGELOG.md                   ← release notes
+├── LICENSE                        ← MIT
+├── .env.example                   ← HF token, signing key templates
+├── .github/workflows/
+│   ├── ci.yml                     ← test matrix 3.10–3.13 + proof + ruff
+│   └── publish.yml                ← tag v* → PyPI (mycelium-runtime)
+│
+├── sdk/                           ← **publishable Python package**
+│   ├── pyproject.toml             ← build config (hatchling)
+│   ├── uv.lock                    ← uv lockfile (dev)
+│   ├── README.md                  ← PyPI long description + API reference
+│   ├── mycelium/                  ← `import mycelium` (what ships on PyPI)
+│   │   ├── protect.py …           ← AF-006 guards
+│   │   ├── tool_*.py              ← AF-004 guards
+│   │   ├── *_ledger.py …          ← AF-002 guards
+│   │   ├── config.py              ← YAML loader
+│   │   └── storage/               ← file / redis / postgres backends
+│   ├── tests/                     ← unit tests (not published)
+│   └── examples/
+│       ├── mycelium.template.yaml ← copy this → your app's mycelium.yaml
+│       └── mycelium.yaml          ← minimal working example
+│
+├── proof/                         ← issue-linked integration proofs (not published)
+│   ├── README.md                  ← fixture catalog
+│   ├── run_demo.py                ← human-readable demo
+│   ├── test_proof*.py             ← parametrized proof tests
+│   └── fixtures/                  ← real GitHub issue shapes (JSON)
+│
+└── planning/
+    └── scope.md                   ← product scope, taxonomy, roadmap
+```
+
+### What users install vs what stays in the repo
+
+| Audience | Gets | Does not get |
+|----------|------|--------------|
+| `pip install mycelium-runtime` | `mycelium/*.py` only | `proof/`, `planning/`, `tests/`, `examples/` |
+| Repo collaborators | Full tree above | — |
+
+**Local dev junk** (never commit): `sdk/.venv/`, `sdk/dist/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`
 
 ## Proof
 
