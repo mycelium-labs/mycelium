@@ -200,6 +200,64 @@
       margin: 0;
     }
 
+    .arch-flow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      margin: 1rem 0 1.5rem;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 0.78rem;
+    }
+
+    .arch-box {
+      border: 1px solid var(--ink);
+      padding: 0.55rem 1rem;
+      text-align: center;
+      min-width: 11rem;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    .arch-box.guard {
+      background: var(--wash);
+      border-width: 2px;
+      font-weight: 600;
+    }
+
+    .arch-box.muted {
+      color: var(--ink-muted);
+      border-color: var(--line);
+      font-size: 0.72rem;
+    }
+
+    .arch-arrow {
+      color: var(--ink-faint);
+      line-height: 1;
+      padding: 0.2rem 0;
+      font-size: 0.85rem;
+    }
+
+    .arch-caption {
+      font-size: 0.82rem;
+      color: var(--ink-muted);
+      margin: 0 0 0.85rem;
+      max-width: 28rem;
+    }
+
+    @media (min-width: 520px) {
+      .arch-flow.horizontal {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .arch-flow.horizontal .arch-arrow {
+        padding: 0 0.15rem;
+      }
+    }
+
     p {
       margin: 0 0 0.85rem;
       color: var(--ink-soft);
@@ -246,6 +304,7 @@
   <aside class="sidebar">
     <p>Contents</p>
     <ol>
+      <li><a href="#architecture">Architecture</a></li>
       <li><a href="#install">Install</a></li>
       <li><a href="#api">API</a></li>
       <li><a href="#context">Context</a></li>
@@ -265,10 +324,27 @@
       <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
     </p>
     <p class="lede">
-      Python library for agent reliability: idempotent tool calls on retry (LangGraph
-      duplicate execution), stale context repair, and tool boundary validation.
-      Framework-agnostic.
+      Runtime guards for AI agents. Prevents predictable failures before they reach the
+      LLM: duplicate tool execution on retry, stale context, invalid tool calls.
+      Framework-agnostic. Experimental (v1.2).
     </p>
+
+    <section id="architecture">
+      <h2>How it fits</h2>
+      <p class="arch-caption">
+        Mycelium wraps your agent loop. Guards run on messages and tools before side effects
+        and before the next LLM call. Not a framework. Not observability.
+      </p>
+      <div class="arch-flow">
+        <div class="arch-box">Your agent loop<br><span style="font-weight:400;color:var(--ink-muted)">LangGraph · CrewAI · Python</span></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box guard">Mycelium guards</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box muted">Context · Tools · Idempotency</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box">LLM + side-effect tools</div>
+      </div>
+    </section>
 
     <section id="install">
       <h2>Install</h2>

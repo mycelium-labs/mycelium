@@ -3,7 +3,11 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-**Runtime guards for AI agents.** Prevents predictable failures before they reach the LLM. Not tracing or dashboards.
+**Runtime guards for AI agents.**
+
+Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
+
+*Experimental early release (v1.2). More guards planned.*
 
 ## Who it's for
 
@@ -11,7 +15,9 @@ Developers running **agents with side-effect tools** in production (payments, em
 
 Python 3.10+. Framework-agnostic.
 
-## What it does
+## What it does (v1.2)
+
+These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools:
 
 - **Duplicate side effects on retry:** same `tool_call_id` won't charge, send, or execute twice
 - **Stale or broken context:** fresh tool data, valid message transcripts
