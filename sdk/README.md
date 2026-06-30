@@ -195,12 +195,24 @@ async def send_payment(amount: float, recipient: str) -> dict:
 
 Storage backends:
 
+| Backend | Use case | YAML `storage` |
+|---------|----------|----------------|
+| `memory` | Single process, tests | `memory` (default) |
+| `file` | Local dev, single host (`fcntl` lock) | `file` + `path` |
+| `redis` | Multi-worker, in-flight TTL | `redis` + `url` or `url_env` |
+| `postgres` | Audit/compliance, durable SQL | `postgres` + `dsn` or `dsn_env` |
+
 ```python
 from mycelium import ActionLedger, FileLedgerStorage, InMemoryLedgerStorage
+from mycelium import RedisLedgerStorage, PostgresLedgerStorage
 
 ledger = ActionLedger(storage=InMemoryLedgerStorage())
 ledger = ActionLedger(storage=FileLedgerStorage("./mycelium-ledger.json"))
+ledger = ActionLedger(storage=RedisLedgerStorage("redis://localhost:6379/0"))
+ledger = ActionLedger(storage=PostgresLedgerStorage("postgresql://localhost/mycelium"))
 ```
+
+Optional extras: `pip install 'mycelium-sdk[redis]'` or `pip install 'mycelium-sdk[postgres]'`.
 
 ## Quickstart — AF-002 task-level ledger
 

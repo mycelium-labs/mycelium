@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import os
 import time
 from contextlib import AbstractContextManager
 from contextvars import ContextVar
@@ -13,6 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from mycelium.session import Session
+from mycelium.storage.json_file import LockedJsonDictFile
 
 FlushReason = Literal["cancel", "disconnect", "error"]
 SnapshotStatus = Literal["in-progress", "completed", "aborted", "error"]
@@ -77,40 +76,25 @@ class InMemoryStateFlushStorage(StateFlushStorage):
 
 
 class FileStateFlushStorage(StateFlushStorage):
-    """JSON-file-backed storage keyed by run_id."""
+    """JSON-file-backed storage keyed by run_id with ``fcntl`` locking."""
 
     def __init__(self, path: str | Path) -> None:
-        self._path = Path(path)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-
-    def _load(self) -> dict[str, dict[str, Any]]:
-        if not self._path.exists():
-            return {}
-        try:
-            with self._path.open("r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except json.JSONDecodeError:
-            return {}
-        if not isinstance(data, dict):
-            return {}
-        return data
-
-    def _save(self, data: dict[str, dict[str, Any]]) -> None:
-        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
-        with tmp.open("w", encoding="utf-8") as handle:
-            json.dump(data, handle, indent=2, default=str)
-        os.replace(tmp, self._path)
+        self._file = LockedJsonDictFile(path)
 
     def get(self, run_id: str) -> StateSnapshot | None:
-        raw = self._load().get(run_id)
-        if raw is None:
-            return None
-        return StateSnapshot.from_dict(raw)
+        def read(data: dict[str, dict[str, Any]]) -> StateSnapshot | None:
+            raw = data.get(run_id)
+            if raw is None:
+                return None
+            return StateSnapshot.from_dict(raw)
+
+        return self._file.read_modify_write_no_save(read)
 
     def set(self, snapshot: StateSnapshot) -> None:
-        data = self._load()
-        data[snapshot.run_id] = snapshot.to_dict()
-        self._save(data)
+        def mutate(data: dict[str, dict[str, Any]]) -> None:
+            data[snapshot.run_id] = snapshot.to_dict()
+
+        self._file.read_modify_write(mutate)
 
 
 class _FlushRun:
