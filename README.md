@@ -1,6 +1,7 @@
 # Mycelium
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
+[![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
 **Runtime failure prevention for AI agents** — Python guards for duplicate tool execution on retry, stale context, and invalid tool calls. Framework-agnostic (LangGraph, CrewAI, OpenAI tool loops).
 
@@ -8,7 +9,7 @@ Keeps context current, enforces tool boundaries, and deduplicates side effects o
 
 Works with raw message lists and plain Python functions. Requires Python 3.10 or later.
 
-**PyPI:** [`mycelium-runtime`](https://pypi.org/project/mycelium-runtime/) · **Handbook:** [docs]([docs/index.html](https://mycelium-labs.github.io/mycelium/#install)) · **API reference:** [sdk/README.md](sdk/README.md)
+**PyPI:** [`mycelium-runtime`](https://pypi.org/project/mycelium-runtime/) · **Handbook:** [mycelium-labs.github.io/mycelium](https://mycelium-labs.github.io/mycelium/) · **API reference:** [sdk/README.md](sdk/README.md)
 
 ## What it does
 
@@ -146,7 +147,7 @@ mycelium/
 ├── CHANGELOG.md
 ├── LICENSE
 ├── docs/
-│   └── index.html         # developer handbook (GitHub Pages)
+│   └── index.html         # developer handbook → https://mycelium-labs.github.io/mycelium/
 ├── .github/workflows/     # CI + PyPI publish
 └── sdk/                   # publishable package
     ├── pyproject.toml

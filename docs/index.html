@@ -9,6 +9,7 @@
   <meta property="og:title" content="Mycelium — Runtime guards for AI agents">
   <meta property="og:description" content="Prevent duplicate tool execution on retry, stale context, and bad tool calls. Plain Python. pip install mycelium-runtime">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mycelium-labs.github.io/mycelium/">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Mycelium — Runtime guards for AI agents">
   <meta name="twitter:description" content="Python runtime guards: idempotent tool calls, context validation, tool boundaries. Framework-agnostic.">
@@ -154,6 +155,22 @@
       border-bottom: 1px solid var(--line);
     }
 
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0 0 1.25rem;
+    }
+
+    .badges a {
+      line-height: 0;
+    }
+
+    .badges img {
+      height: 20px;
+      vertical-align: middle;
+    }
+
     section {
       margin-bottom: 2.75rem;
       scroll-margin-top: 2rem;
@@ -242,6 +259,11 @@
   <div class="main">
 
     <h1>Mycelium — runtime guards for AI agents</h1>
+    <p class="badges">
+      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg" alt="PyPI version"></a>
+      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/pyversions/mycelium-runtime.svg" alt="Python versions"></a>
+      <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
+    </p>
     <p class="lede">
       Python library for agent reliability: idempotent tool calls on retry (LangGraph
       duplicate execution), stale context repair, and tool boundary validation.
