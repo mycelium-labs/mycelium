@@ -1,4 +1,4 @@
-"""CLI entrypoint: ``mycelium init`` scaffolds a config file in the user's project."""
+"""CLI entrypoint: ``mycelium init`` and ``mycelium demo``."""
 
 from __future__ import annotations
 
@@ -7,24 +7,44 @@ import sys
 from importlib import resources
 from pathlib import Path
 
+_TEMPLATE_QUICKSTART = "mycelium.quickstart.yaml"
 _TEMPLATE_FULL = "mycelium.template.yaml"
 _TEMPLATE_MINIMAL = "mycelium.minimal.yaml"
 
 
-def _load_template(minimal: bool) -> str:
-    filename = _TEMPLATE_MINIMAL if minimal else _TEMPLATE_FULL
+def _load_template(*, full: bool, minimal: bool) -> tuple[str, str]:
+    if full:
+        filename = _TEMPLATE_FULL
+        label = "full"
+    elif minimal:
+        filename = _TEMPLATE_MINIMAL
+        label = "minimal"
+    else:
+        filename = _TEMPLATE_QUICKSTART
+        label = "quickstart"
     path = resources.files("mycelium") / "templates" / filename
-    return path.read_text(encoding="utf-8")
+    return path.read_text(encoding="utf-8"), label
 
 
-def cmd_init(output: Path, *, minimal: bool, force: bool) -> int:
+def cmd_init(output: Path, *, full: bool, minimal: bool, force: bool) -> int:
     if output.exists() and not force:
         print(f"error: {output} already exists (use --force to overwrite)", file=sys.stderr)
         return 1
-    output.write_text(_load_template(minimal), encoding="utf-8")
-    variant = "minimal" if minimal else "full"
-    print(f"Wrote {output} ({variant} template)")
-    print("Next: edit tool/task names, then load_config(...) in your agent code.")
+    text, label = _load_template(full=full, minimal=minimal)
+    output.write_text(text, encoding="utf-8")
+    print(f"Wrote {output} ({label} template)")
+    if label == "quickstart":
+        print("Next: rename subagent_task, pass tool_call_id from LangGraph, @config.apply in code.")
+        print("Try: mycelium demo")
+    else:
+        print("Next: edit tool/task names, then load_config(...) in your agent code.")
+    return 0
+
+
+def cmd_demo() -> int:
+    from mycelium.quickstart import run_demo
+
+    run_demo()
     return 0
 
 
@@ -44,9 +64,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Output path (default: ./mycelium.yaml)",
     )
     init_parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Full annotated template (all guards)",
+    )
+    init_parser.add_argument(
         "--minimal",
         action="store_true",
-        help="Use the smaller template (fewer commented examples)",
+        help="Smaller multi-guard template (not the default quickstart)",
     )
     init_parser.add_argument(
         "--force",
@@ -54,9 +79,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite an existing file",
     )
 
+    sub.add_parser("demo", help="Show LangGraph duplicate-tool bug and the 5-line fix")
+
     args = parser.parse_args(argv)
     if args.command == "init":
-        return cmd_init(args.output, minimal=args.minimal, force=args.force)
+        return cmd_init(args.output, full=args.full, minimal=args.minimal, force=args.force)
+    if args.command == "demo":
+        return cmd_demo()
     return 1
 
 

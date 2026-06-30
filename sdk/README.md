@@ -1,19 +1,43 @@
 # Mycelium runtime
 
-**Prevent predictable agent failures before they reach the LLM** — not post-hoc tracing.
+## One painful bug → five lines of code
+
+**LangGraph Cloud redispatches a long tool call while the first is still running.** Both complete. You pay twice. Side effects run twice. [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417)
 
 ```bash
 pip install mycelium-runtime   # Python 3.10+
-mycelium init                  # creates mycelium.yaml in your project
+mycelium init                  # scaffolds mycelium.yaml for your tool
+mycelium demo                  # see the bug and the fix (no LangGraph required)
 ```
+
+```python
+from mycelium import ledger_sync
+
+@ledger_sync()
+def subagent_task(task: str) -> dict:
+    return run_slow_subagent(task)
+
+# Pass tool_call_id from LangGraph — redispatch returns the cached result
+subagent_task(task="analyze_market", tool_call_id=call["id"])
+```
+
+Or wire from `mycelium init`:
 
 ```python
 from mycelium import load_config
 
 config = load_config("mycelium.yaml")
+
+@config.apply
+def subagent_task(task: str) -> dict:
+    return run_slow_subagent(task)
 ```
 
-## What it does
+**LangGraph guide:** [`docs/integrations/langgraph.md`](https://github.com/mycelium-labs/mycelium/blob/main/docs/integrations/langgraph.md)
+
+> **Not observability.** Langfuse shows what happened *after*. Mycelium prevents duplicate execution *during* the run. Use both if you want traces and guards.
+
+## What else it does
 
 | Problem | What Mycelium does |
 |---------|-------------------|
@@ -21,11 +45,7 @@ config = load_config("mycelium.yaml")
 | **Bad or unauthorized tool calls** | Validate inputs/outputs, allowlists, scoped paths — block before execution |
 | **Duplicate side effects on retry** | Idempotency ledgers, state flush on cancel, signed receipts — pay once, not twice |
 
-Framework-agnostic. Works with raw message lists and plain Python functions (LangGraph, CrewAI, OpenAI tool loops, etc.).
-
-**LangGraph guide:** see [`docs/integrations/langgraph.md`](https://github.com/mycelium-labs/mycelium/blob/main/docs/integrations/langgraph.md) in the repo.
-
-> **Not an observability platform.** Langfuse/Helicone show what happened *after*. Mycelium prevents failures *during* execution. Use both if you want traces and guards.
+Framework-agnostic. Raw message lists and plain Python functions (LangGraph, CrewAI, OpenAI tool loops, etc.).
 
 ## Install
 
@@ -33,8 +53,9 @@ Framework-agnostic. Works with raw message lists and plain Python functions (Lan
 
 ```bash
 pip install mycelium-runtime
-mycelium init              # full annotated template → ./mycelium.yaml
-mycelium init --minimal    # smaller starter config
+mycelium init              # quickstart: duplicate-tool fix → ./mycelium.yaml
+mycelium init --full       # all guards, commented examples
+mycelium demo              # terminal demo of langgraph#7417
 ```
 
 ## Quickstart — stale context & broken transcripts

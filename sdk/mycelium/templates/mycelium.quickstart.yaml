@@ -1,0 +1,26 @@
+# Mycelium quickstart — stop duplicate tool execution on LangGraph retry.
+#
+# Scaffolded with:  mycelium init
+# Full template:    mycelium init --full
+#
+# Real bug: langgraph#7417 — long tool calls redispatched while still running.
+#
+# Next:
+#   1. Rename subagent_task to match your Python function.
+#   2. Pass tool_call_id from LangGraph into the tool kwargs.
+#   3. In code:
+#        from mycelium import load_config
+#        config = load_config("mycelium.yaml")
+#
+#        @config.apply
+#        def subagent_task(task: str, duration_seconds: int) -> dict:
+#            return run_slow_subagent(task)
+
+action_ledger:
+  storage: file
+  path: ./mycelium-ledger.json
+  tools:
+    - subagent_task
+
+tools:
+  subagent_task: {}
