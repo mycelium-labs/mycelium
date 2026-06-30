@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mycelium — Runtime guards for AI agents (Python idempotency, tool boundaries)</title>
-  <meta name="description" content="Mycelium is a Python library for AI agent reliability: prevent duplicate tool execution on retry, stale context, and invalid tool calls. Framework-agnostic. pip install mycelium-runtime">
+  <title>Mycelium: runtime guards for AI agents</title>
+  <meta name="description" content="Mycelium is a Python library for AI agent reliability: prevent duplicate tool execution on retry, stale context, and invalid tool calls. Framework-agnostic.">
   <meta name="keywords" content="AI agents, LangGraph, agent idempotency, duplicate tool execution, tool calling, agent reliability, CrewAI, runtime guards, Python LLM agents">
-  <meta property="og:title" content="Mycelium — Runtime guards for AI agents">
-  <meta property="og:description" content="Prevent duplicate tool execution on retry, stale context, and bad tool calls. Plain Python. pip install mycelium-runtime">
+  <meta property="og:title" content="Mycelium: runtime guards for AI agents">
+  <meta property="og:description" content="Prevent duplicate tool execution on retry, stale context, and bad tool calls. Plain Python.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://mycelium-labs.github.io/mycelium/">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Mycelium — Runtime guards for AI agents">
+  <meta name="twitter:title" content="Mycelium: runtime guards for AI agents">
   <meta name="twitter:description" content="Python runtime guards: idempotent tool calls, context validation, tool boundaries. Framework-agnostic.">
   <script type="application/ld+json">
   {
@@ -31,7 +31,7 @@
         "name": "Is Mycelium a replacement for Langfuse or LangSmith?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. Langfuse and LangSmith are observability and tracing tools — they show what happened after an agent runs. Mycelium is runtime prevention: idempotency ledgers, tool boundary checks, and context guards that run before or during execution. Use both if you want traces and guards."
+          "text": "No. Langfuse and LangSmith are observability and tracing tools. They show what happened after an agent runs. Mycelium is runtime prevention: idempotency ledgers, tool boundary checks, and context guards that run before or during execution. Use both if you want traces and guards."
         }
       },
       {
@@ -39,7 +39,7 @@
         "name": "How do I make AI agent tool calls idempotent in Python?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Wrap side-effect tools with a ledger that atomically claims request_id or tool_call_id before execution. On retry or redispatch, return the stored result. Mycelium provides @ledger_sync() for sync tools and @ledger() for async — framework-agnostic, works with LangGraph, CrewAI, or plain Python loops."
+          "text": "Wrap side-effect tools with a ledger that atomically claims request_id or tool_call_id before execution. On retry or redispatch, return the stored result. Mycelium provides @ledger_sync() for sync tools and @ledger() for async. Framework-agnostic; works with LangGraph, CrewAI, or plain Python loops."
         }
       }
     ]
@@ -258,7 +258,7 @@
 
   <div class="main">
 
-    <h1>Mycelium — runtime guards for AI agents</h1>
+    <h1>Mycelium: runtime guards for AI agents</h1>
     <p class="badges">
       <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg" alt="PyPI version"></a>
       <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/pyversions/mycelium-runtime.svg" alt="Python versions"></a>
@@ -267,7 +267,7 @@
     <p class="lede">
       Python library for agent reliability: idempotent tool calls on retry (LangGraph
       duplicate execution), stale context repair, and tool boundary validation.
-      Framework-agnostic. <code>pip install mycelium-runtime</code>
+      Framework-agnostic.
     </p>
 
     <section id="install">
@@ -500,7 +500,7 @@ with config.run(thread_id):
       <div class="faq-item">
         <h3>Is Mycelium a replacement for Langfuse or LangSmith?</h3>
         <p>
-          No. Langfuse and LangSmith are <strong>observability and tracing</strong> — they show
+          No. Langfuse and LangSmith are <strong>observability and tracing</strong>. They show
           what happened after an agent runs. Mycelium is <strong>runtime prevention</strong>:
           idempotency ledgers, tool boundary checks, and context guards during execution.
           Use both if you want traces and guards.
@@ -513,8 +513,8 @@ with config.run(thread_id):
           Wrap side-effect tools with a ledger that atomically claims
           <code>request_id</code> or <code>tool_call_id</code> before execution. On framework
           retry or worker redispatch, return the stored result instead of re-running the tool.
-          Mycelium ships <code>@ledger_sync()</code> (sync) and <code>@ledger()</code> (async) —
-          framework-agnostic, no LangGraph import required.
+          Mycelium ships <code>@ledger_sync()</code> (sync) and <code>@ledger()</code> (async).
+          Framework-agnostic; no LangGraph import required.
         </p>
       </div>
     </section>
