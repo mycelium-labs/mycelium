@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 — 2026-06-30
+
+- `mycelium demo` — terminal demo of langgraph#7417 duplicate tool execution
+- `mycelium init` defaults to LangGraph quickstart template; use `mycelium init --full` for all guards
+
 ## 1.1.1 — 2026-06-30
 
 - PyPI description and README use plain language (no internal AF-00x taxonomy codes)
