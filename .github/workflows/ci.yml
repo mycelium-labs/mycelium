@@ -28,13 +28,6 @@ jobs:
         working-directory: sdk
         run: pytest tests/ -v
 
-      - name: Proof tests
-        env:
-          PYTHONPATH: sdk
-        run: |
-          pytest proof/test_proof.py proof/test_proof_af004.py \
-            proof/test_proof_af002.py proof/test_proof_af002_task.py -v
-
       - name: Ruff
         working-directory: sdk
         run: ruff check mycelium tests

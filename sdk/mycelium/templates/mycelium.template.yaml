@@ -13,7 +13,7 @@
 #            messages = config.prepare_messages(messages)
 
 # ---------------------------------------------------------------------------
-# action_ledger  (AF-002 — tool-level idempotency)
+# action_ledger  (tool-level idempotency)
 # ---------------------------------------------------------------------------
 # storage: memory | file | redis | postgres
 action_ledger:
@@ -33,7 +33,7 @@ action_ledger:
     - delete_file
 
 # ---------------------------------------------------------------------------
-# task_ledger  (AF-002 — task-level idempotency)
+# task_ledger  (task-level idempotency)
 # ---------------------------------------------------------------------------
 task_ledger:
   storage: file
@@ -42,7 +42,7 @@ task_ledger:
     - process_invoice
 
 # ---------------------------------------------------------------------------
-# state_flush  (AF-002 — cancel/disconnect safety)
+# state_flush  (cancel/disconnect safety)
 # ---------------------------------------------------------------------------
 state_flush:
   storage: file
@@ -53,7 +53,7 @@ state_flush:
     - error
 
 # ---------------------------------------------------------------------------
-# audit_receipt  (AF-002 — signed receipts)
+# audit_receipt  (signed receipts)
 # ---------------------------------------------------------------------------
 audit_receipt:
   agent_id: payment-agent
@@ -63,7 +63,7 @@ audit_receipt:
   auto: true
 
 # ---------------------------------------------------------------------------
-# tools  (AF-004 + AF-006 per-tool; AF-002 via action_ledger above)
+# tools  (per-tool protect, bounded; ledger via action_ledger above)
 # ---------------------------------------------------------------------------
 tools:
   fetch_customer:
@@ -121,27 +121,27 @@ tasks:
       - invoice_id
 
 # ---------------------------------------------------------------------------
-# registry  (AF-004)
+# registry
 # ---------------------------------------------------------------------------
 registry:
   auto: true
 
 # ---------------------------------------------------------------------------
-# runner  (AF-004)
+# runner
 # ---------------------------------------------------------------------------
 runner:
   max_llm_retries: 2
   max_tool_retries: 3
 
 # ---------------------------------------------------------------------------
-# history_guard  (AF-006)
+# history_guard
 # ---------------------------------------------------------------------------
 history_guard:
   max_tokens: 100000
   max_messages: 1000
 
 # ---------------------------------------------------------------------------
-# message_validator  (AF-006)
+# message_validator
 # ---------------------------------------------------------------------------
 message_validator:
   enabled: true

@@ -1,5 +1,5 @@
 """
-MessageValidator — catches broken transcripts before LLM calls.
+MessageValidator: catches broken transcripts before LLM calls.
 
 Detects orphan tool results, duplicate IDs, bad roles, and related
 serialization bugs. repair() fixes what it can; validate() raises on any issue.
@@ -56,8 +56,8 @@ class MessageValidator:
     """
     Validates and optionally repairs message list structure before LLM calls.
 
-    validate(messages) — raises MessageValidationError on the first violation.
-    repair(messages)   — auto-fixes repairable issues; raises on unrecoverable ones.
+    validate(messages): raises MessageValidationError on the first violation.
+    repair(messages)  : auto-fixes repairable issues; raises on unrecoverable ones.
     """
 
     def __init__(
@@ -221,7 +221,7 @@ class MessageValidator:
             if self._strict_roles and role not in _VALID_ROLES:
                 self._record_violation("invalid_role", index)
                 raise MessageValidationError(
-                    f"Message {index} has invalid role {role!r} — cannot infer correct role.",
+                    f"Message {index} has invalid role {role!r}: cannot infer correct role.",
                     violation="invalid_role",
                     message_index=index,
                 )

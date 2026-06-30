@@ -1,4 +1,4 @@
-"""Durable storage backends for Mycelium AF-002 guards."""
+"""Durable storage backends for action and task ledgers."""
 
 from mycelium.storage.file_lock import PathFileLock
 from mycelium.storage.json_file import LockedJsonDictFile

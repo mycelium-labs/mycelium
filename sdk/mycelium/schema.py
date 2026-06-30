@@ -1,4 +1,4 @@
-"""Internal schema helpers — converts user field specs to Pydantic models."""
+"""Internal schema helpers: converts user field specs to Pydantic models."""
 
 from __future__ import annotations
 

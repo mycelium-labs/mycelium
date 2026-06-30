@@ -36,9 +36,11 @@ def test_init_minimal_template(tmp_path: Path) -> None:
 def test_demo_runs(capsys) -> None:
     assert main(["demo"]) == 0
     out = capsys.readouterr().out
-    assert "Without Mycelium" in out
-    assert "With Mycelium" in out
+    assert "Mycelium proof demo (real test)" in out
+    assert "langgraph-7417-duplicate-execution" in out
     assert "langgraph/issues/7417" in out
+    assert "PASS" in out
+    assert "ledger deduplication" in out
 
 
 def test_init_refuses_overwrite(tmp_path: Path) -> None:

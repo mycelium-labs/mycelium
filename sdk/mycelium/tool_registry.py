@@ -1,4 +1,4 @@
-"""User-defined tool allowlists for AF-004."""
+"""User-defined tool allowlists."""
 
 from __future__ import annotations
 

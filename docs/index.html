@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mycelium</title>
+  <style>
+    :root {
+      --ink: #181818;
+      --ink-soft: #3d3d3d;
+      --ink-muted: #6b6b6b;
+      --ink-faint: #9a9a9a;
+      --paper: #f8f7f5;
+      --wash: #f0efec;
+      --line: #d8d6d1;
+      --sidebar: 9rem;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: Charter, "Iowan Old Style", Palatino, Georgia, serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.65;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: var(--sidebar) 1fr;
+      gap: 3rem;
+      max-width: 54rem;
+      margin: 0 auto;
+      padding: 3rem 2rem 4rem;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 2rem;
+      align-self: start;
+    }
+
+    .sidebar p {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin: 0 0 1rem;
+    }
+
+    .sidebar ol {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+
+    .sidebar li { margin-bottom: 0.45rem; }
+
+    .sidebar a {
+      color: var(--ink-muted);
+      text-decoration: none;
+      border-left: 2px solid transparent;
+      padding: 0.2rem 0 0.2rem 0.65rem;
+      margin-left: -0.65rem;
+      display: block;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    .sidebar a:hover {
+      color: var(--ink);
+      border-left-color: var(--line);
+    }
+
+    .sidebar a:active {
+      color: var(--ink);
+      background: var(--wash);
+      border-left-color: var(--ink);
+    }
+
+    .sidebar a.active {
+      color: var(--ink);
+      font-weight: 600;
+      background: var(--wash);
+      border-left-color: var(--ink);
+    }
+
+    .main { min-width: 0; }
+
+    h1 {
+      font-size: 2.4rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0 0 0.75rem;
+      line-height: 1.05;
+    }
+
+    .lede {
+      font-size: 1.05rem;
+      color: var(--ink-soft);
+      margin: 0 0 2rem;
+      padding-bottom: 1.75rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    section {
+      margin-bottom: 2.75rem;
+      scroll-margin-top: 2rem;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.85rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 1px solid var(--ink);
+    }
+
+    p {
+      margin: 0 0 0.85rem;
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+    }
+
+    pre {
+      margin: 0;
+      padding: 1rem 1.1rem;
+      background: var(--wash);
+      border: 1px solid var(--line);
+      overflow-x: auto;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.73rem;
+      line-height: 1.6;
+      color: var(--ink);
+    }
+
+    pre + pre { margin-top: 0.75rem; }
+
+    @media (max-width: 640px) {
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 2rem 1.25rem 3rem;
+      }
+      .sidebar {
+        position: static;
+        padding-bottom: 1.25rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .sidebar ol {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.25rem 1rem;
+      }
+      h1 { font-size: 2rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <p>Contents</p>
+    <ol>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#api">API</a></li>
+      <li><a href="#context">Context</a></li>
+      <li><a href="#tools">Tools</a></li>
+      <li><a href="#actions">Actions</a></li>
+      <li><a href="#yaml">YAML</a></li>
+    </ol>
+  </aside>
+
+  <div class="main">
+
+    <h1>Mycelium</h1>
+    <p class="lede">
+      Runtime failure prevention for AI agents. Keeps context current, enforces tool
+      boundaries, and deduplicates side effects on retry.
+    </p>
+
+    <section id="install">
+      <h2>Install</h2>
+      <p>Requires Python 3.10 or later.</p>
+      <pre>pip install mycelium-runtime
+pip install 'mycelium-runtime[redis]'   # optional
+pip install 'mycelium-runtime[postgres]'
+
+mycelium init              # quickstart template (action ledger)
+mycelium init --full       # all guards
+mycelium init --minimal    # smaller multi-guard template
+mycelium demo              # langgraph#7417 bug and fix</pre>
+    </section>
+
+    <section id="api">
+      <h2>API</h2>
+      <pre># Context
+protect, protect_sync, Session
+MessageValidator, HistoryGuard
+
+# Tools
+bounded, bounded_sync, ToolRegistry, ToolRunner
+
+# Actions
+ledger, ledger_sync, task_ledger, task_ledger_sync
+ActionLedger, TaskLedger, StateFlush, AuditReceiptEmitter, verify_receipt
+
+# Config
+load_config, load_config_from_string, MyceliumConfig</pre>
+    </section>
+
+    <section id="context">
+      <h2>Context</h2>
+      <pre>from mycelium import protect, protect_sync, Session
+from mycelium import MessageValidator, HistoryGuard
+
+# async
+@protect(entity_param="customer_id", ttl=60)
+async def fetch_customer(customer_id: str) -> dict:
+    return await db.get(customer_id)
+
+async def run(customer_id: str, messages: list):
+    async with Session():
+        await fetch_customer(customer_id=customer_id)
+        messages = MessageValidator().repair(messages)
+        guard = HistoryGuard(max_tokens=100_000)
+        messages = guard.validate(messages)
+        guard.check_for_drops(messages)  # after framework trimming
+        return await llm.ainvoke(messages)
+
+# sync (CrewAI, Smolagents)
+@protect_sync(entity_param="customer_id", ttl=60)
+def fetch_customer(customer_id: str) -> dict:
+    return db.get(customer_id)
+
+with Session():
+    fetch_customer(customer_id="c1")</pre>
+    </section>
+
+    <section id="tools">
+      <h2>Tools</h2>
+      <pre>from mycelium import bounded, bounded_sync, ToolRegistry, ToolRunner
+
+registry = ToolRegistry(allowed=["fetch_customer", "delete_file"])
+
+@registry.register
+@bounded(
+    schema={"customer_id": {"type": "string", "required": True, "pattern": r"^c\d+$"}},
+    output_schema={"customer_id": {"type": "string", "required": True}, "name": {"type": "string", "required": True}},
+    allowed_paths=["/workspace/src/"],
+    path_param="path",
+)
+async def fetch_customer(customer_id: str) -> dict:
+    return await db.get(customer_id)
+
+runner = ToolRunner(registry=registry, max_llm_retries=2, max_tool_retries=3)
+result = await runner.call(fetch_customer, customer_id="c1")
+
+# with LLM retry loop
+result, messages = await runner.run_with_llm_retry(
+    fetch_customer,
+    messages=messages,
+    tool_call_id="call_1",
+    kwargs={"customer_id": "c1"},
+    invoke_llm=llm.ainvoke,
+    parse_tool_kwargs=extract_tool_args,
+)
+
+# sync
+@bounded_sync(schema={"customer_id": {"type": "string", "required": True}})
+def fetch_customer(customer_id: str) -> dict:
+    return db.get(customer_id)</pre>
+    </section>
+
+    <section id="actions">
+      <h2>Actions</h2>
+      <pre>from mycelium import ledger, ledger_sync, task_ledger_sync
+
+# tool-level idempotency
+@ledger_sync()
+def send_payment(amount: float, recipient: str) -> dict:
+    return gateway.charge(amount, recipient)
+
+send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_abc")
+send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_abc")  # cached
+
+# or request_id instead of tool_call_id
+send_payment(amount=100.0, recipient="acct_123", request_id="invoice-42")
+
+@ledger()
+async def send_payment(amount: float, recipient: str) -> dict:
+    return await gateway.charge(amount, recipient)
+
+# task-level idempotency
+@task_ledger_sync(id_from=["invoice_id"])
+def process_invoice(invoice_id: str, amount: float) -> dict:
+    ...
+    return {"invoice_id": invoice_id, "status": "paid"}
+
+process_invoice(invoice_id="inv-42", amount=100.0)
+process_invoice(invoice_id="inv-42", amount=200.0)  # returns first result
+
+# correction retry: use a new task_id
+process_invoice(invoice_id="inv-42", task_id="inv-42-attempt-2")</pre>
+    </section>
+
+    <section id="yaml">
+      <h2>YAML</h2>
+      <pre>action_ledger:
+  storage: file          # memory | file | redis | postgres
+  path: ./mycelium-ledger.json
+  tools: [send_payment, delete_file]
+
+task_ledger:
+  storage: file
+  path: ./mycelium-task-ledger.json
+  tasks: [process_invoice]
+
+state_flush:
+  storage: file
+  path: ./mycelium-state.json
+  flush_on: [cancel, disconnect, error]
+
+audit_receipt:
+  agent_id: payment-agent
+  signing_key_env: MYCELIUM_SIGNING_KEY
+  storage: file
+  path: ./mycelium-receipts.jsonl
+  auto: true
+
+tools:
+  fetch_customer:
+    protect: {entity_param: customer_id, ttl: 60}
+    bounded:
+      schema:
+        customer_id: {type: string, required: true, pattern: "^c\\d+$"}
+      output_schema:
+        customer_id: {type: string, required: true}
+        name: {type: string, required: true}
+
+  delete_file:
+    bounded:
+      schema:
+        path: {type: string, required: true}
+      allowed_paths: [/workspace/src/]
+      path_param: path
+
+  send_payment:
+    bounded:
+      schema:
+        amount: {type: number, required: true}
+        recipient: {type: string, required: true}
+
+tasks:
+  process_invoice:
+    ledger: true
+    id_from: [invoice_id]
+
+registry:
+  auto: true
+
+runner:
+  max_llm_retries: 2
+  max_tool_retries: 3
+
+history_guard:
+  max_tokens: 100000
+  max_messages: 1000
+
+message_validator:
+  enabled: true</pre>
+      <pre>from mycelium import load_config
+import my_tools
+
+config = load_config("mycelium.yaml")
+
+# option A: instrument a module
+tools = config.instrument(my_tools)
+
+# option B: decorate one function (name must match tools: key)
+@config.apply
+def send_payment(amount: float, recipient: str) -> dict:
+    return gateway.charge(amount, recipient)
+
+@config.apply_task
+def process_invoice(invoice_id: str) -> dict:
+    ...
+
+with config.run(thread_id):
+    messages = config.prepare_messages(messages)
+    runner = config.build_runner(registry=config.registry)</pre>
+    </section>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    const links = Array.from(document.querySelectorAll(".sidebar a"));
+    const sections = links
+      .map((link) => document.querySelector(link.getAttribute("href")))
+      .filter(Boolean);
+
+    function setActive(id) {
+      links.forEach((link) => {
+        link.classList.toggle("active", link.getAttribute("href") === "#" + id);
+      });
+    }
+
+    links.forEach((link) => {
+      link.addEventListener("click", () => {
+        setActive(link.getAttribute("href").slice(1));
+      });
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible.length) setActive(visible[0].target.id);
+      },
+      { rootMargin: "-20% 0px -60% 0px", threshold: [0, 0.25, 0.5, 1] }
+    );
+
+    sections.forEach((section) => observer.observe(section));
+
+    if (location.hash) {
+      setActive(location.hash.slice(1));
+    } else if (sections.length) {
+      setActive(sections[0].id);
+    }
+  })();
+</script>
+
+</body>
+</html>

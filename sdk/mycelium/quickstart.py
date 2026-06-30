@@ -1,10 +1,15 @@
-"""Interactive demo: LangGraph duplicate tool call on retry (langgraph#7417)."""
+"""Run the langgraph#7417 proof demo (bundled fixture + ledger guard)."""
 
 from __future__ import annotations
 
-from mycelium import ledger_sync
+import sys
+from typing import Any
 
-ISSUE_URL = "https://github.com/langchain-ai/langgraph/issues/7417"
+from mycelium.proofs.langgraph_7417 import (
+    load_fixture,
+    prove_ledger_deduplication,
+    reproduce_baseline_duplicate,
+)
 
 
 def _section(title: str) -> None:
@@ -13,53 +18,65 @@ def _section(title: str) -> None:
     print("-" * len(title))
 
 
-def run_demo() -> None:
-    """Show the bug without Mycelium, then the fix with @ledger_sync."""
-    print("Mycelium quickstart demo")
-    print(f"Bug: LangGraph redispatches a long tool call while the first is still running")
-    print(f"Source: {ISSUE_URL}")
+def _print_execute(tool_name: str, record: dict[str, Any]) -> None:
+    print(f"  [EXECUTING] {tool_name}({record!r})")
 
-    executions: list[str] = []
 
-    def run_slow_subagent(task: str) -> dict[str, str]:
-        executions.append(task)
-        print(f"  [EXECUTING] subagent_task({task!r})")
-        return {"task": task, "result": "done"}
+def _pass(msg: str) -> None:
+    print(f"PASS: {msg}")
 
-    _section("Without Mycelium")
-    executions.clear()
-    run_slow_subagent("analyze_market")
-    run_slow_subagent("analyze_market")
-    print(f"Executions: {len(executions)}  ← duplicate side effect + cost")
 
-    _section("With Mycelium (5 lines)")
-    executions.clear()
+def _fail(msg: str) -> None:
+    print(f"FAIL: {msg}", file=sys.stderr)
 
-    @ledger_sync()
-    def subagent_task(task: str, duration_seconds: int = 0) -> dict[str, str]:
-        return run_slow_subagent(task)
 
-    tool_call_id = "call_subagent_1"
-    subagent_task(
-        task="analyze_market",
-        duration_seconds=300,
-        tool_call_id=tool_call_id,
+def run_demo() -> int:
+    """Run baseline + guarded proof from the bundled fixture. Returns exit code."""
+    fixture = load_fixture()
+    scenario = fixture["scenario"]
+
+    print("Mycelium proof demo (real test)")
+    print(f"Fixture: {fixture['id']}")
+    print(f"Source:  {fixture['source_url']}")
+    print(f"Pattern: {fixture['pattern']}")
+
+    _section("[1/2] Baseline: unguarded redispatch (failure class)")
+    print(
+        f"Simulating redispatch of {scenario['tool_name']!r} "
+        f"(runtime={scenario['runtime']!r}, no ActionLedger)"
     )
-    subagent_task(
-        task="analyze_market",
-        duration_seconds=300,
-        tool_call_id=tool_call_id,
-    )
-    print(f"Executions: {len(executions)}  ← redispatch returned cached result")
+    baseline = reproduce_baseline_duplicate(fixture, on_execute=_print_execute)
+    print(f"Executions: {len(baseline)}")
+    if len(baseline) == 2:
+        _pass("duplicate side effect reproduced (this is the bug)")
+    else:
+        _fail(f"expected 2 executions, got {len(baseline)}")
+        return 1
 
-    _section("Install")
+    _section("[2/2] Guarded: ledger deduplication")
+    print(
+        f"Same scenario with @ledger_sync, tool_call_id={scenario['tool_call_id']!r}"
+    )
+    try:
+        result = prove_ledger_deduplication(fixture, on_execute=_print_execute)
+    except AssertionError as exc:
+        _fail(str(exc))
+        return 1
+
+    print(f"Executions: {len(result['executions'])}")
+    print(f"r1 == r2:   {result['r1'] == result['r2']}")
+    _pass("redispatch returned cached result, side effect ran once")
+
+    _section("Use in your agent")
     print("pip install mycelium-runtime")
     print("mycelium init")
     print()
     print("from mycelium import ledger_sync")
     print()
     print("@ledger_sync()")
-    print("def subagent_task(task: str) -> dict:")
+    print(f"def {scenario['tool_name']}(task: str, duration_seconds: int) -> dict:")
     print("    return run_slow_subagent(task)")
     print()
-    print("# LangGraph passes tool_call_id — same id won't execute twice")
+    print("# Pass tool_call_id from LangGraph on each invocation")
+
+    return 0

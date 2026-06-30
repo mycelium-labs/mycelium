@@ -1,4 +1,4 @@
-"""AuditReceipt — AF-002 tamper-evident signed action receipts."""
+"""AuditReceipt: tamper-evident signed action receipts."""
 
 from __future__ import annotations
 

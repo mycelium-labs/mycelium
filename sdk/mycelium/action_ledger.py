@@ -1,4 +1,4 @@
-"""ActionLedger — AF-002 durable action records and idempotency guard."""
+"""ActionLedger: durable action records and idempotency guard."""
 
 from __future__ import annotations
 

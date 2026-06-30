@@ -1,4 +1,4 @@
-"""StateFlush — AF-002 partial state persistence on cancel, disconnect, or error."""
+"""StateFlush: partial state persistence on cancel, disconnect, or error."""
 
 from __future__ import annotations
 

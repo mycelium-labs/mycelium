@@ -34,7 +34,10 @@ def cmd_init(output: Path, *, full: bool, minimal: bool, force: bool) -> int:
     output.write_text(text, encoding="utf-8")
     print(f"Wrote {output} ({label} template)")
     if label == "quickstart":
-        print("Next: rename subagent_task, pass tool_call_id from LangGraph, @config.apply in code.")
+        print(
+            "Next: rename subagent_task, pass tool_call_id from LangGraph, "
+            "@config.apply in code."
+        )
         print("Try: mycelium demo")
     else:
         print("Next: edit tool/task names, then load_config(...) in your agent code.")
@@ -44,14 +47,13 @@ def cmd_init(output: Path, *, full: bool, minimal: bool, force: bool) -> int:
 def cmd_demo() -> int:
     from mycelium.quickstart import run_demo
 
-    run_demo()
-    return 0
+    return run_demo()
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="mycelium",
-        description="Mycelium runtime — scaffold config and utilities",
+        description="Mycelium runtime: scaffold config and utilities",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
