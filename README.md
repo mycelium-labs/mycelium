@@ -35,7 +35,7 @@ Use Mycelium **with** your existing observability stack if you want both. Myceli
 
 ```bash
 pip install ./sdk
-# or: pip install mycelium-sdk   # once published to PyPI
+# or: pip install mycelium-runtime   # PyPI (import: from mycelium import ...)
 ```
 
 ```python
@@ -56,7 +56,7 @@ Copy `sdk/examples/mycelium.template.yaml` → `mycelium.yaml` and edit the glob
 
 | Path | What |
 |------|------|
-| [`sdk/`](sdk/) | Python package (`mycelium-sdk`) |
+| [`sdk/`](sdk/) | Python package (`mycelium-runtime` on PyPI, `import mycelium`) |
 | [`proof/`](proof/) | Issue-linked proof fixtures + tests |
 | [`planning/`](planning/) | Scope, taxonomy, roadmap |
 

@@ -29,7 +29,7 @@ def _require_psycopg() -> Any:
     except ImportError as exc:
         raise ImportError(
             "Postgres storage requires the 'psycopg' package. "
-            "Install with: pip install 'mycelium-sdk[postgres]'"
+            "Install with: pip install 'mycelium-runtime[postgres]'"
         ) from exc
     return psycopg, sql
 

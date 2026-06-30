@@ -17,7 +17,7 @@ def _require_redis() -> Any:
     except ImportError as exc:
         raise ImportError(
             "Redis storage requires the 'redis' package. "
-            "Install with: pip install 'mycelium-sdk[redis]'"
+            "Install with: pip install 'mycelium-runtime[redis]'"
         ) from exc
     return redis
 
