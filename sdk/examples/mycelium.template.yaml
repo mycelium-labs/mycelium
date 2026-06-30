@@ -16,9 +16,19 @@
 # ---------------------------------------------------------------------------
 # action_ledger  (AF-002 — tool-level idempotency)
 # ---------------------------------------------------------------------------
+# storage: memory | file | redis | postgres
 action_ledger:
   storage: file
   path: ./mycelium-ledger.json
+  # Redis (multi-worker, atomic claim via SET + Lua):
+  # storage: redis
+  # url_env: MYCELIUM_REDIS_URL
+  # prefix: mycelium:action:
+  # in_flight_ttl: 3600
+  # Postgres (audit/compliance, INSERT ... ON CONFLICT):
+  # storage: postgres
+  # dsn_env: MYCELIUM_POSTGRES_DSN
+  # table: mycelium_action_ledger
   # Auto-apply ledger to side-effect tools without repeating storage config:
   tools:
     - send_payment

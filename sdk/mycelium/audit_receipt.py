@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from mycelium.action_ledger import LedgerEntry
+from mycelium.storage.file_lock import PathFileLock
 from mycelium.task_ledger import TaskLedgerEntry
 
 
@@ -103,27 +104,30 @@ class InMemoryAuditReceiptStorage(AuditReceiptStorage):
 
 
 class FileAuditReceiptStorage(AuditReceiptStorage):
-    """Append-only JSONL receipt log."""
+    """Append-only JSONL receipt log with ``fcntl`` locking."""
 
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = PathFileLock(self._path)
 
     def append(self, receipt: AuditReceiptRecord) -> None:
-        with self._path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(receipt.to_dict(), default=str) + "\n")
+        with self._lock.acquire():
+            with self._path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(receipt.to_dict(), default=str) + "\n")
 
     def list_all(self) -> list[AuditReceiptRecord]:
-        if not self._path.exists():
-            return []
-        records: list[AuditReceiptRecord] = []
-        with self._path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                records.append(AuditReceiptRecord.from_dict(json.loads(line)))
-        return records
+        with self._lock.acquire():
+            if not self._path.exists():
+                return []
+            records: list[AuditReceiptRecord] = []
+            with self._path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    records.append(AuditReceiptRecord.from_dict(json.loads(line)))
+            return records
 
 
 def _canonical_json(payload: dict[str, Any]) -> str:

@@ -305,6 +305,32 @@ class MyceliumConfig:
             return FileLedgerStorage(path)
         if storage_type == "memory":
             return InMemoryLedgerStorage()
+        if storage_type == "redis":
+            from mycelium.storage._helpers import resolve_storage_url
+            from mycelium.storage.redis_ledger import RedisLedgerStorage
+
+            try:
+                url = resolve_storage_url(raw)
+            except ValueError as exc:
+                raise ConfigError(str(exc)) from exc
+            ttl = raw.get("in_flight_ttl", 3600)
+            return RedisLedgerStorage(
+                url,
+                prefix=str(raw.get("prefix", "mycelium:action:")),
+                in_flight_ttl=float(ttl) if ttl is not None else None,
+            )
+        if storage_type == "postgres":
+            from mycelium.storage._helpers import resolve_storage_url
+            from mycelium.storage.postgres_ledger import PostgresLedgerStorage
+
+            try:
+                dsn = resolve_storage_url(raw, url_key="dsn")
+            except ValueError as exc:
+                raise ConfigError(str(exc)) from exc
+            return PostgresLedgerStorage(
+                dsn,
+                table=str(raw.get("table", "mycelium_action_ledger")),
+            )
         raise ConfigError(f"unknown ledger storage type: {storage_type!r}")
 
     @staticmethod
@@ -320,6 +346,32 @@ class MyceliumConfig:
             return TaskFileLedgerStorage(path)
         if storage_type == "memory":
             return TaskInMemoryLedgerStorage()
+        if storage_type == "redis":
+            from mycelium.storage._helpers import resolve_storage_url
+            from mycelium.storage.redis_ledger import RedisTaskLedgerStorage
+
+            try:
+                url = resolve_storage_url(raw)
+            except ValueError as exc:
+                raise ConfigError(str(exc)) from exc
+            ttl = raw.get("in_flight_ttl", 3600)
+            return RedisTaskLedgerStorage(
+                url,
+                prefix=str(raw.get("prefix", "mycelium:task:")),
+                in_flight_ttl=float(ttl) if ttl is not None else None,
+            )
+        if storage_type == "postgres":
+            from mycelium.storage._helpers import resolve_storage_url
+            from mycelium.storage.postgres_ledger import PostgresTaskLedgerStorage
+
+            try:
+                dsn = resolve_storage_url(raw, url_key="dsn")
+            except ValueError as exc:
+                raise ConfigError(str(exc)) from exc
+            return PostgresTaskLedgerStorage(
+                dsn,
+                table=str(raw.get("table", "mycelium_task_ledger")),
+            )
         raise ConfigError(f"unknown task ledger storage type: {storage_type!r}")
 
     @staticmethod

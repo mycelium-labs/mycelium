@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
-import os
 import time
 import uuid
 import warnings
@@ -13,6 +12,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
+
+from mycelium.storage.json_file import LockedJsonDictFile
 
 if TYPE_CHECKING:
     from mycelium.audit_receipt import AuditReceiptEmitter
@@ -72,6 +73,14 @@ class TaskLedgerStorage:
         """Persist entry, replacing any existing entry with the same request_id."""
         raise NotImplementedError
 
+    def try_claim_inflight(
+        self,
+        entry: TaskLedgerEntry,
+    ) -> tuple[str, TaskLedgerEntry | None]:
+        from mycelium.storage._helpers import default_try_claim_inflight
+
+        return default_try_claim_inflight(self, entry)
+
     def list_all(self) -> list[TaskLedgerEntry]:
         """Return all entries. Intended for debugging/auditing only."""
         raise NotImplementedError
@@ -94,44 +103,51 @@ class TaskInMemoryLedgerStorage(TaskLedgerStorage):
 
 
 class TaskFileLedgerStorage(TaskLedgerStorage):
-    """JSON-file-backed storage. Best-effort concurrency; prefer a real backend at scale."""
+    """JSON-file-backed storage with ``fcntl`` locking for multi-process safety."""
 
     def __init__(self, path: str | Path) -> None:
-        self._path = Path(path)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-
-    def _load(self) -> dict[str, dict[str, Any]]:
-        if not self._path.exists():
-            return {}
-        try:
-            with self._path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            return {}
-        if not isinstance(data, dict):
-            return {}
-        return data
-
-    def _save(self, data: dict[str, dict[str, Any]]) -> None:
-        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, default=str)
-        os.replace(tmp, self._path)
+        self._file = LockedJsonDictFile(path)
 
     def get(self, request_id: str) -> TaskLedgerEntry | None:
-        data = self._load()
-        raw = data.get(request_id)
-        if raw is None:
-            return None
-        return TaskLedgerEntry.from_dict(raw)
+        def read(data: dict[str, dict[str, Any]]) -> TaskLedgerEntry | None:
+            raw = data.get(request_id)
+            if raw is None:
+                return None
+            return TaskLedgerEntry.from_dict(raw)
+
+        return self._file.read_modify_write_no_save(read)
 
     def set(self, entry: TaskLedgerEntry) -> None:
-        data = self._load()
-        data[entry.request_id] = entry.to_dict()
-        self._save(data)
+        def mutate(data: dict[str, dict[str, Any]]) -> None:
+            data[entry.request_id] = entry.to_dict()
+
+        self._file.read_modify_write(mutate)
+
+    def try_claim_inflight(
+        self,
+        entry: TaskLedgerEntry,
+    ) -> tuple[str, TaskLedgerEntry | None]:
+        outcome: list[tuple[str, TaskLedgerEntry | None]] = []
+
+        def mutate(data: dict[str, dict[str, Any]]) -> None:
+            raw = data.get(entry.request_id)
+            if raw is not None:
+                existing = TaskLedgerEntry.from_dict(raw)
+                if existing.status == "completed":
+                    outcome.append(("completed", existing))
+                    return
+                if existing.status == "in-flight":
+                    outcome.append(("in_flight", existing))
+                    return
+            data[entry.request_id] = entry.to_dict()
+            outcome.append(("claimed", None))
+
+        self._file.read_modify_write(mutate)
+        return outcome[0]
 
     def list_all(self) -> list[TaskLedgerEntry]:
-        return [TaskLedgerEntry.from_dict(raw) for raw in self._load().values()]
+        data = self._file.load()
+        return [TaskLedgerEntry.from_dict(raw) for raw in data.values()]
 
 
 class TaskLedger:
@@ -163,16 +179,6 @@ class TaskLedger:
         Returns the existing completed entry if the task already succeeded.
         Raises TaskLedgerPendingError if the task is currently in-flight.
         """
-        existing = self._storage.get(request_id)
-        if existing is not None:
-            if existing.status == "completed":
-                return existing
-            if existing.status == "in-flight":
-                raise TaskLedgerPendingError(
-                    f"Task {task!r} request {request_id!r} is already in-flight"
-                )
-            # failed: allow retry by falling through to re-claim
-
         bound = _bind_args(args, kwargs)
         entry = TaskLedgerEntry(
             request_id=request_id,
@@ -181,7 +187,13 @@ class TaskLedger:
             kwargs=bound["kwargs"],
             status="in-flight",
         )
-        self._storage.set(entry)
+        outcome, existing = self._storage.try_claim_inflight(entry)
+        if outcome == "completed" and existing is not None:
+            return existing
+        if outcome == "in_flight":
+            raise TaskLedgerPendingError(
+                f"Task {task!r} request {request_id!r} is already in-flight"
+            )
         return entry
 
     def complete(self, request_id: str, result: Any) -> TaskLedgerEntry:

@@ -31,10 +31,13 @@ Repository = "https://github.com/mycelium-labs/mycelium"
 Issues = "https://github.com/mycelium-labs/mycelium/issues"
 
 [project.optional-dependencies]
+redis = ["redis>=5"]
+postgres = ["psycopg[binary]>=3"]
 dev = [
     "pytest",
     "pytest-asyncio",
     "ruff",
+    "fakeredis",
 ]
 
 [tool.hatch.build.targets.wheel]

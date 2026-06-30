@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
-import os
 import time
 import uuid
 import warnings
@@ -15,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 from mycelium.session import Session, _session_var
+from mycelium.storage.json_file import LockedJsonDictFile
 
 if TYPE_CHECKING:
     from mycelium.audit_receipt import AuditReceiptEmitter
@@ -74,6 +74,20 @@ class LedgerStorage:
         """Persist entry, replacing any existing entry with the same request_id."""
         raise NotImplementedError
 
+    def try_claim_inflight(
+        self,
+        entry: LedgerEntry,
+    ) -> tuple[str, LedgerEntry | None]:
+        """Atomically claim an in-flight entry.
+
+        Returns ``("claimed", None)``, ``("completed", entry)``, or
+        ``("in_flight", entry)``. Redis/Postgres backends override with
+        atomic primitives; file storage uses an exclusive lock.
+        """
+        from mycelium.storage._helpers import default_try_claim_inflight
+
+        return default_try_claim_inflight(self, entry)
+
     def list_all(self) -> list[LedgerEntry]:
         """Return all entries. Intended for debugging/auditing only."""
         raise NotImplementedError
@@ -96,44 +110,51 @@ class InMemoryLedgerStorage(LedgerStorage):
 
 
 class FileLedgerStorage(LedgerStorage):
-    """JSON-file-backed storage. Best-effort concurrency; prefer a real backend at scale."""
+    """JSON-file-backed storage with ``fcntl`` locking for multi-process safety."""
 
     def __init__(self, path: str | Path) -> None:
-        self._path = Path(path)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-
-    def _load(self) -> dict[str, dict[str, Any]]:
-        if not self._path.exists():
-            return {}
-        try:
-            with self._path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            return {}
-        if not isinstance(data, dict):
-            return {}
-        return data
-
-    def _save(self, data: dict[str, dict[str, Any]]) -> None:
-        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, default=str)
-        os.replace(tmp, self._path)
+        self._file = LockedJsonDictFile(path)
 
     def get(self, request_id: str) -> LedgerEntry | None:
-        data = self._load()
-        raw = data.get(request_id)
-        if raw is None:
-            return None
-        return LedgerEntry.from_dict(raw)
+        def read(data: dict[str, dict[str, Any]]) -> LedgerEntry | None:
+            raw = data.get(request_id)
+            if raw is None:
+                return None
+            return LedgerEntry.from_dict(raw)
+
+        return self._file.read_modify_write_no_save(read)
 
     def set(self, entry: LedgerEntry) -> None:
-        data = self._load()
-        data[entry.request_id] = entry.to_dict()
-        self._save(data)
+        def mutate(data: dict[str, dict[str, Any]]) -> None:
+            data[entry.request_id] = entry.to_dict()
+
+        self._file.read_modify_write(mutate)
+
+    def try_claim_inflight(
+        self,
+        entry: LedgerEntry,
+    ) -> tuple[str, LedgerEntry | None]:
+        outcome: list[tuple[str, LedgerEntry | None]] = []
+
+        def mutate(data: dict[str, dict[str, Any]]) -> None:
+            raw = data.get(entry.request_id)
+            if raw is not None:
+                existing = LedgerEntry.from_dict(raw)
+                if existing.status == "completed":
+                    outcome.append(("completed", existing))
+                    return
+                if existing.status == "in-flight":
+                    outcome.append(("in_flight", existing))
+                    return
+            data[entry.request_id] = entry.to_dict()
+            outcome.append(("claimed", None))
+
+        self._file.read_modify_write(mutate)
+        return outcome[0]
 
     def list_all(self) -> list[LedgerEntry]:
-        return [LedgerEntry.from_dict(raw) for raw in self._load().values()]
+        data = self._file.load()
+        return [LedgerEntry.from_dict(raw) for raw in data.values()]
 
 
 class ActionLedger:
@@ -159,16 +180,6 @@ class ActionLedger:
         Returns the existing completed entry if the request already succeeded.
         Raises LedgerPendingError if the request is currently in-flight.
         """
-        existing = self._storage.get(request_id)
-        if existing is not None:
-            if existing.status == "completed":
-                return existing
-            if existing.status == "in-flight":
-                raise LedgerPendingError(
-                    f"Tool {tool!r} request {request_id!r} is already in-flight"
-                )
-            # failed: allow retry by falling through to re-claim
-
         bound = _bind_args(args, kwargs)
         entry = LedgerEntry(
             request_id=request_id,
@@ -177,7 +188,13 @@ class ActionLedger:
             kwargs=bound["kwargs"],
             status="in-flight",
         )
-        self._storage.set(entry)
+        outcome, existing = self._storage.try_claim_inflight(entry)
+        if outcome == "completed" and existing is not None:
+            return existing
+        if outcome == "in_flight":
+            raise LedgerPendingError(
+                f"Tool {tool!r} request {request_id!r} is already in-flight"
+            )
         return entry
 
     def complete(self, request_id: str, result: Any) -> LedgerEntry:
