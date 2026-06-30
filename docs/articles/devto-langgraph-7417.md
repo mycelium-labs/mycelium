@@ -194,7 +194,7 @@ This article focuses on the highest-cost bug: **duplicate side effects on retry.
 - **GitHub:** https://github.com/mycelium-labs/mycelium
 - **PyPI:** https://pypi.org/project/mycelium-runtime/
 - **Issue:** https://github.com/langchain-ai/langgraph/issues/7417
-- **Handbook:** https://github.com/mycelium-labs/mycelium/blob/main/docs/index.html
+- **Handbook:** https://mycelium-labs.github.io/mycelium/
 
 ```bash
 pip install mycelium-runtime
