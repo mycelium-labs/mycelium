@@ -61,7 +61,7 @@ from mycelium.tool_boundary import (
 from mycelium.tool_registry import ToolRegistry
 from mycelium.tool_runner import ToolRunner
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 __all__ = [
     "ActionLedger",

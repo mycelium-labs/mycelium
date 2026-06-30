@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mycelium-runtime"
-version = "1.1.0"
-description = "Mycelium runtime — failure prevention for AI agents (AF-006, AF-004, AF-002)"
+version = "1.1.1"
+description = "Runtime guards for AI agents: stale context, bad tool calls, duplicate side effects on retry"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

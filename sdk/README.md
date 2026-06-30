@@ -1,23 +1,31 @@
 # Mycelium runtime
 
-Runtime failure prevention for AI agents.
+**Prevent predictable agent failures before they reach the LLM** — not post-hoc tracing.
 
-**PyPI:** `pip install mycelium-runtime` — **import:** `from mycelium import ...`
+```bash
+pip install mycelium-runtime   # Python 3.10+
+mycelium init                  # creates mycelium.yaml in your project
+```
 
-This directory is the **publishable package**. Only `mycelium/` ships on PyPI; everything else here is for development and docs.
+```python
+from mycelium import load_config
 
-| Path | In PyPI wheel? |
-|------|----------------|
-| `mycelium/` | Yes (code + `templates/*.yaml`) |
-| `mycelium/templates/` | Yes — use `mycelium init` to write into your project |
-| `tests/` | No — run with `pytest tests/` |
-| `examples/` | No — see `mycelium init` |
-| `README.md` | PyPI project page only (not inside wheel) |
-| `pyproject.toml`, `uv.lock` | No |
+config = load_config("mycelium.yaml")
+```
 
-**v1.1** ships three failure modes: context corruption (AF-006), tool boundary enforcement (AF-004), and **action traceability prevention** (AF-002).
+## What it does
 
-> **AF-002 is not an observability platform.** The failure mode is called "observability black hole" because agents act without durable records. Mycelium **prevents** that — via idempotency ledgers, state flush on cancel, and signed receipts — not via traces, spans, or dashboards. For post-hoc tracing, use Langfuse, Helicone, or Opik alongside Mycelium.
+| Problem | What Mycelium does |
+|---------|-------------------|
+| **Stale or broken context** | TTL cache, message repair, history limits — agent sees fresh, valid data |
+| **Bad or unauthorized tool calls** | Validate inputs/outputs, allowlists, scoped paths — block before execution |
+| **Duplicate side effects on retry** | Idempotency ledgers, state flush on cancel, signed receipts — pay once, not twice |
+
+Framework-agnostic. Works with raw message lists and plain Python functions (LangGraph, CrewAI, OpenAI tool loops, etc.).
+
+**LangGraph guide:** see [`docs/integrations/langgraph.md`](https://github.com/mycelium-labs/mycelium/blob/main/docs/integrations/langgraph.md) in the repo.
+
+> **Not an observability platform.** Langfuse/Helicone show what happened *after*. Mycelium prevents failures *during* execution. Use both if you want traces and guards.
 
 ## Install
 
@@ -25,13 +33,11 @@ This directory is the **publishable package**. Only `mycelium/` ships on PyPI; e
 
 ```bash
 pip install mycelium-runtime
-mycelium init              # writes ./mycelium.yaml (full annotated template)
+mycelium init              # full annotated template → ./mycelium.yaml
 mycelium init --minimal    # smaller starter config
-# local dev from repo:
-pip install -e ./sdk
 ```
 
-## Quickstart — AF-006
+## Quickstart — stale context & broken transcripts
 
 ```python
 from mycelium import protect, Session
@@ -91,7 +97,7 @@ guard.check_for_drops(processed_messages)  # after framework trimming
 
 Raises on token overflow, message count limits, duplicate turns, and silent message drops.
 
-## Quickstart — AF-004
+## Quickstart — tool boundaries
 
 ```python
 from mycelium import bounded, ToolRegistry, ToolRunner
@@ -175,9 +181,9 @@ result, messages = await runner.run_with_llm_retry(
 - Output failures → retry the tool up to `max_tool_retries` → then LLM retry
 - Raises `ToolBoundaryExhaustedError` when retries are used up
 
-## Quickstart — AF-002 (action traceability prevention)
+## Quickstart — idempotency & audit receipts
 
-AF-002 prevents the "observability black hole" failure class: duplicate side effects, lost state on cancel, and actions that can't be audited. This is **not** distributed tracing — see the note at the top of this README.
+Stop duplicate payments, emails, and API calls when the framework retries. Persist state on cancel. This is **runtime prevention**, not distributed tracing.
 
 ### Tool-level idempotency
 
@@ -231,7 +237,7 @@ ledger = ActionLedger(storage=PostgresLedgerStorage("postgresql://localhost/myce
 
 Optional extras: `pip install 'mycelium-runtime[redis]'` or `pip install 'mycelium-runtime[postgres]'`.
 
-## Quickstart — AF-002 task-level ledger
+## Quickstart — task-level idempotency
 
 Stop entire tasks from re-running on framework-level retries:
 
@@ -272,7 +278,7 @@ r2 = process_invoice(invoice_id="inv-42", task_id="invoice-42-attempt-2")  # fre
 
 ## YAML configuration
 
-Separate sections per failure mode. Global AF-002 settings inherit into tools/tasks
+Separate YAML sections per guard type. Global ledger settings inherit into tools/tasks
 so you do not repeat storage paths on every function.
 
 **Minimum integration (3 steps):**
@@ -336,7 +342,7 @@ config = load_config("mycelium.yaml")
 tools = config.instrument(my_tools)   # one call wraps tools + tasks
 
 with config.run(thread_id):
-    messages = config.prepare_messages(messages)  # AF-006 + auto state flush
+    messages = config.prepare_messages(messages)  # message validation + state flush
     ...
 ```
 
@@ -345,3 +351,15 @@ is configured with `auto: true` (default), all ledgered tools/tasks get signed
 receipts automatically.
 
 Legacy per-tool style still works — run `mycelium init` for the full annotated template.
+
+---
+
+## For contributors (repo layout)
+
+Clone the GitHub repo to run proofs and tests. PyPI installs only the `mycelium` package.
+
+```bash
+git clone https://github.com/mycelium-labs/mycelium.git
+cd mycelium/sdk && pip install -e ".[dev]"
+pytest tests/ -v
+```
