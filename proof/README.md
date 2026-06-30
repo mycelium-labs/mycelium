@@ -31,8 +31,6 @@ This is not marketing copy or fake chat text. Each fixture links to a public Git
 
 Shipped guards: `ActionLedger`, `TaskLedger`, `StateFlush`, `AuditReceipt`.
 
-Next failure mode. Fixtures capture the real issues that v2 prevents.
-
 | Fixture | Real issue | Component | Pattern |
 |---|---|---|---|
 | `langgraph-7417-duplicate-tool-execution.json` | [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417) | `ActionLedger` | long tool call redispatched because no durable in-flight record exists |
@@ -58,7 +56,7 @@ pytest proof/test_proof.py proof/test_proof_af004.py proof/test_proof_af002.py p
 
 ## How to add a new legitimate case
 
-1. **Find a real issue** in your tagged corpus (`incidents/`) or GitHub with a clear mechanism in the body/comments.
+1. **Find a real issue** in the Hugging Face corpus (`MYCELIUM_HF_REPO`, see `.env.example`) or on GitHub with a clear mechanism in the body/comments.
 2. **Extract the failure class** — not the whole conversation, just the structural bug (orphan tool result, stale cache, etc.).
 3. **Add a fixture JSON** with:
    - `source_url`, `source_title`, `pattern`
