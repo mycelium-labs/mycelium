@@ -130,11 +130,14 @@ Use `config.run(thread_id)` — it wires `StateFlush` when `state_flush` is in Y
 
 ## Quick test (no LangGraph required)
 
-Reproduces the langgraph#7417 failure class:
+```bash
+pip install mycelium-runtime
+mycelium demo
+```
+
+Or from this repo:
 
 ```bash
-git clone https://github.com/mycelium-labs/mycelium.git
-cd mycelium
 pip install -e "./sdk[dev]"
 pytest proof/test_proof_af002.py::test_ledger_deduplicates_redispatched_tool_call_langgraph_7417 -v
 ```
