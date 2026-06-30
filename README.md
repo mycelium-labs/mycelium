@@ -8,7 +8,7 @@ Keeps context current, enforces tool boundaries, and deduplicates side effects o
 
 Works with raw message lists and plain Python functions. Requires Python 3.10 or later.
 
-**PyPI:** [`mycelium-runtime`](https://pypi.org/project/mycelium-runtime/) · **Handbook:** [docs/index.html](docs/index.html) · **API reference:** [sdk/README.md](sdk/README.md)
+**PyPI:** [`mycelium-runtime`](https://pypi.org/project/mycelium-runtime/) · **Handbook:** [docs]([docs/index.html](https://mycelium-labs.github.io/mycelium/#install)) · **API reference:** [sdk/README.md](sdk/README.md)
 
 ## What it does
 
