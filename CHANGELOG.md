@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.1.0 — 2026-06-30
+
+First public PyPI release as **`mycelium-runtime`** (`pip install mycelium-runtime`).
+
+### Packaging
+- PyPI distribution renamed from `mycelium-sdk` (name taken) to `mycelium-runtime`
+- Python **3.10+** support (was 3.12-only in early releases)
+- GitHub Actions publish workflow (tag `v*` → PyPI)
+
+### AF-002 storage backends
+- **File** — `fcntl` locking for multi-process safety on a single host
+- **Redis** — atomic `SET NX` claim + in-flight TTL (multi-worker)
+- **Postgres** — `INSERT ... ON CONFLICT` claim (audit/compliance)
+- Optional extras: `mycelium-runtime[redis]`, `mycelium-runtime[postgres]`
+
+### Docs
+- AF-002 positioned as runtime prevention, not a tracing platform
+
 ## 1.0.0 — 2026-06-29
 
 First production release. Ships three failure modes with YAML-first integration.
