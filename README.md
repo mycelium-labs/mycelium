@@ -1,8 +1,12 @@
 # Mycelium
 
-Runtime failure prevention for AI agents. Keeps context current, enforces tool boundaries, and deduplicates side effects on retry.
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime)](https://pypi.org/project/mycelium-runtime/)
 
-Framework-agnostic. Works with raw message lists and plain Python functions (LangGraph, CrewAI, OpenAI tool loops, etc.). Requires Python 3.10 or later.
+**Runtime failure prevention for AI agents** — Python guards for duplicate tool execution on retry, stale context, and invalid tool calls. Framework-agnostic (LangGraph, CrewAI, OpenAI tool loops).
+
+Keeps context current, enforces tool boundaries, and deduplicates side effects on retry. Not observability or tracing — use Langfuse/Helicone alongside Mycelium if you want both.
+
+Works with raw message lists and plain Python functions. Requires Python 3.10 or later.
 
 **PyPI:** [`mycelium-runtime`](https://pypi.org/project/mycelium-runtime/) · **Handbook:** [docs/index.html](docs/index.html) · **API reference:** [sdk/README.md](sdk/README.md)
 

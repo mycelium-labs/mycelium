@@ -1,5 +1,7 @@
 # Mycelium runtime
 
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime)](https://pypi.org/project/mycelium-runtime/)
+
 ## One painful bug → five lines of code
 
 **LangGraph Cloud redispatches a long tool call while the first is still running.** Both complete. You pay twice. Side effects run twice. [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417)
