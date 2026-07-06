@@ -6,7 +6,9 @@ from mycelium.action_ledger import (
     InMemoryLedgerStorage,
     LedgerEntry,
     LedgerError,
+    LedgerHardBlockError,
     LedgerPendingError,
+    LedgerPollTimeoutError,
     LedgerStorage,
     get_ledger,
     ledger,
@@ -23,6 +25,7 @@ from mycelium.audit_receipt import (
 from mycelium.config import (
     ConfigError,
     MyceliumConfig,
+    TransitionConfig,
     load_config,
     load_config_from_string,
 )
@@ -60,8 +63,18 @@ from mycelium.tool_boundary import (
 )
 from mycelium.tool_registry import ToolRegistry
 from mycelium.tool_runner import ToolRunner
+from mycelium.transition import (
+    RetryPermission,
+    SideEffectBoundary,
+    SideEffectClass,
+    TerminalOutcome,
+    ToolTransitionBinding,
+    TransitionScope,
+    derive_transition_key_for_call,
+    execution_scope,
+)
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 __all__ = [
     "ActionLedger",
@@ -69,7 +82,9 @@ __all__ = [
     "InMemoryLedgerStorage",
     "LedgerEntry",
     "LedgerError",
+    "LedgerHardBlockError",
     "LedgerPendingError",
+    "LedgerPollTimeoutError",
     "LedgerStorage",
     "get_ledger",
     "ledger",
@@ -96,6 +111,16 @@ __all__ = [
     "task_ledger_sync",
     "ConfigError",
     "MyceliumConfig",
+    "TransitionConfig",
+    "SideEffectClass",
+    "SideEffectBoundary",
+    "RetryPermission",
+    "TerminalOutcome",
+    "ToolTransitionBinding",
+    "TransitionScope",
+    "derive_transition_key",
+    "derive_transition_key_for_call",
+    "execution_scope",
     "load_config",
     "load_config_from_string",
     "protect",
