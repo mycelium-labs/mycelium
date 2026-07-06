@@ -76,10 +76,12 @@ class TaskLedgerStorage:
     def try_claim_inflight(
         self,
         entry: TaskLedgerEntry,
+        *,
+        lease_ttl: float = 3600.0,
     ) -> tuple[str, TaskLedgerEntry | None]:
         from mycelium.storage._helpers import default_try_claim_inflight
 
-        return default_try_claim_inflight(self, entry)
+        return default_try_claim_inflight(self, entry, lease_ttl=lease_ttl)
 
     def list_all(self) -> list[TaskLedgerEntry]:
         """Return all entries. Intended for debugging/auditing only."""

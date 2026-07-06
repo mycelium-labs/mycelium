@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -58,14 +59,22 @@ class RedisEntryStorage:
             if entry.status != "in-flight":
                 self._client.persist(key)
 
-    def try_claim_inflight(self, entry: E) -> tuple[ClaimOutcome, E | None]:
+    def try_claim_inflight(
+        self,
+        entry: E,
+        *,
+        lease_ttl: float = 3600.0,
+    ) -> tuple[ClaimOutcome, E | None]:
+        from mycelium.storage._helpers import claim_inflight_outcome, with_lease
+
         key = self._key(entry.request_id)
-        payload = json.dumps(entry.to_dict(), default=str)
-        ttl = int(self._in_flight_ttl or 0)
+        ttl = int(self._in_flight_ttl or lease_ttl or 0)
 
         for _ in range(32):
             existing_raw = self._client.get(key)
             if existing_raw is None:
+                leased = with_lease(entry, now=time.time(), lease_ttl=lease_ttl)
+                payload = json.dumps(leased.to_dict(), default=str)
                 if ttl > 0:
                     claimed = self._client.set(key, payload, nx=True, ex=ttl)
                 else:
@@ -75,11 +84,15 @@ class RedisEntryStorage:
                 continue
 
             existing = self._from_dict(json.loads(existing_raw))
-            if existing.status == "completed":
+            now = time.time()
+            outcome = claim_inflight_outcome(existing, now=now)
+            if outcome == "completed":
                 return "completed", existing
-            if existing.status == "in-flight":
+            if outcome == "in_flight":
                 return "in_flight", existing
 
+            leased = with_lease(entry, now=now, lease_ttl=lease_ttl)
+            payload = json.dumps(leased.to_dict(), default=str)
             if ttl > 0:
                 self._client.set(key, payload, ex=ttl)
             else:
@@ -129,8 +142,13 @@ class RedisLedgerStorage:
     def set(self, entry: Any) -> None:
         self._inner.set(entry)
 
-    def try_claim_inflight(self, entry: Any) -> tuple[ClaimOutcome, Any | None]:
-        return self._inner.try_claim_inflight(entry)
+    def try_claim_inflight(
+        self,
+        entry: Any,
+        *,
+        lease_ttl: float = 3600.0,
+    ) -> tuple[ClaimOutcome, Any | None]:
+        return self._inner.try_claim_inflight(entry, lease_ttl=lease_ttl)
 
     def list_all(self) -> list[Any]:
         return self._inner.list_all()
@@ -161,8 +179,13 @@ class RedisTaskLedgerStorage:
     def set(self, entry: Any) -> None:
         self._inner.set(entry)
 
-    def try_claim_inflight(self, entry: Any) -> tuple[ClaimOutcome, Any | None]:
-        return self._inner.try_claim_inflight(entry)
+    def try_claim_inflight(
+        self,
+        entry: Any,
+        *,
+        lease_ttl: float = 3600.0,
+    ) -> tuple[ClaimOutcome, Any | None]:
+        return self._inner.try_claim_inflight(entry, lease_ttl=lease_ttl)
 
     def list_all(self) -> list[Any]:
         return self._inner.list_all()

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from mycelium.storage._helpers import ClaimOutcome
+from mycelium.storage._helpers import ClaimOutcome, claim_inflight_outcome, with_lease
 
 E = TypeVar("E")
 
@@ -95,9 +96,16 @@ class PostgresEntryStorage:
             conn.execute(query, (entry.request_id, json.dumps(payload)))
             conn.commit()
 
-    def try_claim_inflight(self, entry: E) -> tuple[ClaimOutcome, E | None]:
+    def try_claim_inflight(
+        self,
+        entry: E,
+        *,
+        lease_ttl: float = 3600.0,
+    ) -> tuple[ClaimOutcome, E | None]:
         self._ensure_schema()
-        payload = json.loads(json.dumps(entry.to_dict(), default=str))
+        now = time.time()
+        leased = with_lease(entry, now=now, lease_ttl=lease_ttl)
+        payload = json.loads(json.dumps(leased.to_dict(), default=str))
         insert_query = self._sql.SQL(
             "INSERT INTO {} (request_id, payload) VALUES (%s, %s::jsonb) "
             "ON CONFLICT (request_id) DO NOTHING RETURNING request_id"
@@ -105,13 +113,8 @@ class PostgresEntryStorage:
         select_for_update = self._sql.SQL(
             "SELECT payload FROM {} WHERE request_id = %s FOR UPDATE"
         ).format(self._table_id())
-        update_failed = self._sql.SQL(
-            "UPDATE {} SET payload = %s::jsonb "
-            "WHERE request_id = %s AND payload->>'status' = 'failed' "
-            "RETURNING request_id"
-        ).format(self._table_id())
-        select_one = self._sql.SQL(
-            "SELECT payload FROM {} WHERE request_id = %s"
+        update_reclaim = self._sql.SQL(
+            "UPDATE {} SET payload = %s::jsonb WHERE request_id = %s RETURNING request_id"
         ).format(self._table_id())
 
         with self._psycopg.connect(self._dsn) as conn:
@@ -128,24 +131,18 @@ class PostgresEntryStorage:
                     return "claimed", None
 
                 existing = self._from_dict(_payload_dict(row[0]))
-                if existing.status == "completed":
+                outcome = claim_inflight_outcome(existing, now=now)
+                if outcome == "completed":
                     return "completed", existing
-                if existing.status == "in-flight":
+                if outcome == "in_flight":
                     return "in_flight", existing
 
-                updated = conn.execute(
-                    update_failed,
+                reclaimed = conn.execute(
+                    update_reclaim,
                     (json.dumps(payload), entry.request_id),
                 ).fetchone()
-                if updated is not None:
+                if reclaimed is not None:
                     return "claimed", None
-
-                row = conn.execute(select_one, (entry.request_id,)).fetchone()
-                if row is None:
-                    return "claimed", None
-                existing = self._from_dict(_payload_dict(row[0]))
-                if existing.status == "completed":
-                    return "completed", existing
                 return "in_flight", existing
 
     def list_all(self) -> list[E]:
@@ -179,8 +176,13 @@ class PostgresLedgerStorage:
     def set(self, entry: Any) -> None:
         self._inner.set(entry)
 
-    def try_claim_inflight(self, entry: Any) -> tuple[ClaimOutcome, Any | None]:
-        return self._inner.try_claim_inflight(entry)
+    def try_claim_inflight(
+        self,
+        entry: Any,
+        *,
+        lease_ttl: float = 3600.0,
+    ) -> tuple[ClaimOutcome, Any | None]:
+        return self._inner.try_claim_inflight(entry, lease_ttl=lease_ttl)
 
     def list_all(self) -> list[Any]:
         return self._inner.list_all()
@@ -209,8 +211,13 @@ class PostgresTaskLedgerStorage:
     def set(self, entry: Any) -> None:
         self._inner.set(entry)
 
-    def try_claim_inflight(self, entry: Any) -> tuple[ClaimOutcome, Any | None]:
-        return self._inner.try_claim_inflight(entry)
+    def try_claim_inflight(
+        self,
+        entry: Any,
+        *,
+        lease_ttl: float = 3600.0,
+    ) -> tuple[ClaimOutcome, Any | None]:
+        return self._inner.try_claim_inflight(entry, lease_ttl=lease_ttl)
 
     def list_all(self) -> list[Any]:
         return self._inner.list_all()
