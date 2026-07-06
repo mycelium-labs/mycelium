@@ -46,6 +46,18 @@ from mycelium.task_ledger import (
 from mycelium.tool_boundary import bounded, bounded_sync
 from mycelium.tool_registry import ToolRegistry
 from mycelium.tool_runner import ToolRunner
+from mycelium.transition import (
+    SideEffectClass,
+    SideEffectBoundary,
+    RetryPermission,
+    ToolTransitionBinding,
+    TransitionConfig,
+    TransitionScope,
+    parse_retry_permission,
+    parse_side_effect_boundary,
+    parse_side_effect_class,
+    execution_scope,
+)
 
 
 class ConfigError(Exception):
@@ -61,6 +73,9 @@ class ToolConfig:
     bounded: dict[str, Any] | None = None
     ledger: dict[str, Any] | None = None
     audit_receipt: bool = False
+    side_effect_class: SideEffectClass | None = None
+    retry_permission: RetryPermission | None = None
+    side_effect_boundary: SideEffectBoundary | None = None
 
     def is_noop(self) -> bool:
         return (
@@ -95,6 +110,7 @@ class MyceliumConfig:
     tasks: dict[str, TaskConfig] | None = None
     state_flush: dict[str, Any] | None = None
     audit_receipt: dict[str, Any] | None = None
+    transition: TransitionConfig | None = None
     action_ledger: dict[str, Any] | None = None
     task_ledger_defaults: dict[str, Any] | None = None
     _audit_emitter: AuditReceiptEmitter | None = None
@@ -135,10 +151,22 @@ class MyceliumConfig:
         if tool_config.ledger is not None:
             storage = self._build_ledger_storage(tool_config.ledger)
             audit_emitter = self._tool_audit_emitter(tool_config)
+            transition_binding = self.tool_transition_binding(tool_config)
+            ledger_kwargs = self._ledger_timing_kwargs()
             if is_async:
-                func = ledger(storage=storage, audit_emitter=audit_emitter)(func)
+                func = ledger(
+                    storage=storage,
+                    audit_emitter=audit_emitter,
+                    transition_binding=transition_binding,
+                    **ledger_kwargs,
+                )(func)
             else:
-                func = ledger_sync(storage=storage, audit_emitter=audit_emitter)(func)
+                func = ledger_sync(
+                    storage=storage,
+                    audit_emitter=audit_emitter,
+                    transition_binding=transition_binding,
+                    **ledger_kwargs,
+                )(func)
 
         return func
 
@@ -216,9 +244,16 @@ class MyceliumConfig:
             return None
         if self._audit_emitter is not None:
             return self._audit_emitter
-        agent_id = self.audit_receipt.get("agent_id")
-        if not agent_id:
-            raise ConfigError("'audit_receipt.agent_id' is required")
+        if self.audit_receipt.get("agent_id"):
+            raise ConfigError(
+                "'audit_receipt.agent_id' is no longer supported; "
+                "set 'transition.agent_id' instead"
+            )
+        if self.transition is None:
+            raise ConfigError(
+                "'transition' with 'agent_id' is required when audit_receipt is configured"
+            )
+        agent_id = self.transition.agent_id
         signing_key = resolve_signing_key(
             signing_key=self.audit_receipt.get("signing_key"),
             signing_key_env=self.audit_receipt.get("signing_key_env"),
@@ -261,11 +296,44 @@ class MyceliumConfig:
         is not configured.
         """
         state_flush = self.build_state_flush()
+        scope = TransitionScope(thread_id=run_id, run_id=run_id)
         if state_flush is not None:
-            return state_flush.run(run_id, use_session=use_session)
-        if use_session:
-            return Session()
-        return _NoopRun(run_id)
+            inner: AbstractContextManager[Any] = state_flush.run(
+                run_id, use_session=use_session
+            )
+        elif use_session:
+            inner = Session()
+        else:
+            inner = _NoopRun(run_id)
+        return _ScopedRunContext(inner, scope)
+
+    def tool_transition_binding(
+        self, tool_config: ToolConfig
+    ) -> ToolTransitionBinding | None:
+        """Build per-tool transition binding when transition config is present."""
+        if self.transition is None or tool_config.side_effect_class is None:
+            return None
+        return ToolTransitionBinding.for_tool(
+            agent_id=self.transition.agent_id,
+            policy_version=self.transition.policy_version,
+            side_effect_class=tool_config.side_effect_class,
+            scope_from=dict(self.transition.scope_from),
+            retry_permission=tool_config.retry_permission,
+            side_effect_boundary=tool_config.side_effect_boundary,
+        )
+
+    def _ledger_timing_kwargs(self) -> dict[str, float]:
+        """Return ActionLedger timing overrides from ``transition`` config."""
+        if self.transition is None:
+            return {}
+        kwargs: dict[str, float] = {}
+        if self.transition.lease_ttl is not None:
+            kwargs["lease_ttl"] = self.transition.lease_ttl
+        if self.transition.poll_interval is not None:
+            kwargs["poll_interval"] = self.transition.poll_interval
+        if self.transition.poll_timeout is not None:
+            kwargs["poll_timeout"] = self.transition.poll_timeout
+        return kwargs
 
     def _tool_audit_emitter(self, tool_config: ToolConfig) -> AuditReceiptEmitter | None:
         if not tool_config.audit_receipt:
@@ -437,6 +505,28 @@ class _SimpleNamespace:
         self.__dict__.update(kwargs)
 
 
+class _ScopedRunContext(AbstractContextManager[Any]):
+    """Nest an execution scope around a run/session context manager."""
+
+    def __init__(
+        self,
+        inner: AbstractContextManager[Any],
+        scope: TransitionScope,
+    ) -> None:
+        self._inner = inner
+        self._scope_cm = execution_scope(scope)
+
+    def __enter__(self) -> Any:
+        self._scope_cm.__enter__()
+        return self._inner.__enter__()
+
+    def __exit__(self, *args: Any) -> bool:
+        try:
+            return bool(self._inner.__exit__(*args))
+        finally:
+            self._scope_cm.__exit__(*args)
+
+
 class _NoopRun:
     """Stand-in run handle when state_flush is not configured."""
 
@@ -503,12 +593,38 @@ def _parse_tool_config(
     if audit_auto and ledger is not None and raw.get("audit_receipt") is not False:
         audit_receipt = True
 
+    side_effect_class: SideEffectClass | None = None
+    if "side_effect_class" in raw:
+        try:
+            side_effect_class = parse_side_effect_class(raw["side_effect_class"])
+        except ValueError as exc:
+            raise ConfigError(f"tool '{name}': {exc}") from exc
+
+    retry_permission: RetryPermission | None = None
+    if "retry_permission" in raw:
+        try:
+            retry_permission = parse_retry_permission(raw["retry_permission"])
+        except ValueError as exc:
+            raise ConfigError(f"tool '{name}': {exc}") from exc
+
+    side_effect_boundary: SideEffectBoundary | None = None
+    if "side_effect_boundary" in raw:
+        try:
+            side_effect_boundary = parse_side_effect_boundary(
+                raw["side_effect_boundary"]
+            )
+        except ValueError as exc:
+            raise ConfigError(f"tool '{name}': {exc}") from exc
+
     return ToolConfig(
         name=name,
         protect=protect,
         bounded=bounded,
         ledger=ledger,
         audit_receipt=audit_receipt,
+        side_effect_class=side_effect_class,
+        retry_permission=retry_permission,
+        side_effect_boundary=side_effect_boundary,
     )
 
 
@@ -591,6 +707,9 @@ def _apply_action_ledger_tools(
             bounded=existing.bounded,
             ledger=ledger,
             audit_receipt=audit_receipt,
+            side_effect_class=existing.side_effect_class,
+            retry_permission=existing.retry_permission,
+            side_effect_boundary=existing.side_effect_boundary,
         )
 
 
@@ -630,6 +749,81 @@ def _apply_task_ledger_tasks(
         )
 
 
+def _parse_optional_positive_float(
+    raw: dict[str, Any],
+    key: str,
+    *,
+    section: str,
+    allow_null: bool = False,
+) -> float | None:
+    if key not in raw:
+        return None
+    value = raw[key]
+    if value is None:
+        if allow_null:
+            return None
+        raise ConfigError(f"'{section}.{key}' cannot be null")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"'{section}.{key}' must be a number") from exc
+    if parsed <= 0:
+        raise ConfigError(f"'{section}.{key}' must be greater than zero")
+    return parsed
+
+
+def _parse_transition_config(raw: Any) -> TransitionConfig | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConfigError("'transition' must be a mapping")
+
+    agent_id = raw.get("agent_id")
+    policy_version = raw.get("policy_version")
+    if not agent_id:
+        raise ConfigError("'transition.agent_id' is required")
+    if not policy_version:
+        raise ConfigError("'transition.policy_version' is required")
+
+    scope_from_raw = raw.get("scope_from", {})
+    if not isinstance(scope_from_raw, dict):
+        raise ConfigError("'transition.scope_from' must be a mapping")
+    scope_from = {str(key): str(value) for key, value in scope_from_raw.items()}
+
+    lease_ttl = _parse_optional_positive_float(
+        raw, "lease_ttl", section="transition"
+    )
+    poll_interval = _parse_optional_positive_float(
+        raw, "poll_interval", section="transition"
+    )
+    poll_timeout = _parse_optional_positive_float(
+        raw, "poll_timeout", section="transition"
+    )
+
+    return TransitionConfig(
+        agent_id=str(agent_id),
+        policy_version=str(policy_version),
+        scope_from=scope_from,
+        lease_ttl=lease_ttl,
+        poll_interval=poll_interval,
+        poll_timeout=poll_timeout,
+    )
+
+
+def _validate_transition_tools(
+    tools: dict[str, ToolConfig],
+    transition: TransitionConfig | None,
+) -> None:
+    if transition is None:
+        return
+    for name, tool in tools.items():
+        if tool.ledger is not None and tool.side_effect_class is None:
+            raise ConfigError(
+                f"tool '{name}' has ledger but no side_effect_class; "
+                "required when 'transition' is configured"
+            )
+
+
 def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
     if not isinstance(data, dict):
         raise ConfigError("config root must be a mapping")
@@ -642,9 +836,17 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
     if task_ledger_raw is not None and not isinstance(task_ledger_raw, dict):
         raise ConfigError("'task_ledger' must be a mapping")
 
+    transition_raw = data.get("transition")
+    transition = _parse_transition_config(transition_raw)
+
     audit_receipt_raw = data.get("audit_receipt")
     if audit_receipt_raw is not None and not isinstance(audit_receipt_raw, dict):
         raise ConfigError("'audit_receipt' must be a mapping")
+    if audit_receipt_raw and audit_receipt_raw.get("agent_id"):
+        raise ConfigError(
+            "'audit_receipt.agent_id' is no longer supported; "
+            "set 'transition.agent_id' instead"
+        )
 
     audit_auto = bool(audit_receipt_raw and audit_receipt_raw.get("auto", True))
 
@@ -664,6 +866,8 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
 
     if action_ledger_raw:
         _apply_action_ledger_tools(tools, action_ledger_raw, audit_auto=audit_auto)
+
+    _validate_transition_tools(tools, transition)
 
     tasks_raw = data.get("tasks", {})
     if not isinstance(tasks_raw, dict):
@@ -717,6 +921,7 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
         message_validator=message_validator,
         state_flush=state_flush_raw,
         audit_receipt=audit_receipt_raw,
+        transition=transition,
         action_ledger=action_ledger_raw,
         task_ledger_defaults=task_ledger_raw,
         _audit_auto=audit_auto,
@@ -750,6 +955,7 @@ __all__ = [
     "ConfigError",
     "MyceliumConfig",
     "ToolConfig",
+    "TransitionConfig",
     "load_config",
     "load_config_from_string",
 ]

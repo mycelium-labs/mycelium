@@ -268,6 +268,10 @@ def test_load_config_missing_file_raises() -> None:
 
 def test_state_flush_and_audit_receipt_factories() -> None:
     yaml_text = """
+transition:
+  agent_id: payment-agent
+  policy_version: "2026.07.1"
+
 state_flush:
   storage: memory
   flush_on:
@@ -275,7 +279,6 @@ state_flush:
     - error
 
 audit_receipt:
-  agent_id: payment-agent
   signing_key: test-key
   storage: memory
 """
@@ -290,19 +293,23 @@ audit_receipt:
 
 def test_apply_tool_with_audit_receipt_from_yaml() -> None:
     yaml_text = """
+transition:
+  agent_id: payment-agent
+  policy_version: "2026.07.1"
+
 action_ledger:
   storage: memory
   tools:
     - send_payment
 
 audit_receipt:
-  agent_id: payment-agent
   signing_key: test-key
   storage: memory
   auto: true
 
 tools:
-  send_payment: {}
+  send_payment:
+    side_effect_class: payment
 """
     config = load_config_from_string(yaml_text)
 

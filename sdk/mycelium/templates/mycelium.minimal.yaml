@@ -2,6 +2,10 @@
 #
 # Scaffolded with:  mycelium init --minimal
 
+transition:
+  agent_id: demo-agent
+  policy_version: "2026.07.1"
+
 action_ledger:
   storage: file
   path: ./mycelium-ledger.json
@@ -19,13 +23,13 @@ state_flush:
   path: ./mycelium-state.json
 
 audit_receipt:
-  agent_id: demo-agent
   signing_key_env: MYCELIUM_SIGNING_KEY
   storage: file
   path: ./mycelium-receipts.jsonl
 
 tools:
   fetch_customer:
+    side_effect_class: read_only
     protect:
       entity_param: customer_id
       ttl: 60
@@ -44,6 +48,7 @@ tools:
           required: true
 
   search_docs:
+    side_effect_class: read_only
     bounded:
       schema:
         query:
@@ -51,6 +56,7 @@ tools:
           required: true
 
   delete_file:
+    side_effect_class: non_idempotent_write
     bounded:
       schema:
         path:
