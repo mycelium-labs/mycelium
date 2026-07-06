@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1 (2026-07-06)
+
+Patch release fixing CI and PyPI packaging for v1.3.0.
+
+- Fix duplicate `mycelium/fixtures` path in wheel build (PyPI publish failed on [v1.3.0 tag](https://github.com/mycelium-labs/mycelium/actions/runs/28768287204))
+- Fix Ruff lint errors blocking CI (import order, unused test variables)
+- Add `StrEnum` compatibility shim for Python 3.10
+
 ## 1.3.0 (2026-07-06)
 
 Transition envelope: side-effect classification, rich idempotency keys, and resolution rules that respond to post-v1.2 community feedback — especially [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417) (duplicate tool execution on checkpoint redispatch) and [crewAI#5802](https://github.com/crewAIInc/crewAI/issues/5802) (crash between claim and complete).
