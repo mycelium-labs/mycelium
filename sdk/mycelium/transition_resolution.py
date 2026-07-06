@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Protocol
 
+from mycelium._compat import StrEnum
 from mycelium.transition import (
     RetryPermission,
     SideEffectBoundary,

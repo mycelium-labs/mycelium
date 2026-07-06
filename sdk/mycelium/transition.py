@@ -8,8 +8,9 @@ import time
 from contextlib import AbstractContextManager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any
+
+from mycelium._compat import StrEnum
 
 TRANSITION_SCHEMA = "mycelium.transition/v1"
 
