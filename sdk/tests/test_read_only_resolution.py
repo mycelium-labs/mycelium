@@ -32,12 +32,11 @@ def _read_only_binding() -> ToolTransitionBinding:
 
 def test_read_only_polls_until_completed() -> None:
     storage = InMemoryLedgerStorage()
-    ledger = ActionLedger(storage=storage, poll_interval=0.01)
     binding = _read_only_binding()
     executions: list[str] = []
     started = threading.Event()
 
-    @ledger_sync(storage=storage, transition_binding=binding)
+    @ledger_sync(storage=storage, transition_binding=binding, poll_interval=0.01)
     def search_docs(query: str) -> dict[str, str]:
         started.set()
         time.sleep(0.05)
@@ -95,7 +94,6 @@ def test_read_only_reclaims_expired_lease() -> None:
 
 def test_read_only_retries_after_failure() -> None:
     storage = InMemoryLedgerStorage()
-    ledger = ActionLedger(storage=storage)
     binding = _read_only_binding()
     attempts = {"count": 0}
 

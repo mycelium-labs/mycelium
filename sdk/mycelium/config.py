@@ -47,16 +47,16 @@ from mycelium.tool_boundary import bounded, bounded_sync
 from mycelium.tool_registry import ToolRegistry
 from mycelium.tool_runner import ToolRunner
 from mycelium.transition import (
-    SideEffectClass,
-    SideEffectBoundary,
     RetryPermission,
+    SideEffectBoundary,
+    SideEffectClass,
     ToolTransitionBinding,
     TransitionConfig,
     TransitionScope,
+    execution_scope,
     parse_retry_permission,
     parse_side_effect_boundary,
     parse_side_effect_class,
-    execution_scope,
 )
 
 
