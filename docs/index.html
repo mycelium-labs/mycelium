@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mycelium: runtime guards for AI agents</title>
-  <meta name="description" content="Mycelium v1.3: transition envelope for AI agent tool idempotency — side-effect classification, rich transition keys, poll read-only duplicates, hard-block ambiguous payments on retry. Framework-agnostic.">
+  <meta name="description" content="Mycelium: runtime guards for AI agents — transition envelope, side-effect classification, tool boundaries, and context validation. Framework-agnostic.">
   <meta name="keywords" content="AI agents, LangGraph, agent idempotency, duplicate tool execution, tool calling, agent reliability, CrewAI, runtime guards, Python LLM agents">
   <meta property="og:title" content="Mycelium: runtime guards for AI agents">
   <meta property="og:description" content="Prevent duplicate tool execution on retry, stale context, and bad tool calls. Plain Python.">
@@ -309,7 +309,6 @@
   <aside class="sidebar">
     <p>Contents</p>
     <ol>
-      <li><a href="#whats-new">What's new</a></li>
       <li><a href="#architecture">Architecture</a></li>
       <li><a href="#install">Install</a></li>
       <li><a href="#api">API</a></li>
@@ -325,46 +324,24 @@
 
     <h1>Mycelium: runtime guards for AI agents</h1>
     <p class="badges">
-      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60" alt="PyPI version 1.3.1"></a>
+      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60" alt="PyPI version"></a>
       <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/pyversions/mycelium-runtime.svg" alt="Python versions"></a>
       <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
     </p>
     <p class="lede">
       Runtime guards for AI agents. Prevents predictable failures before they reach the
       LLM: duplicate tool execution on retry, stale context, invalid tool calls.
-      v1.3 adds a <strong>transition envelope</strong> — classify tools, hash a durable
-      transition key, resolve duplicates by terminal state (poll reads, hard-block
-      ambiguous writes). Framework-agnostic. Experimental.
+      Classify tools, hash a durable transition key, resolve duplicates by terminal
+      state — poll reads, hard-block ambiguous writes. Framework-agnostic. Experimental.
     </p>
-
-    <section id="whats-new">
-      <h2>What's new in v1.3</h2>
-      <p>
-        After v1.2, feedback from
-        <a href="https://github.com/langchain-ai/langgraph/issues/7417">langgraph#7417</a>
-        and <a href="https://github.com/crewAIInc/crewAI/issues/5802">crewAI#5802</a>
-        converged on one gap: frameworks treat redispatch as a fresh tool call. v1.3 fixes that.
-      </p>
-      <pre># side_effect_class per tool
-read_only | idempotent_write | payment | email | subagent | ...
-
-# rich transition_key (not only tool_call_id)
-scope + tool + args + side_effect_class + policy_version
-
-# resolution by class
-read_only     → poll in-flight, reclaim expired lease, retry safe failures
-payment/write → return completed, poll in-flight, HARD_BLOCK ambiguous states</pre>
-      <p>
-        Configs without <code>transition:</code> keep v1.2 ledger behavior.
-        Breaking: <code>audit_receipt.agent_id</code> → <code>transition.agent_id</code>.
-      </p>
-    </section>
 
     <section id="architecture">
       <h2>How it fits</h2>
       <p class="arch-caption">
         Mycelium wraps your agent loop. Guards run on messages and tools before side effects
-        and before the next LLM call. Not a framework. Not observability.
+        and before the next LLM call. The transition envelope classifies each tool, hashes
+        a durable key per dispatch, and resolves duplicates by terminal state — not by
+        re-running blindly. Not a framework. Not observability.
       </p>
       <div class="arch-flow">
         <div class="arch-box">Your agent loop<br><span style="font-weight:400;color:var(--ink-muted)">LangGraph · CrewAI · Python</span></div>
@@ -399,12 +376,12 @@ MessageValidator, HistoryGuard
 # Tools
 bounded, bounded_sync, ToolRegistry, ToolRunner
 
-# Actions (v1.3 transition envelope)
+# Actions
 ledger, ledger_sync, task_ledger, task_ledger_sync
 ActionLedger, TaskLedger, StateFlush, AuditReceiptEmitter, verify_receipt
 LedgerHardBlockError, LedgerPollTimeoutError
 
-# Transition (v1.3)
+# Transition envelope
 TransitionConfig, SideEffectClass, SideEffectBoundary, RetryPermission
 TerminalOutcome, ToolTransitionBinding, execution_scope
 derive_transition_key_for_call
@@ -478,11 +455,18 @@ def fetch_customer(customer_id: str) -> dict:
 
     <section id="actions">
       <h2>Actions</h2>
+      <p>
+        Each ledgered tool gets a <code>side_effect_class</code> and a
+        <code>transition_key</code> (scope, tool, args, class, policy version).
+        Duplicate dispatches resolve by terminal state:
+        <code>read_only</code> tools poll in-flight and reclaim expired leases;
+        <code>payment</code> and write tools return completed results or hard-block
+        ambiguous retries (<code>LedgerHardBlockError</code>).
+      </p>
       <pre>from mycelium import load_config
 
 config = load_config("mycelium.yaml")
 
-# v1.3: transition + side_effect_class from YAML
 @config.apply
 def send_payment(amount: float, recipient: str) -> dict:
     return gateway.charge(amount, recipient)
@@ -495,14 +479,7 @@ def search_docs(query: str) -> dict:
 search_docs(query="billing", tool_call_id="call_read")
 
 # payment: duplicate resolves existing transition; won't charge twice
-send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_pay")
-
-# legacy v1.2 (no transition: in YAML)
-from mycelium import ledger_sync
-
-@ledger_sync()
-def legacy_tool(x: str) -> dict:
-    return {"x": x}</pre>
+send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_pay")</pre>
       <pre>from mycelium import task_ledger_sync
 
 @task_ledger_sync(id_from=["invoice_id"])
@@ -649,8 +626,7 @@ with config.run(thread_id):
           <code>transition:</code> in YAML, and wrap with <code>@config.apply</code>.
           On framework retry or worker redispatch, Mycelium resolves the existing transition:
           return completed, poll in-flight, or raise <code>LedgerHardBlockError</code> when
-          reconciliation is required. Legacy <code>@ledger_sync()</code> without
-          <code>transition:</code> keeps v1.2 behavior. Framework-agnostic.
+          reconciliation is required. Framework-agnostic.
         </p>
       </div>
     </section>
