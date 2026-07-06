@@ -1,5 +1,61 @@
 # Changelog
 
+## 1.3.0 (2026-07-06)
+
+Transition envelope: side-effect classification, rich idempotency keys, and resolution rules that respond to post-v1.2 community feedback — especially [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417) (duplicate tool execution on checkpoint redispatch) and [crewAI#5802](https://github.com/crewAIInc/crewAI/issues/5802) (crash between claim and complete).
+
+### Why v1.3
+
+After v1.2 shipped, feedback converged on a few gaps:
+
+- **Redispatch is not a fresh action** ([@Correctover](https://github.com/langchain-ai/langgraph/issues/7417#issuecomment-4861603050)): frameworks often treat “tool execution started” the same as “completed and persisted.” On LangGraph retry, the same tool call can run twice unless idempotency lives outside graph state.
+- **Read-only ≠ side-effecting** ([@Tuttotorna](https://github.com/langchain-ai/langgraph/issues/7417#issuecomment-4859465734)): duplicate reads are wasteful but recoverable; duplicate payments, writes, emails, or subagent spawns are unsafe unless terminal state and side-effect boundary are known first.
+- **`LedgerPendingError` is the wrong default for reads** ([#7417](https://github.com/langchain-ai/langgraph/issues/7417)): in-flight duplicates should poll and return the cached result, not fail the run.
+- **Stale in-flight claims need leases, not blind reclaim** ([#5802](https://github.com/crewAIInc/crewAI/issues/5802)): a worker crash after claim but before complete must reconcile — not silently re-execute a side effect.
+
+v1.3 addresses these with a phased envelope: classify tools, hash a durable transition key, then resolve duplicates by outcome — not by re-running blindly.
+
+### Transition envelope
+
+- Rich **`transition_key`** — SHA-256 of scope (`thread_id`, `run_id`, `node`), tool, args fingerprint, `side_effect_class`, `agent_id`, and `policy_version` (not only `tool_call_id`)
+- **`SideEffectClass`** per tool: `read_only`, `idempotent_write`, `non_idempotent_write`, `payment`, `email`, `subagent`, `external_api_mutation`, `onchain_action`
+- **`TerminalOutcome`** on ledger entries: `IN_FLIGHT`, `COMPLETED`, `FAILED_BEFORE_EFFECT`, `FAILED_AFTER_EFFECT`, `EXPIRED`, `BLOCKED`, `UNKNOWN`
+- **`SideEffectBoundary`**: `not_crossed`, `maybe_crossed`, `crossed` — updated on complete / fail-after-effect
+- **`RetryPermission`** per tool (YAML override or class default): `safe_retry`, `retry_only_with_same_provider_idempotency_key`, `manual_reconciliation_required`, `never_retry_automatically`
+
+### Resolution paths
+
+- **`read_only`** tools: poll in-flight, reclaim expired leases, retry failed-before-effect — no `LedgerHardBlockError`
+- **Side-effecting** tools: return completed, poll in-flight, hard-block ambiguous states — raises `LedgerHardBlockError` instead of auto-reclaiming failed payment/write entries (v1.2 behavior)
+- **Legacy path**: configs without `transition:` keep v1.2 `@ledger` behavior unchanged
+
+### Config (YAML)
+
+```yaml
+transition:
+  agent_id: payment-agent
+  policy_version: "2026.07.1"
+  lease_ttl: 3600
+  poll_interval: 0.05
+  poll_timeout: 300
+
+tools:
+  send_payment:
+    side_effect_class: payment
+    retry_permission: manual_reconciliation_required
+```
+
+Ledgered tools require `side_effect_class` when `transition:` is configured.
+
+### Breaking changes
+
+- **`audit_receipt.agent_id` removed** — set `transition.agent_id` instead (required when audit receipts are enabled)
+- New exceptions: `LedgerHardBlockError`, `LedgerPollTimeoutError`
+
+### Not in v1.3 (planned)
+
+- `spendability`, `external_operation_ref`, provider idempotency key flow, mid-flight `maybe_crossed` updates
+
 ## 1.2.0 (2026-06-30)
 
 - `mycelium demo`: terminal demo of langgraph#7417 duplicate tool execution
