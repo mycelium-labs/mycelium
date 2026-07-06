@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mycelium: runtime guards for AI agents</title>
-  <meta name="description" content="Mycelium is a Python library for AI agent reliability: prevent duplicate tool execution on retry, stale context, and invalid tool calls. Framework-agnostic.">
+  <meta name="description" content="Mycelium v1.3: transition envelope for AI agent tool idempotency — side-effect classification, rich transition keys, poll read-only duplicates, hard-block ambiguous payments on retry. Framework-agnostic.">
   <meta name="keywords" content="AI agents, LangGraph, agent idempotency, duplicate tool execution, tool calling, agent reliability, CrewAI, runtime guards, Python LLM agents">
   <meta property="og:title" content="Mycelium: runtime guards for AI agents">
   <meta property="og:description" content="Prevent duplicate tool execution on retry, stale context, and bad tool calls. Plain Python.">
@@ -28,7 +28,7 @@
         "name": "How do I prevent duplicate tool execution in LangGraph?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Claim a durable idempotency key (tool_call_id) before the side effect runs. Mycelium's @ledger_sync() decorator records an in-flight claim in file, Redis, or Postgres storage so redispatched workers return the cached result instead of re-executing. pip install mycelium-runtime && mycelium demo"
+          "text": "Classify each tool (read_only vs payment, etc.), enable transition: in mycelium.yaml, and use @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state — read-only tools poll in-flight; side-effecting tools hard-block ambiguous retries. pip install mycelium-runtime && mycelium demo"
         }
       },
       {
@@ -309,6 +309,7 @@
   <aside class="sidebar">
     <p>Contents</p>
     <ol>
+      <li><a href="#whats-new">What's new</a></li>
       <li><a href="#architecture">Architecture</a></li>
       <li><a href="#install">Install</a></li>
       <li><a href="#api">API</a></li>
@@ -331,8 +332,33 @@
     <p class="lede">
       Runtime guards for AI agents. Prevents predictable failures before they reach the
       LLM: duplicate tool execution on retry, stale context, invalid tool calls.
-      Framework-agnostic. Experimental (v1.3).
+      v1.3 adds a <strong>transition envelope</strong> — classify tools, hash a durable
+      transition key, resolve duplicates by terminal state (poll reads, hard-block
+      ambiguous writes). Framework-agnostic. Experimental.
     </p>
+
+    <section id="whats-new">
+      <h2>What's new in v1.3</h2>
+      <p>
+        After v1.2, feedback from
+        <a href="https://github.com/langchain-ai/langgraph/issues/7417">langgraph#7417</a>
+        and <a href="https://github.com/crewAIInc/crewAI/issues/5802">crewAI#5802</a>
+        converged on one gap: frameworks treat redispatch as a fresh tool call. v1.3 fixes that.
+      </p>
+      <pre># side_effect_class per tool
+read_only | idempotent_write | payment | email | subagent | ...
+
+# rich transition_key (not only tool_call_id)
+scope + tool + args + side_effect_class + policy_version
+
+# resolution by class
+read_only     → poll in-flight, reclaim expired lease, retry safe failures
+payment/write → return completed, poll in-flight, HARD_BLOCK ambiguous states</pre>
+      <p>
+        Configs without <code>transition:</code> keep v1.2 ledger behavior.
+        Breaking: <code>audit_receipt.agent_id</code> → <code>transition.agent_id</code>.
+      </p>
+    </section>
 
     <section id="architecture">
       <h2>How it fits</h2>
@@ -345,7 +371,7 @@
         <div class="arch-arrow">↓</div>
         <div class="arch-box guard">Mycelium guards</div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-box muted">Context · Tools · Idempotency</div>
+        <div class="arch-box muted">Context · Tools · Transition envelope</div>
         <div class="arch-arrow">↓</div>
         <div class="arch-box">LLM + side-effect tools</div>
       </div>
@@ -373,13 +399,18 @@ MessageValidator, HistoryGuard
 # Tools
 bounded, bounded_sync, ToolRegistry, ToolRunner
 
-# Actions
+# Actions (v1.3 transition envelope)
 ledger, ledger_sync, task_ledger, task_ledger_sync
 ActionLedger, TaskLedger, StateFlush, AuditReceiptEmitter, verify_receipt
+LedgerHardBlockError, LedgerPollTimeoutError
+
+# Transition (v1.3)
+TransitionConfig, SideEffectClass, SideEffectBoundary, RetryPermission
+TerminalOutcome, ToolTransitionBinding, execution_scope
+derive_transition_key_for_call
 
 # Config
-load_config, load_config_from_string, MyceliumConfig
-TransitionConfig, SideEffectClass, ToolTransitionBinding, execution_scope</pre>
+load_config, load_config_from_string, MyceliumConfig</pre>
     </section>
 
     <section id="context">
@@ -447,34 +478,40 @@ def fetch_customer(customer_id: str) -> dict:
 
     <section id="actions">
       <h2>Actions</h2>
-      <pre>from mycelium import ledger, ledger_sync, task_ledger_sync
+      <pre>from mycelium import load_config
 
-# tool-level idempotency
-@ledger_sync()
+config = load_config("mycelium.yaml")
+
+# v1.3: transition + side_effect_class from YAML
+@config.apply
 def send_payment(amount: float, recipient: str) -> dict:
     return gateway.charge(amount, recipient)
 
-send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_abc")
-send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_abc")  # cached
+@config.apply
+def search_docs(query: str) -> dict:
+    return {"query": query, "hits": 3}
 
-# or request_id instead of tool_call_id
-send_payment(amount=100.0, recipient="acct_123", request_id="invoice-42")
+# read_only: second call polls and returns cached result
+search_docs(query="billing", tool_call_id="call_read")
 
-@ledger()
-async def send_payment(amount: float, recipient: str) -> dict:
-    return await gateway.charge(amount, recipient)
+# payment: duplicate resolves existing transition; won't charge twice
+send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_pay")
 
-# task-level idempotency
+# legacy v1.2 (no transition: in YAML)
+from mycelium import ledger_sync
+
+@ledger_sync()
+def legacy_tool(x: str) -> dict:
+    return {"x": x}</pre>
+      <pre>from mycelium import task_ledger_sync
+
 @task_ledger_sync(id_from=["invoice_id"])
 def process_invoice(invoice_id: str, amount: float) -> dict:
     ...
     return {"invoice_id": invoice_id, "status": "paid"}
 
 process_invoice(invoice_id="inv-42", amount=100.0)
-process_invoice(invoice_id="inv-42", amount=200.0)  # returns first result
-
-# correction retry: use a new task_id
-process_invoice(invoice_id="inv-42", task_id="inv-42-attempt-2")</pre>
+process_invoice(invoice_id="inv-42", amount=200.0)  # returns first result</pre>
     </section>
 
     <section id="yaml">
@@ -487,7 +524,7 @@ process_invoice(invoice_id="inv-42", task_id="inv-42-attempt-2")</pre>
 action_ledger:
   storage: file          # memory | file | redis | postgres
   path: ./mycelium-ledger.json
-  tools: [send_payment, delete_file]
+  tools: [send_payment, delete_file, search_docs]
 
 task_ledger:
   storage: file
@@ -531,6 +568,12 @@ tools:
       schema:
         amount: {type: number, required: true}
         recipient: {type: string, required: true}
+
+  search_docs:
+    side_effect_class: read_only
+    bounded:
+      schema:
+        query: {type: string, required: true}
 
 tasks:
   process_invoice:
@@ -578,11 +621,13 @@ with config.run(thread_id):
       <div class="faq-item">
         <h3>How do I prevent duplicate tool execution in LangGraph?</h3>
         <p>
-          Claim a durable idempotency key (<code>tool_call_id</code>) <em>before</em> the side
-          effect runs. LangGraph Cloud can redispatch long tool calls while the first is still
+          Add <code>transition:</code> and <code>side_effect_class</code> per tool in
+          <code>mycelium.yaml</code>. Mycelium hashes a durable transition key (scope, tool,
+          args, class, policy) and resolves duplicates by terminal state — not by re-running
+          blindly. LangGraph Cloud can redispatch long tool calls while the first is still
           in flight (<a href="https://github.com/langchain-ai/langgraph/issues/7417">langgraph#7417</a>).
-          Mycelium's <code>@ledger_sync()</code> records an in-flight claim in file, Redis, or
-          Postgres so the second invocation returns the cached result.
+          <code>read_only</code> tools poll and return the cached result;
+          <code>payment</code> / write tools hard-block ambiguous retries.
           <code>pip install mycelium-runtime &amp;&amp; mycelium demo</code>
         </p>
       </div>
@@ -600,11 +645,12 @@ with config.run(thread_id):
       <div class="faq-item">
         <h3>How do I make AI agent tool calls idempotent in Python?</h3>
         <p>
-          Wrap side-effect tools with a ledger that atomically claims
-          <code>request_id</code> or <code>tool_call_id</code> before execution. On framework
-          retry or worker redispatch, return the stored result instead of re-running the tool.
-          Mycelium ships <code>@ledger_sync()</code> (sync) and <code>@ledger()</code> (async).
-          Framework-agnostic; no LangGraph import required.
+          Classify each tool (<code>read_only</code>, <code>payment</code>, etc.), enable
+          <code>transition:</code> in YAML, and wrap with <code>@config.apply</code>.
+          On framework retry or worker redispatch, Mycelium resolves the existing transition:
+          return completed, poll in-flight, or raise <code>LedgerHardBlockError</code> when
+          reconciliation is required. Legacy <code>@ledger_sync()</code> without
+          <code>transition:</code> keeps v1.2 behavior. Framework-agnostic.
         </p>
       </div>
     </section>
