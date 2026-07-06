@@ -201,22 +201,50 @@ result, messages = await runner.run_with_llm_retry(
 - Output failures → retry the tool up to `max_tool_retries` → then LLM retry
 - Raises `ToolBoundaryExhaustedError` when retries are used up
 
-## Quickstart: idempotency & audit receipts
+## Quickstart: idempotency & audit receipts (v1.3 transition envelope)
 
-Stop duplicate payments, emails, and API calls when the framework retries. Persist state on cancel. This is **runtime prevention**, not distributed tracing.
+Stop duplicate payments, emails, and API calls when the framework retries. v1.3 adds **side-effect classification** and **transition resolution**: read-only tools poll in-flight duplicates; side-effecting tools hard-block ambiguous states instead of blind re-execute.
 
 ### Tool-level idempotency
 
 ```python
 from mycelium import ledger_sync
+from mycelium.transition import SideEffectClass, ToolTransitionBinding
 
-@ledger_sync()
+binding = ToolTransitionBinding.for_tool(
+    agent_id="payment-agent",
+    policy_version="2026.07.1",
+    side_effect_class=SideEffectClass.PAYMENT,
+)
+
+@ledger_sync(transition_binding=binding)
 def send_payment(amount: float, recipient: str) -> dict:
     return gateway.charge(amount, recipient)
 
 # Same logical call executes only once.
-send_payment(amount=100.0, recipient="acct_123", request_id="invoice-42")
-send_payment(amount=100.0, recipient="acct_123", request_id="invoice-42")
+send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_abc")
+send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_abc")
+```
+
+Or wire from YAML (recommended):
+
+```yaml
+transition:
+  agent_id: payment-agent
+  policy_version: "2026.07.1"
+  lease_ttl: 3600
+
+action_ledger:
+  storage: file
+  path: ./mycelium-ledger.json
+  tools: [send_payment, search_docs]
+
+tools:
+  send_payment:
+    side_effect_class: payment
+    retry_permission: manual_reconciliation_required
+  search_docs:
+    side_effect_class: read_only
 ```
 
 Async tools:
@@ -232,9 +260,20 @@ async def send_payment(amount: float, recipient: str) -> dict:
 ## What `@ledger` / `ledger_sync` do
 
 - Record every tool invocation in a durable `ActionLedger`
-- Deduplicate retries and redispatches by `request_id` or LLM `tool_call_id`
-- Allow legitimate repeats when the request id differs
-- Persist failed attempts for audit and debugging
+- Deduplicate retries and redispatches via a rich **transition key** (scope + tool + args + `side_effect_class` + policy), not only `tool_call_id`
+- **`read_only` tools:** poll in-flight, reclaim expired leases, retry failed-before-effect
+- **Side-effecting tools:** return completed results, poll in-flight, **hard-block** ambiguous states (`LedgerHardBlockError`)
+- Persist failed attempts with **terminal outcomes** (`FAILED_BEFORE_EFFECT`, `FAILED_AFTER_EFFECT`, etc.) for audit and reconciliation
+
+### Side-effect classes
+
+| Class | Typical use | Duplicate handling |
+|-------|-------------|-------------------|
+| `read_only` | search, fetch | poll / reclaim / retry |
+| `idempotent_write` | upsert | retry if boundary not crossed |
+| `payment`, `non_idempotent_write`, `email`, `subagent`, `onchain_action` | charges, deletes, sends | hard-block on ambiguity |
+
+Set per tool in YAML with `side_effect_class`. Required when `transition:` is configured and the tool is ledgered.
 
 Storage backends:
 
@@ -305,10 +344,15 @@ so you do not repeat storage paths on every function.
 
 ```yaml
 # mycelium.yaml: global sections (configure once)
+transition:
+  agent_id: payment-agent
+  policy_version: "2026.07.1"
+  lease_ttl: 3600
+
 action_ledger:
   storage: file
   path: ./mycelium-ledger.json
-  tools: [send_payment]          # auto-ledger side-effect tools
+  tools: [send_payment, search_docs]
 
 task_ledger:
   storage: file
@@ -320,24 +364,28 @@ state_flush:
   path: ./mycelium-state.json
 
 audit_receipt:
-  agent_id: my-agent
   signing_key_env: MYCELIUM_SIGNING_KEY
   storage: file
   path: ./mycelium-receipts.jsonl
 
-# Per-tool: only what differs (schemas, cache, etc.)
+# Per-tool: side_effect_class + schemas
 tools:
   fetch_customer:
+    side_effect_class: read_only
     protect: {entity_param: customer_id, ttl: 60}
     bounded:
       schema:
         customer_id: {type: string, required: true, pattern: "^c\\d+$"}
 
   send_payment:
+    side_effect_class: payment
     bounded:
       schema:
         amount: {type: number, required: true}
         recipient: {type: string, required: true}
+
+  search_docs:
+    side_effect_class: read_only
 
 tasks:
   process_invoice:
@@ -368,7 +416,10 @@ with config.run(thread_id):
 
 `ledger: true` inherits from `action_ledger` / `task_ledger`. When `audit_receipt`
 is configured with `auto: true` (default), all ledgered tools/tasks get signed
-receipts automatically.
+receipts automatically. Set `transition.agent_id` for receipt identity (replaces
+`audit_receipt.agent_id` from v1.2).
+
+Configs without `transition:` keep v1.2 ledger behavior. See [CHANGELOG](../CHANGELOG.md) for breaking changes.
 
 Legacy per-tool style still works; run `mycelium init` for the full annotated template.
 

@@ -7,7 +7,7 @@
 
 Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
 
-*Experimental early release (v1.2). More guards planned.*
+*Experimental early release (v1.3). More guards planned.*
 
 ## Who it's for
 
@@ -15,11 +15,11 @@ Developers running **agents with side-effect tools** in production (payments, em
 
 Python 3.10+. Framework-agnostic.
 
-## What it does (v1.2)
+## What it does (v1.3)
 
 These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools:
 
-- **Duplicate side effects on retry:** same `tool_call_id` won't charge, send, or execute twice
+- **Duplicate side effects on retry:** classify tools (`read_only` vs `payment`, etc.), hash a durable transition key, resolve duplicates by terminal state — poll reads, hard-block ambiguous writes
 - **Stale or broken context:** fresh tool data, valid message transcripts
 - **Bad tool calls:** block invalid inputs and out-of-scope tools before they run
 
@@ -33,17 +33,30 @@ mycelium demo          # see the bug and the fix
 mycelium init          # scaffold mycelium.yaml
 ```
 
-```python
-from mycelium import ledger_sync
+```yaml
+# mycelium.yaml
+transition:
+  agent_id: payment-agent
+  policy_version: "2026.07.1"
 
-@ledger_sync()
-def subagent_task(task: str) -> dict:
-    return run_slow_subagent(task)
-
-subagent_task(task="analyze_market", tool_call_id=call["id"])
+tools:
+  send_payment:
+    side_effect_class: payment
 ```
 
-Pass `tool_call_id` from your framework. Redispatch returns the cached result. No second side effect.
+```python
+from mycelium import load_config
+
+config = load_config("mycelium.yaml")
+
+@config.apply
+def send_payment(amount: float, recipient: str) -> dict:
+    return gateway.charge(amount, recipient)
+
+send_payment(amount=100.0, recipient="acct_123", tool_call_id=call["id"])
+```
+
+Pass `tool_call_id` from your framework. Redispatch resolves the existing transition — read-only tools poll and return; side-effecting tools won't execute twice.
 
 Multi-worker / cloud: `pip install 'mycelium-runtime[redis]'`. See the [handbook](https://mycelium-labs.github.io/mycelium/).
 
