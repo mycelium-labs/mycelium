@@ -331,7 +331,7 @@
     <p class="lede">
       Runtime guards for AI agents. Prevents predictable failures before they reach the
       LLM: duplicate tool execution on retry, stale context, invalid tool calls.
-      Framework-agnostic. Experimental (v1.2).
+      Framework-agnostic. Experimental (v1.3).
     </p>
 
     <section id="architecture">
@@ -378,7 +378,8 @@ ledger, ledger_sync, task_ledger, task_ledger_sync
 ActionLedger, TaskLedger, StateFlush, AuditReceiptEmitter, verify_receipt
 
 # Config
-load_config, load_config_from_string, MyceliumConfig</pre>
+load_config, load_config_from_string, MyceliumConfig
+TransitionConfig, SideEffectClass, ToolTransitionBinding, execution_scope</pre>
     </section>
 
     <section id="context">
@@ -478,7 +479,12 @@ process_invoice(invoice_id="inv-42", task_id="inv-42-attempt-2")</pre>
 
     <section id="yaml">
       <h2>YAML</h2>
-      <pre>action_ledger:
+      <pre>transition:
+  agent_id: payment-agent
+  policy_version: "2026.07.1"
+  lease_ttl: 3600
+
+action_ledger:
   storage: file          # memory | file | redis | postgres
   path: ./mycelium-ledger.json
   tools: [send_payment, delete_file]
@@ -494,7 +500,6 @@ state_flush:
   flush_on: [cancel, disconnect, error]
 
 audit_receipt:
-  agent_id: payment-agent
   signing_key_env: MYCELIUM_SIGNING_KEY
   storage: file
   path: ./mycelium-receipts.jsonl
@@ -502,6 +507,7 @@ audit_receipt:
 
 tools:
   fetch_customer:
+    side_effect_class: read_only
     protect: {entity_param: customer_id, ttl: 60}
     bounded:
       schema:
@@ -511,6 +517,7 @@ tools:
         name: {type: string, required: true}
 
   delete_file:
+    side_effect_class: non_idempotent_write
     bounded:
       schema:
         path: {type: string, required: true}
@@ -518,6 +525,8 @@ tools:
       path_param: path
 
   send_payment:
+    side_effect_class: payment
+    retry_permission: manual_reconciliation_required
     bounded:
       schema:
         amount: {type: number, required: true}
