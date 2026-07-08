@@ -64,6 +64,7 @@ Multi-worker / cloud: `pip install 'mycelium-runtime[redis]'`. See the [handbook
 
 - **Handbook:** https://mycelium-labs.github.io/mycelium/
 - **Full API reference:** [sdk/README.md](sdk/README.md)
+- **Reading list:** [READING_LIST.md](READING_LIST.md)
 - **PyPI:** https://pypi.org/project/mycelium-runtime/
 
 ## License
