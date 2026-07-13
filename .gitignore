@@ -15,3 +15,5 @@ build/
 .cache/
 proof/fixtures/af002/_hf_af002_index.json
 randm/
+READING_LIST.md
+TODO.md
