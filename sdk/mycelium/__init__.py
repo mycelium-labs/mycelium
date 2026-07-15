@@ -70,6 +70,7 @@ from mycelium.transition import (
     TerminalOutcome,
     ToolTransitionBinding,
     TransitionScope,
+    derive_transition_key,
     derive_transition_key_for_call,
     execution_scope,
 )

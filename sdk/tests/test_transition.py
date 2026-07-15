@@ -10,6 +10,7 @@ from mycelium import (
     SideEffectClass,
     ToolTransitionBinding,
     TransitionScope,
+    derive_transition_key,
     derive_transition_key_for_call,
     execution_scope,
     get_ledger,
@@ -17,6 +18,21 @@ from mycelium import (
     load_config_from_string,
 )
 from mycelium.transition import build_transition_preimage
+
+
+def test_derive_transition_key_is_exported_from_package() -> None:
+    preimage = build_transition_preimage(
+        scope=TransitionScope(thread_id="t1", run_id="r1", node="pay"),
+        dispatch_id="call_abc",
+        tool="send_payment",
+        args=(100.0,),
+        kwargs={"recipient": "acct_1"},
+        side_effect_class=SideEffectClass.PAYMENT,
+        agent_id="payment-agent",
+        policy_version="2026.07.1",
+    )
+    assert isinstance(derive_transition_key(preimage), str)
+    assert len(derive_transition_key(preimage)) == 64
 
 
 def _binding(**overrides: object) -> ToolTransitionBinding:
