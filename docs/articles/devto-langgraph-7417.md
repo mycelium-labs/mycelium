@@ -69,24 +69,31 @@ You'll see:
 Executions: 2
 PASS: duplicate side effect reproduced (this is the bug)
 
-[2/2] Guarded: ledger deduplication
+[2/2] Guarded: transition envelope (v1.3)
   [EXECUTING] subagent_task({'task': 'analyze_market', ...})
 Executions: 1
-PASS: redispatch returned cached result, side effect ran once
+side_effect_class: subagent
+PASS: redispatch resolved existing transition, side effect ran once
 ```
 
 Same assertions as our [proof test on GitHub](https://github.com/mycelium-labs/mycelium).
 
 ---
 
-## The fix: five lines of Python
+## The fix: init + apply
 
 [Mycelium](https://github.com/mycelium-labs/mycelium) is an open-source runtime guard library. Framework-agnostic — plain Python, no LangGraph import required.
 
-```python
-from mycelium import ledger_sync
+```bash
+mycelium init
+```
 
-@ledger_sync()
+```python
+from mycelium import load_config
+
+config = load_config("mycelium.yaml")
+
+@config.apply
 def subagent_task(task: str, duration_seconds: int = 0) -> dict:
     return run_slow_subagent(task)
 
@@ -94,27 +101,20 @@ def subagent_task(task: str, duration_seconds: int = 0) -> dict:
 result = subagent_task(
     task="analyze_market",
     duration_seconds=300,
-    tool_call_id=call["id"],  # same id → no second execution
+    tool_call_id=call["id"],  # same id → resolve existing transition
 )
 ```
 
-What `@ledger_sync()` does:
+What the transition envelope does:
 
-1. Before your function runs, claim `tool_call_id` in a ledger (file by default).
-2. If the same key is already **in-flight** or **completed**, return the stored result.
-3. Your side effect runs **once**.
+1. Classify the tool (`side_effect_class: subagent`) and hash a durable transition key.
+2. Before your function runs, claim that key in a ledger.
+3. If the same transition is already **in-flight** or **completed**, resolve the existing outcome instead of re-executing.
+4. Your side effect runs **once**.
 
 ---
 
-## YAML config (optional)
-
-Scaffold a starter config:
-
-```bash
-mycelium init
-```
-
-`mycelium.yaml`:
+## What `mycelium init` scaffolds
 
 ```yaml
 transition:
@@ -130,18 +130,6 @@ action_ledger:
 tools:
   subagent_task:
     side_effect_class: subagent
-```
-
-Wire in code:
-
-```python
-from mycelium import load_config
-
-config = load_config("mycelium.yaml")
-
-@config.apply
-def subagent_task(task: str, duration_seconds: int) -> dict:
-    return run_slow_subagent(task)
 ```
 
 ---

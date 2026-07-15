@@ -53,7 +53,11 @@ def test_demo_runs(capsys) -> None:
     assert "langgraph-7417-duplicate-execution" in out
     assert "langgraph/issues/7417" in out
     assert "PASS" in out
-    assert "ledger deduplication" in out
+    assert "transition envelope (v1.3)" in out
+    assert "side_effect_class: subagent" in out
+    assert "load_config" in out
+    assert "@ledger_sync()" not in out
+    assert "@config.apply" in out
 
 
 def test_init_refuses_overwrite(tmp_path: Path) -> None:

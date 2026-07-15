@@ -10,10 +10,26 @@ from collections.abc import Callable
 from importlib import resources
 from typing import Any
 
-from mycelium import ledger_sync
+from mycelium import load_config_from_string
 
 FIXTURE_NAME = "langgraph-7417-duplicate-tool-execution.json"
 ExecuteHook = Callable[[str, dict[str, Any]], None]
+
+# Same shape as ``mycelium init`` quickstart (memory storage for the demo).
+TRANSITION_DEMO_YAML = """\
+transition:
+  agent_id: my-agent
+  policy_version: "2026.07.1"
+
+action_ledger:
+  storage: memory
+  tools:
+    - subagent_task
+
+tools:
+  subagent_task:
+    side_effect_class: subagent
+"""
 
 
 def load_fixture() -> dict[str, Any]:
@@ -56,6 +72,9 @@ def prove_ledger_deduplication(
 ) -> dict[str, Any]:
     """Real proof: same tool_call_id redispatched → executes only once.
 
+    Uses the v1.3 transition envelope (``transition:`` + ``side_effect_class``),
+    matching what ``mycelium init`` scaffolds.
+
     Raises ``AssertionError`` if the guard fails (same assertions as proof/ test).
     """
     fixture = fixture or load_fixture()
@@ -64,7 +83,9 @@ def prove_ledger_deduplication(
     tool_call_id = scenario["tool_call_id"]
     executions: list[dict[str, Any]] = []
 
-    @ledger_sync()
+    config = load_config_from_string(TRANSITION_DEMO_YAML)
+
+    @config.apply
     def subagent_task(task: str, duration_seconds: int) -> dict[str, Any]:
         record = {"task": task, "duration_seconds": duration_seconds}
         executions.append(record)
@@ -79,10 +100,15 @@ def prove_ledger_deduplication(
     assert len(executions) == 1, f"expected 1 execution, got {len(executions)}"
     assert r1 == r2 == expected, f"results mismatch: r1={r1!r} r2={r2!r}"
 
+    binding = config.tool_transition_binding(config.tools["subagent_task"])
+    assert binding is not None
+
     return {
         "executions": executions,
         "r1": r1,
         "r2": r2,
         "tool_call_id": tool_call_id,
         "fixture": fixture,
+        "side_effect_class": binding.side_effect_class.value,
+        "agent_id": binding.agent_id,
     }

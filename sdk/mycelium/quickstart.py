@@ -1,4 +1,4 @@
-"""Run the langgraph#7417 proof demo (bundled fixture + ledger guard)."""
+"""Run the langgraph#7417 proof demo (bundled fixture + transition envelope)."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def run_demo() -> int:
     _section("[1/2] Baseline: unguarded redispatch (failure class)")
     print(
         f"Simulating redispatch of {scenario['tool_name']!r} "
-        f"(runtime={scenario['runtime']!r}, no ActionLedger)"
+        f"(runtime={scenario['runtime']!r}, no transition envelope)"
     )
     baseline = reproduce_baseline_duplicate(fixture, on_execute=_print_execute)
     print(f"Executions: {len(baseline)}")
@@ -53,9 +53,10 @@ def run_demo() -> int:
         _fail(f"expected 2 executions, got {len(baseline)}")
         return 1
 
-    _section("[2/2] Guarded: ledger deduplication")
+    _section("[2/2] Guarded: transition envelope (v1.3)")
     print(
-        f"Same scenario with @ledger_sync, tool_call_id={scenario['tool_call_id']!r}"
+        f"Same scenario with transition + side_effect_class=subagent, "
+        f"tool_call_id={scenario['tool_call_id']!r}"
     )
     try:
         result = prove_ledger_deduplication(fixture, on_execute=_print_execute)
@@ -65,15 +66,18 @@ def run_demo() -> int:
 
     print(f"Executions: {len(result['executions'])}")
     print(f"r1 == r2:   {result['r1'] == result['r2']}")
-    _pass("redispatch returned cached result, side effect ran once")
+    print(f"side_effect_class: {result['side_effect_class']}")
+    _pass("redispatch resolved existing transition, side effect ran once")
 
     _section("Use in your agent")
     print("pip install mycelium-runtime")
     print("mycelium init")
     print()
-    print("from mycelium import ledger_sync")
+    print("from mycelium import load_config")
     print()
-    print("@ledger_sync()")
+    print('config = load_config("mycelium.yaml")')
+    print()
+    print("@config.apply")
     print(f"def {scenario['tool_name']}(task: str, duration_seconds: int) -> dict:")
     print("    return run_slow_subagent(task)")
     print()

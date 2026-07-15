@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `mycelium init` quickstart template now includes `transition:` and `side_effect_class` (v1.3 envelope) instead of legacy ledger-only config
+- `mycelium demo` exercises the v1.3 transition envelope (`load_config` + `@config.apply`) instead of the v1.2 `@ledger_sync()` path
 
 ## 1.3.1 (2026-07-06)
 

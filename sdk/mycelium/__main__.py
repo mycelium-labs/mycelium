@@ -81,7 +81,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite an existing file",
     )
 
-    sub.add_parser("demo", help="Show LangGraph duplicate-tool bug and the 5-line fix")
+    sub.add_parser(
+        "demo",
+        help="Show LangGraph duplicate-tool bug and the v1.3 transition fix",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "init":
