@@ -3,37 +3,29 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-## One painful bug → five lines of code
+Current package: **mycelium-runtime v1.3.1** (transition envelope).
+
+## One painful bug → a few lines of config
 
 **LangGraph Cloud redispatches a long tool call while the first is still running.** Both complete. You pay twice. Side effects run twice. [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417)
 
 ```bash
 pip install mycelium-runtime   # Python 3.10+
-mycelium init                  # scaffolds mycelium.yaml for your tool
+mycelium init                  # scaffolds mycelium.yaml with transition: (v1.3)
 mycelium demo                  # see the bug and the fix (no LangGraph required)
 ```
 
 ```python
-from mycelium import ledger_sync
-
-@ledger_sync()
-def subagent_task(task: str) -> dict:
-    return run_slow_subagent(task)
-
-# Pass tool_call_id from LangGraph; redispatch returns the cached result
-subagent_task(task="analyze_market", tool_call_id=call["id"])
-```
-
-Or wire from `mycelium init`:
-
-```python
 from mycelium import load_config
 
-config = load_config("mycelium.yaml")
+config = load_config("mycelium.yaml")  # includes transition: + side_effect_class
 
 @config.apply
 def subagent_task(task: str) -> dict:
     return run_slow_subagent(task)
+
+# Pass tool_call_id from LangGraph; redispatch resolves the existing transition
+subagent_task(task="analyze_market", tool_call_id=call["id"])
 ```
 
 ## What else it does
@@ -42,7 +34,7 @@ def subagent_task(task: str) -> dict:
 |---------|-------------------|
 | **Stale or broken context** | TTL cache, message repair, history limits; agent sees fresh, valid data |
 | **Bad or unauthorized tool calls** | Validate inputs/outputs, allowlists, scoped paths; block before execution |
-| **Duplicate side effects on retry** | Idempotency ledgers, state flush on cancel, signed receipts; pay once, not twice |
+| **Duplicate side effects on retry** | v1.3 transition envelope (side-effect class, poll / hard-block), ledgers, state flush, signed receipts |
 
 Framework-agnostic. Raw message lists and plain Python functions (LangGraph, CrewAI, OpenAI tool loops, etc.).
 

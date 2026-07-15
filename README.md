@@ -7,7 +7,7 @@
 
 Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
 
-*Experimental early release (v1.3). More guards planned.*
+*Experimental early release (**v1.3.1**). More guards planned.*
 
 ## Who it's for
 
@@ -15,7 +15,7 @@ Developers running **agents with side-effect tools** in production (payments, em
 
 Python 3.10+. Framework-agnostic.
 
-## What it does (v1.3)
+## What it does (v1.3.x)
 
 These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools:
 
