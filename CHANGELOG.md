@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `mycelium init` quickstart template now includes `transition:` and `side_effect_class` (v1.3 envelope) instead of legacy ledger-only config
+
 ## 1.3.1 (2026-07-06)
 
 Patch release fixing CI and PyPI packaging for v1.3.0.

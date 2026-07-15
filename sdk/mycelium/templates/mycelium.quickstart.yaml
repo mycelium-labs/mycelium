@@ -6,7 +6,7 @@
 # Real bug: langgraph#7417: long tool calls redispatched while still running.
 #
 # Next:
-#   1. Rename subagent_task to match your Python function.
+#   1. Rename subagent_task / agent_id to match your project.
 #   2. Pass tool_call_id from LangGraph into the tool kwargs.
 #   3. In code:
 #        from mycelium import load_config
@@ -16,6 +16,10 @@
 #        def subagent_task(task: str, duration_seconds: int) -> dict:
 #            return run_slow_subagent(task)
 
+transition:
+  agent_id: my-agent
+  policy_version: "2026.07.1"
+
 action_ledger:
   storage: file
   path: ./mycelium-ledger.json
@@ -23,4 +27,5 @@ action_ledger:
     - subagent_task
 
 tools:
-  subagent_task: {}
+  subagent_task:
+    side_effect_class: subagent

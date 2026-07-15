@@ -1,7 +1,8 @@
 # Mycelium configuration (full template).
 #
-# Scaffolded with:  mycelium init
-# Minimal variant:  mycelium init --minimal
+# Scaffolded with:  mycelium init --full
+# Default quickstart: mycelium init
+# Minimal variant:    mycelium init --minimal
 #
 # Next steps:
 #   1. Edit tool/task names to match your Python functions.

@@ -117,6 +117,10 @@ mycelium init
 `mycelium.yaml`:
 
 ```yaml
+transition:
+  agent_id: my-agent
+  policy_version: "2026.07.1"
+
 action_ledger:
   storage: file
   path: ./mycelium-ledger.json
@@ -124,7 +128,8 @@ action_ledger:
     - subagent_task
 
 tools:
-  subagent_task: {}
+  subagent_task:
+    side_effect_class: subagent
 ```
 
 Wire in code:
