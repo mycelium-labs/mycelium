@@ -11,10 +11,12 @@ from mycelium import (
     InMemoryLedgerStorage,
     LedgerEntry,
     LedgerHardBlockError,
+    SideEffectBoundary,
     SideEffectClass,
     TerminalOutcome,
     ToolTransitionBinding,
     TransitionScope,
+    derive_transition_key_for_call,
     execution_scope,
     ledger_sync,
 )
@@ -71,6 +73,7 @@ def test_payment_polls_in_flight_instead_of_pending_error() -> None:
 
 
 def test_payment_hard_blocks_expired_lease() -> None:
+    """Ledger API: expired in-flight payment must hard-block (crewAI#5802 class)."""
     from mycelium import ActionLedger
 
     storage = InMemoryLedgerStorage()
@@ -102,6 +105,55 @@ def test_payment_hard_blocks_expired_lease() -> None:
                 side_effect_class=SideEffectClass.PAYMENT,
             ),
         )
+
+    entry = storage.get(request_id)
+    assert entry is not None
+    assert entry.terminal_outcome == TerminalOutcome.BLOCKED.value
+
+
+def test_crash_after_claim_before_complete_hard_blocks_redispatch() -> None:
+    """crewAI#5802: claim succeeds, worker dies before complete, redispatch must not run.
+
+    Simulates an expired in-flight transition, then retries through ``@ledger_sync``.
+    The tool body must not execute again.
+    """
+    storage = InMemoryLedgerStorage()
+    binding = _payment_binding()
+    executions: list[str] = []
+
+    args: tuple[()] = ()
+    kwargs = {"amount": 42.0, "tool_call_id": "call_pay_5802"}
+
+    with execution_scope(TransitionScope(thread_id="thread-1", run_id="run-1")):
+        request_id = derive_transition_key_for_call(
+            "send_payment", args, kwargs, binding
+        )
+
+        # Claim succeeded; process died before complete()/fail().
+        storage.set(
+            LedgerEntry(
+                request_id=request_id,
+                tool="send_payment",
+                args=list(args),
+                kwargs={"amount": 42.0},
+                status="in-flight",
+                terminal_outcome=TerminalOutcome.IN_FLIGHT.value,
+                side_effect_boundary=SideEffectBoundary.NOT_CROSSED.value,
+                lease_until=time.time() - 1.0,
+                idempotency_key=request_id,
+                owner="dead-worker:1",
+            )
+        )
+
+        @ledger_sync(storage=storage, transition_binding=binding)
+        def send_payment(amount: float) -> dict[str, str]:
+            executions.append("executed")
+            return {"status": "sent", "amount": str(amount)}
+
+        with pytest.raises(LedgerHardBlockError, match="manual reconciliation"):
+            send_payment(amount=42.0, tool_call_id="call_pay_5802")
+
+    assert executions == []
 
     entry = storage.get(request_id)
     assert entry is not None
