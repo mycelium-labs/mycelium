@@ -1,9 +1,28 @@
 # Changelog
 
-## Unreleased
+## 1.3.2 (2026-07-15)
 
-- `mycelium init` quickstart template now includes `transition:` and `side_effect_class` (v1.3 envelope) instead of legacy ledger-only config
+Transition-envelope hardening: align first-run UX with v1.3, prove crash and durable-backend behavior, and fix a public export defect. No new transition schema fields or policy concepts.
+
+### Onboarding and demos
+
+- `mycelium init` quickstart template now includes `transition:` and `side_effect_class: subagent` instead of legacy ledger-only config
 - `mycelium demo` exercises the v1.3 transition envelope (`load_config` + `@config.apply`) instead of the v1.2 `@ledger_sync()` path
+- CLI and proof tests assert that scaffolded config and demo output use the transition model
+
+### Correctness proofs
+
+- Add crewAI#5802-style crash-after-claim test: expired in-flight side-effecting transition hard-blocks and does not re-execute through `@ledger_sync`
+- Extend file and Redis storage tests for transition hard-block, read-only reclaim, and completed read return (Postgres remains opt-in via `MYCELIUM_TEST_POSTGRES_DSN`)
+
+### API and docs
+
+- Export `derive_transition_key` from the package root (it was listed in `__all__` but not imported)
+- Identify the published package as v1.3.2 in README, SDK docs, and handbook
+
+### Still deferred (not in this patch)
+
+- `spendability`, `external_operation_ref`, provider idempotency key flow, mid-flight `maybe_crossed` updates
 
 ## 1.3.1 (2026-07-06)
 
