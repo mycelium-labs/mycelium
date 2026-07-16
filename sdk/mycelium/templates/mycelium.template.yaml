@@ -47,21 +47,27 @@ transition:
 # ---------------------------------------------------------------------------
 # action_ledger  (tool-level idempotency)
 # ---------------------------------------------------------------------------
-# storage: memory | file | redis | postgres
+# storage — pick ONE (enum):
+#   memory   — process-local; tests / single process only (lost on restart)
+#   file     — single host; needs path: (default below)
+#   redis    — multi-worker; needs url: or url_env: (+ optional prefix, in_flight_ttl)
+#   postgres — durable SQL; needs dsn: or dsn_env: (+ optional table)
 action_ledger:
-  storage: file
-  path: ./mycelium-ledger.json
-  # Redis (multi-worker, atomic claim via SET NX):
-  # storage: redis
+  storage: file            # <TODO: choose memory | file | redis | postgres>
+  path: ./mycelium-ledger.json   # required when storage: file
+  # --- if storage: redis ---
   # url_env: MYCELIUM_REDIS_URL
   # prefix: mycelium:action:
   # in_flight_ttl: 3600
-  # Postgres (audit/compliance, INSERT ... ON CONFLICT):
-  # storage: postgres
+  # --- if storage: postgres ---
   # dsn_env: MYCELIUM_POSTGRES_DSN
   # table: mycelium_action_ledger
+  #
+  # tools: allowlist of Python function names that get claim/settle.
+  # Must match names under tools: below (and your @config.apply defs).
+  # Only these tools are ledgered — omit a name = no duplicate-side-effect guard.
   tools:
-    - fetch_customer
+    - fetch_customer       # <TODO: replace with your ledgered tool names>
     - set_order_status
     - send_payment
     - send_email
