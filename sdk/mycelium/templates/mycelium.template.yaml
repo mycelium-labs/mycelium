@@ -6,10 +6,12 @@
 #   Optional:  task_ledger, state_flush, audit_receipt, registry, runner,
 #              history_guard, message_validator — delete unused sections
 #
-# Wire-up order
-#   1. Fill transition.agent_id / policy_version
-#   2. Rename tools: / tasks: stubs; put those names in action_ledger.tools /
-#      task_ledger.tasks (empty allowlist = no ledger protection)
+# Next steps
+#   1. Allowlist first: rename tools: / tasks: stubs, then copy those exact
+#      names into action_ledger.tools / task_ledger.tasks.
+#      Defining a tool under tools: alone does NOT ledger it —
+#      empty allowlist = no duplicate-side-effect protection.
+#   2. Fill transition.agent_id / policy_version
 #   3. load_config + @config.apply / @config.apply_task (or config.instrument)
 #
 # storage (ledgers): memory | file | redis | postgres
@@ -44,7 +46,8 @@ action_ledger:
   path: ./mycelium-ledger.json
   # url_env: MYCELIUM_REDIS_URL          # redis
   # dsn_env: MYCELIUM_POSTGRES_DSN       # postgres
-  tools: []               # <TODO: names of ledgered tools — must match tools: keys>
+  # <TODO step 1: copy ledgered tool names from tools: keys below>
+  tools: []
 
 # ---------------------------------------------------------------------------
 # task_ledger  (whole-task claim/settle; omit if unused)
@@ -54,7 +57,8 @@ task_ledger:
   path: ./mycelium-task-ledger.json
   # url_env: MYCELIUM_REDIS_URL
   # dsn_env: MYCELIUM_POSTGRES_DSN
-  tasks: []               # <TODO: names of ledgered tasks — must match tasks: keys>
+  # <TODO step 1: copy ledgered task names from tasks: keys below>
+  tasks: []
 
 # ---------------------------------------------------------------------------
 # state_flush  (persist on abort; omit if unused)
@@ -75,7 +79,8 @@ audit_receipt:
   auto: true
 
 # ---------------------------------------------------------------------------
-# tools  (rename stubs; delete unused; ledgered names → action_ledger.tools)
+# tools  (rename stubs; delete unused; then list ledgered names in
+#         action_ledger.tools above — step 1)
 # ---------------------------------------------------------------------------
 tools:
   "<TODO: your_read_tool>":
@@ -96,7 +101,7 @@ tools:
     side_effect_class: irreversible
 
 # ---------------------------------------------------------------------------
-# tasks  (omit if unused; ledgered names → task_ledger.tasks)
+# tasks  (omit if unused; then list ledgered names in task_ledger.tasks — step 1)
 # ---------------------------------------------------------------------------
 tasks:
   "<TODO: your_task_function>":
