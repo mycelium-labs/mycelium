@@ -164,38 +164,42 @@ tools:
     # bounded: {schema: {}}
 
 # ---------------------------------------------------------------------------
-# tasks  (per-task config; list ledgered names under task_ledger.tasks above)
+# tasks  (whole-task idempotency; names must match task_ledger.tasks)
 # ---------------------------------------------------------------------------
-tasks: {}
-# Example:
-# tasks:
-#   process_invoice:
-#     ledger: true
-#     id_from:
-#       - invoice_id
+# Key = Python task function name (@config.apply_task).
+# ledger: true + id_from: business keys used to derive the task id.
+# Delete this stub if you only use tool-level ledgers.
+tasks:
+  "<TODO: your_task_function>":
+    ledger: true
+    id_from:
+      - "<TODO: business key param, e.g. invoice_id>"
 
 # ---------------------------------------------------------------------------
-# registry
+# registry  (AF-004 — which tools the agent may call)
 # ---------------------------------------------------------------------------
+# auto: true  → allowlist = all keys under tools: above
+# Or set allowed: explicitly and set auto: false
 registry:
-  auto: true
+  auto: true               # <TODO: true, or false + allowed: [tool_a, tool_b]>
+  # allowed: []
 
 # ---------------------------------------------------------------------------
-# runner
+# runner  (AF-004 — retries when a tool call is rejected / fails)
 # ---------------------------------------------------------------------------
 runner:
-  max_llm_retries: 2
-  max_tool_retries: 3
+  max_llm_retries: 2       # <TODO: LLM retries after invalid tool args>
+  max_tool_retries: 3      # <TODO: tool execution retries>
 
 # ---------------------------------------------------------------------------
-# history_guard
+# history_guard  (AF-006 — block oversized / corrupted message history)
 # ---------------------------------------------------------------------------
 history_guard:
-  max_tokens: 100000
-  max_messages: 1000
+  max_tokens: 100000       # <TODO: token budget before LLM call>
+  max_messages: 1000       # <TODO: max messages in history>
 
 # ---------------------------------------------------------------------------
-# message_validator
+# message_validator  (AF-006 — repair/reject broken tool transcripts)
 # ---------------------------------------------------------------------------
 message_validator:
-  enabled: true
+  enabled: true            # <TODO: false to disable orphan/duplicate-id checks>
