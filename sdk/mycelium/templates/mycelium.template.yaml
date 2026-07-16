@@ -27,8 +27,8 @@
 # transition  (v1.3 — rich transition keys)
 # ---------------------------------------------------------------------------
 transition:
-  agent_id: payment-agent
-  policy_version: "2026.07.1"
+  agent_id: "<TODO: fill with your agent id — used in transition keys and receipts>"
+  policy_version: "<TODO: fill with your policy version string, e.g. 2026.07.1>"
   lease_ttl: 3600          # seconds before stale in-flight can be reclaimed
   poll_interval: 0.05       # seconds between in-flight ledger checks
   poll_timeout: 300         # max seconds to poll an in-flight transition

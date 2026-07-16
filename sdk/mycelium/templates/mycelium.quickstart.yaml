@@ -6,7 +6,7 @@
 # Real bug: langgraph#7417: long tool calls redispatched while still running.
 #
 # Next:
-#   1. Rename subagent_task / agent_id to match your project.
+#   1. Fill every <TODO: …> below; rename subagent_task to match your tool.
 #   2. Pass tool_call_id from LangGraph into the tool kwargs.
 #   3. In code:
 #        from mycelium import load_config
@@ -17,8 +17,8 @@
 #            return run_slow_subagent(task)
 
 transition:
-  agent_id: my-agent
-  policy_version: "2026.07.1"
+  agent_id: "<TODO: fill with your agent id — used in transition keys and receipts>"
+  policy_version: "<TODO: fill with your policy version string, e.g. 2026.07.1>"
 
 action_ledger:
   storage: file

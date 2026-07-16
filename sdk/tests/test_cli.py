@@ -21,7 +21,9 @@ def test_init_writes_quickstart_template_by_default(tmp_path: Path) -> None:
 
     config = load_config(out)
     assert config.transition is not None
-    assert config.transition.agent_id == "my-agent"
+    assert config.transition.agent_id.startswith("<TODO:")
+    assert "agent id" in config.transition.agent_id
+
     assert config.tools["subagent_task"].side_effect_class == SideEffectClass.NON_IDEMPOTENT_MUTATE
 
 

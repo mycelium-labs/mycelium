@@ -6,8 +6,8 @@
 #   read | idempotent_mutate | keyed_mutate | non_idempotent_mutate | irreversible
 
 transition:
-  agent_id: demo-agent
-  policy_version: "2026.07.1"
+  agent_id: "<TODO: fill with your agent id — used in transition keys and receipts>"
+  policy_version: "<TODO: fill with your policy version string, e.g. 2026.07.1>"
 
 action_ledger:
   storage: file
