@@ -66,12 +66,11 @@ action_ledger:
   # tools: allowlist of Python function names that get claim/settle.
   # Must match names under tools: below (and your @config.apply defs).
   # Only these tools are ledgered — omit a name = no duplicate-side-effect guard.
-  tools:
-    - fetch_customer       # <TODO: replace with your ledgered tool names>
-    - set_order_status
-    - send_payment
-    - send_email
-    - wire_transfer
+  tools: []               # <TODO: list your ledgered tool function names>
+  # Example:
+  # tools:
+  #   - send_payment
+  #   - send_email
 
 # ---------------------------------------------------------------------------
 # task_ledger  (task-level idempotency)
