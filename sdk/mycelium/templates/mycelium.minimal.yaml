@@ -1,6 +1,9 @@
 # Mycelium configuration (minimal).
 #
 # Scaffolded with:  mycelium init --minimal
+#
+# side_effect_class required only for tools listed under action_ledger.tools:
+#   read | idempotent_mutate | keyed_mutate | non_idempotent_mutate | irreversible
 
 transition:
   agent_id: demo-agent
@@ -29,7 +32,6 @@ audit_receipt:
 
 tools:
   fetch_customer:
-    side_effect_class: read
     protect:
       entity_param: customer_id
       ttl: 60
@@ -48,7 +50,6 @@ tools:
           required: true
 
   search_docs:
-    side_effect_class: read
     bounded:
       schema:
         query:

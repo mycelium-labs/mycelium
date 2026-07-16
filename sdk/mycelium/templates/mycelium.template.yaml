@@ -4,14 +4,24 @@
 # Default quickstart: mycelium init
 # Minimal variant:    mycelium init --minimal
 #
+# side_effect_class (retry/redispatch policy — pick one per ledgered tool):
+#   read                  — no external mutation; poll / reclaim / retry
+#   idempotent_mutate     — mutation; retry-safe as-is
+#   keyed_mutate          — safe only with same provider idempotency key
+#   non_idempotent_mutate — second call = second effect; hard-block on ambiguity
+#   irreversible          — no compensation; ambiguity → human
+#
 # Next steps:
 #   1. Edit tool/task names to match your Python functions.
 #   2. In code:
 #        from mycelium import load_config
 #        config = load_config("mycelium.yaml")
-#        tools = config.instrument(my_tools)
-#        with config.run(thread_id):
-#            messages = config.prepare_messages(messages)
+#
+#        @config.apply
+#        def send_payment(amount: float, recipient: str) -> dict:
+#            return gateway.charge(amount, recipient)
+#
+#        # Or bulk-wrap a module: tools = config.instrument(my_tools)
 
 # ---------------------------------------------------------------------------
 # transition  (v1.3 — rich transition keys)
@@ -20,8 +30,8 @@ transition:
   agent_id: payment-agent
   policy_version: "2026.07.1"
   lease_ttl: 3600          # seconds before stale in-flight can be reclaimed
-  poll_interval: 0.05       # seconds between read-only in-flight ledger checks
-  poll_timeout: 300         # max seconds to poll a read-only in-flight transition
+  poll_interval: 0.05       # seconds between in-flight ledger checks
+  poll_timeout: 300         # max seconds to poll an in-flight transition
   scope_from:
     thread_id: thread_id
     run_id: run_id
@@ -44,8 +54,11 @@ action_ledger:
   # dsn_env: MYCELIUM_POSTGRES_DSN
   # table: mycelium_action_ledger
   tools:
+    - fetch_customer
+    - set_order_status
     - send_payment
-    - delete_file
+    - send_email
+    - wire_transfer
 
 # ---------------------------------------------------------------------------
 # task_ledger  (task-level idempotency)
@@ -77,9 +90,10 @@ audit_receipt:
   auto: true
 
 # ---------------------------------------------------------------------------
-# tools  (per-tool protect, bounded; ledger via action_ledger above)
+# tools  (side_effect_class required when listed under action_ledger.tools)
 # ---------------------------------------------------------------------------
 tools:
+  # read — fetch only; poll / reclaim / retry
   fetch_customer:
     side_effect_class: read
     protect:
@@ -99,10 +113,21 @@ tools:
           type: string
           required: true
 
+  # idempotent_mutate — same call twice → same end state
+  set_order_status:
+    side_effect_class: idempotent_mutate
+    bounded:
+      schema:
+        order_id:
+          type: string
+          required: true
+        status:
+          type: string
+          required: true
+
+  # keyed_mutate — Stripe-style; retry only with same provider idempotency key
   send_payment:
     side_effect_class: keyed_mutate
-    retry_permission: manual_reconciliation_required
-    side_effect_boundary: not_crossed
     bounded:
       schema:
         amount:
@@ -112,8 +137,39 @@ tools:
           type: string
           required: true
 
-  delete_file:
+  # non_idempotent_mutate — second call = second effect
+  send_email:
     side_effect_class: non_idempotent_mutate
+    bounded:
+      schema:
+        to:
+          type: string
+          required: true
+        subject:
+          type: string
+          required: true
+
+  # irreversible — no compensation; ambiguity → human
+  wire_transfer:
+    side_effect_class: irreversible
+    bounded:
+      schema:
+        amount:
+          type: number
+          required: true
+        account:
+          type: string
+          required: true
+
+  # Not ledgered: AF-004/AF-006 only (no side_effect_class required)
+  search_docs:
+    bounded:
+      schema:
+        query:
+          type: string
+          required: true
+
+  delete_file:
     bounded:
       schema:
         path:
@@ -122,14 +178,6 @@ tools:
       allowed_paths:
         - /workspace/src/
       path_param: path
-
-  search_docs:
-    side_effect_class: read
-    bounded:
-      schema:
-        query:
-          type: string
-          required: true
 
 # ---------------------------------------------------------------------------
 # tasks

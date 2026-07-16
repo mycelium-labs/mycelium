@@ -32,7 +32,24 @@ def test_init_writes_full_template(tmp_path: Path) -> None:
     assert "transition:" in text
     assert "action_ledger:" in text
     assert "send_payment" in text
-    assert load_config(out).transition is not None
+    assert "side_effect_class: read" in text
+    assert "side_effect_class: idempotent_mutate" in text
+    assert "side_effect_class: keyed_mutate" in text
+    assert "side_effect_class: non_idempotent_mutate" in text
+    assert "side_effect_class: irreversible" in text
+    assert "retry_permission: manual_reconciliation_required" not in text
+
+    config = load_config(out)
+    assert config.transition is not None
+    assert config.tools["fetch_customer"].side_effect_class == SideEffectClass.READ
+    assert config.tools["set_order_status"].side_effect_class == (
+        SideEffectClass.IDEMPOTENT_MUTATE
+    )
+    assert config.tools["send_payment"].side_effect_class == SideEffectClass.KEYED_MUTATE
+    assert config.tools["send_email"].side_effect_class == (
+        SideEffectClass.NON_IDEMPOTENT_MUTATE
+    )
+    assert config.tools["wire_transfer"].side_effect_class == SideEffectClass.IRREVERSIBLE
 
 
 def test_init_minimal_template(tmp_path: Path) -> None:
