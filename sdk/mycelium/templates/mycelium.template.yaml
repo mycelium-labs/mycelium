@@ -1,146 +1,82 @@
 # Mycelium configuration (full template).
+# Scaffold: mycelium init --full | default: mycelium init | slim: mycelium init --minimal
 #
-# Scaffolded with:  mycelium init --full
-# Default quickstart: mycelium init
-# Minimal variant:    mycelium init --minimal
+# Required vs optional
+#   Required for transition guards:  transition, action_ledger (+ tools entries you ledger)
+#   Optional:  task_ledger, state_flush, audit_receipt, registry, runner,
+#              history_guard, message_validator — delete unused sections
 #
-# side_effect_class (retry/redispatch policy — pick one per ledgered tool):
-#   read                  — no external mutation; poll / reclaim / retry
-#   idempotent_mutate     — mutation; retry-safe as-is
-#   keyed_mutate          — safe only with same provider idempotency key
-#   non_idempotent_mutate — second call = second effect; hard-block on ambiguity
-#   irreversible          — no compensation; ambiguity → human
+# Wire-up order
+#   1. Fill transition.agent_id / policy_version
+#   2. Rename tools: / tasks: stubs; put those names in action_ledger.tools /
+#      task_ledger.tasks (empty allowlist = no ledger protection)
+#   3. load_config + @config.apply / @config.apply_task (or config.instrument)
 #
-# Next steps:
-#   1. Edit tool/task names to match your Python functions.
-#   2. In code:
-#        from mycelium import load_config
-#        config = load_config("mycelium.yaml")
+# storage (ledgers): memory | file | redis | postgres
+#   memory — process-local  |  file — needs path:
+#   redis  — url: or url_env: (+ optional prefix, in_flight_ttl)
+#   postgres — dsn: or dsn_env: (+ optional table)
+# state_flush / audit_receipt: memory | file only
 #
-#        @config.apply
-#        def send_payment(amount: float, recipient: str) -> dict:
-#            return gateway.charge(amount, recipient)
-#
-#        # Or bulk-wrap a module: tools = config.instrument(my_tools)
+# side_effect_class (per ledgered tool): read | idempotent_mutate |
+#   keyed_mutate | non_idempotent_mutate | irreversible
 
 # ---------------------------------------------------------------------------
-# transition  (v1.3 — rich transition keys)
+# transition
 # ---------------------------------------------------------------------------
 transition:
-  agent_id: "<TODO: fill with your agent id — used in transition keys and receipts>"
-  policy_version: "<TODO: fill with your policy version string, e.g. 2026.07.1>"
-  lease_ttl: 3600          # seconds before stale in-flight can be reclaimed
-  poll_interval: 0.05       # seconds between in-flight ledger checks
-  poll_timeout: 300         # max seconds to poll an in-flight transition
-  # scope_from: which kwargs feed the transition key's run scope.
-  #   left  = Mycelium field (keep these names)
-  #   right = kwarg name YOUR tools receive from the framework
-  # Defaults assume you pass thread_id / run_id / node into tool kwargs.
-  # Change the right-hand side if your framework uses different names
-  # (e.g. LangGraph configurable: thread_id: configurable.thread_id — or
-  # just pass those kwargs explicitly). Drop any line you don't use.
+  agent_id: "<TODO: your agent id — used in transition keys and receipts>"
+  policy_version: "<TODO: policy version string, e.g. 2026.07.1>"
+  lease_ttl: 3600
+  poll_interval: 0.05
+  poll_timeout: 300
+  # left = Mycelium field; right = kwarg name your tools receive (change/drop as needed)
   scope_from:
-    thread_id: thread_id    # <TODO: kwarg name for conversation/thread id>
-    run_id: run_id          # <TODO: kwarg name for this run/invocation id>
-    node: node              # <TODO: kwarg name for graph node / step id>
+    thread_id: thread_id    # <TODO: conversation/thread kwarg>
+    run_id: run_id          # <TODO: run/invocation kwarg>
+    node: node              # <TODO: graph node/step kwarg>
 
 # ---------------------------------------------------------------------------
-# action_ledger  (tool-level idempotency)
+# action_ledger  (tool-level claim/settle)
 # ---------------------------------------------------------------------------
-# storage — pick ONE (enum):
-#   memory   — process-local; tests / single process only (lost on restart)
-#   file     — single host; needs path: (default below)
-#   redis    — multi-worker; needs url: or url_env: (+ optional prefix, in_flight_ttl)
-#   postgres — durable SQL; needs dsn: or dsn_env: (+ optional table)
 action_ledger:
-  storage: file            # <TODO: choose memory | file | redis | postgres>
-  path: ./mycelium-ledger.json   # required when storage: file
-  # --- if storage: redis ---
-  # url_env: MYCELIUM_REDIS_URL
-  # prefix: mycelium:action:
-  # in_flight_ttl: 3600
-  # --- if storage: postgres ---
-  # dsn_env: MYCELIUM_POSTGRES_DSN
-  # table: mycelium_action_ledger
-  #
-  # tools: allowlist of Python function names that get claim/settle.
-  # Must match names under tools: below (and your @config.apply defs).
-  # Only these tools are ledgered — omit a name = no duplicate-side-effect guard.
-  tools: []               # <TODO: list your ledgered tool function names>
-  # Example:
-  # tools:
-  #   - send_payment
-  #   - send_email
+  storage: file            # <TODO: memory | file | redis | postgres>
+  path: ./mycelium-ledger.json
+  # url_env: MYCELIUM_REDIS_URL          # redis
+  # dsn_env: MYCELIUM_POSTGRES_DSN       # postgres
+  tools: []               # <TODO: names of ledgered tools — must match tools: keys>
 
 # ---------------------------------------------------------------------------
-# task_ledger  (task-level idempotency — CrewAI-style task retries)
+# task_ledger  (whole-task claim/settle; omit if unused)
 # ---------------------------------------------------------------------------
-# storage — pick ONE (enum):
-#   memory   — process-local; tests / single process only (lost on restart)
-#   file     — single host; needs path: (default below)
-#   redis    — multi-worker; needs url: or url_env: (+ optional prefix)
-#   postgres — durable SQL; needs dsn: or dsn_env: (+ optional table)
 task_ledger:
-  storage: file            # <TODO: choose memory | file | redis | postgres>
-  path: ./mycelium-task-ledger.json   # required when storage: file
-  # --- if storage: redis ---
+  storage: file            # <TODO: memory | file | redis | postgres>
+  path: ./mycelium-task-ledger.json
   # url_env: MYCELIUM_REDIS_URL
-  # prefix: mycelium:task:
-  # --- if storage: postgres ---
   # dsn_env: MYCELIUM_POSTGRES_DSN
-  # table: mycelium_task_ledger
-  #
-  # tasks: allowlist of Python task function names that get claim/settle.
-  # Must match names under tasks: below (and your @config.apply_task defs).
-  tasks: []               # <TODO: list your ledgered task function names>
-  # Example:
-  # tasks:
-  #   - process_invoice
+  tasks: []               # <TODO: names of ledgered tasks — must match tasks: keys>
 
 # ---------------------------------------------------------------------------
-# state_flush  (persist in-progress state when a run aborts mid-stream)
+# state_flush  (persist on abort; omit if unused)
 # ---------------------------------------------------------------------------
-# storage — pick ONE (enum):
-#   memory — process-local; tests / single process only (lost on restart)
-#   file   — single host; needs path: (default below)
-# (redis / postgres are not supported for state_flush)
 state_flush:
-  storage: file            # <TODO: choose memory | file>
-  path: ./mycelium-state.json   # required when storage: file
-  # flush_on: when to write a partial/aborted record (subset of these):
-  #   cancel | disconnect | error
-  flush_on:                # <TODO: keep defaults or trim the list>
-    - cancel
-    - disconnect
-    - error
-  # flush_on_complete: true   # also persist on normal completion (default: true)
+  storage: file            # <TODO: memory | file>
+  path: ./mycelium-state.json
+  flush_on: [cancel, disconnect, error]   # subset of cancel | disconnect | error
+  # flush_on_complete: true
 
 # ---------------------------------------------------------------------------
-# audit_receipt  (tamper-evident signed receipts for ledgered actions)
+# audit_receipt  (signed receipts; needs transition.agent_id; omit if unused)
 # ---------------------------------------------------------------------------
-# Requires transition.agent_id (used as the receipt agent identity).
-# signing_key — pick ONE:
-#   signing_key_env: NAME   — load key from that environment variable
-#   signing_key: "..."      — inline key (dev only; do not commit secrets)
-# storage — pick ONE (enum):
-#   memory — process-local; tests / single process only (lost on restart)
-#   file   — single host; needs path: (default below)
-# (redis / postgres are not supported for audit_receipt)
 audit_receipt:
-  signing_key_env: MYCELIUM_SIGNING_KEY   # <TODO: set this env var, or use signing_key:>
-  storage: file                           # <TODO: choose memory | file>
-  path: ./mycelium-receipts.jsonl         # required when storage: file
-  auto: true                              # <TODO: true = emit on ledger complete/fail>
+  signing_key_env: MYCELIUM_SIGNING_KEY   # <TODO: set env, or use signing_key:>
+  storage: file                           # <TODO: memory | file>
+  path: ./mycelium-receipts.jsonl
+  auto: true
 
 # ---------------------------------------------------------------------------
-# tools
+# tools  (rename stubs; delete unused; ledgered names → action_ledger.tools)
 # ---------------------------------------------------------------------------
-# Key = Python function name (must match @config.apply / action_ledger.tools).
-# side_effect_class (required if ledgered) — pick ONE:
-#   read | idempotent_mutate | keyed_mutate | non_idempotent_mutate | irreversible
-# Optional: protect: (freshness), bounded: (schema / path scope).
-#
-# Fill in / delete unused entries:
 tools:
   "<TODO: your_read_tool>":
     side_effect_class: read
@@ -149,57 +85,38 @@ tools:
 
   "<TODO: your_idempotent_mutate_tool>":
     side_effect_class: idempotent_mutate
-    # bounded: {schema: {}}
 
   "<TODO: your_keyed_mutate_tool>":
     side_effect_class: keyed_mutate
-    # bounded: {schema: {}}
 
   "<TODO: your_non_idempotent_mutate_tool>":
     side_effect_class: non_idempotent_mutate
-    # bounded: {schema: {}}
 
   "<TODO: your_irreversible_tool>":
     side_effect_class: irreversible
-    # bounded: {schema: {}}
 
 # ---------------------------------------------------------------------------
-# tasks  (whole-task idempotency; names must match task_ledger.tasks)
+# tasks  (omit if unused; ledgered names → task_ledger.tasks)
 # ---------------------------------------------------------------------------
-# Key = Python task function name (@config.apply_task).
-# ledger: true + id_from: business keys used to derive the task id.
-# Delete this stub if you only use tool-level ledgers.
 tasks:
   "<TODO: your_task_function>":
     ledger: true
     id_from:
-      - "<TODO: business key param, e.g. invoice_id>"
+      - "<TODO: business key param>"
 
 # ---------------------------------------------------------------------------
-# registry  (AF-004 — which tools the agent may call)
+# registry / runner / history_guard / message_validator  (omit if unused)
 # ---------------------------------------------------------------------------
-# auto: true  → allowlist = all keys under tools: above
-# Or set allowed: explicitly and set auto: false
 registry:
-  auto: true               # <TODO: true, or false + allowed: [tool_a, tool_b]>
-  # allowed: []
+  auto: true               # or false + allowed: [tool_a, tool_b]
 
-# ---------------------------------------------------------------------------
-# runner  (AF-004 — retries when a tool call is rejected / fails)
-# ---------------------------------------------------------------------------
 runner:
-  max_llm_retries: 2       # <TODO: LLM retries after invalid tool args>
-  max_tool_retries: 3      # <TODO: tool execution retries>
+  max_llm_retries: 2
+  max_tool_retries: 3
 
-# ---------------------------------------------------------------------------
-# history_guard  (AF-006 — block oversized / corrupted message history)
-# ---------------------------------------------------------------------------
 history_guard:
-  max_tokens: 100000       # <TODO: token budget before LLM call>
-  max_messages: 1000       # <TODO: max messages in history>
+  max_tokens: 100000
+  max_messages: 1000
 
-# ---------------------------------------------------------------------------
-# message_validator  (AF-006 — repair/reject broken tool transcripts)
-# ---------------------------------------------------------------------------
 message_validator:
-  enabled: true            # <TODO: false to disable orphan/duplicate-id checks>
+  enabled: true
