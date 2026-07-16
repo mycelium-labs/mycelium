@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.4 (2026-07-16)
+
+Scaffold and docs polish for the five-class `side_effect_class` model.
+
+### Templates
+
+- Full YAML template (`mycelium init --full`) rewritten as a fill-in reference: required/optional legend, allowlist-first wire-up, storage enums once at the top, empty `tools:` / `tasks:` (stubs as comments so `registry.auto` cannot allowlist placeholders)
+- Clarify `mycelium init` = on-ramp, `--full` = reference, `--minimal` = smaller multi-guard
+- TODOs for `agent_id` / `policy_version`; templatified ledgers, state_flush, audit_receipt
+
+### Docs
+
+- README, SDK README, handbook, and CLI help describe the init on-ramp vs `--full` reference split
+
 ## 1.3.3 (2026-07-16)
 
 Improve `side_effect_class` to five **effect-semantic** buckets for retry/redispatch policy (not business-domain labels).

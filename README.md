@@ -7,7 +7,7 @@
 
 Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
 
-*Experimental early release (**v1.3.3**). More guards planned.*
+*Experimental early release (**v1.3.4**). More guards planned.*
 
 ## Who it's for
 
