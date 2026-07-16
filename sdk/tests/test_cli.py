@@ -33,7 +33,7 @@ def test_init_writes_full_template(tmp_path: Path) -> None:
     text = out.read_text(encoding="utf-8")
     assert "transition:" in text
     assert "action_ledger:" in text
-    assert "send_payment" in text
+    assert "tools: {}" in text
     assert "side_effect_class: read" in text
     assert "side_effect_class: idempotent_mutate" in text
     assert "side_effect_class: keyed_mutate" in text
@@ -43,15 +43,7 @@ def test_init_writes_full_template(tmp_path: Path) -> None:
 
     config = load_config(out)
     assert config.transition is not None
-    assert config.tools["fetch_customer"].side_effect_class == SideEffectClass.READ
-    assert config.tools["set_order_status"].side_effect_class == (
-        SideEffectClass.IDEMPOTENT_MUTATE
-    )
-    assert config.tools["send_payment"].side_effect_class == SideEffectClass.KEYED_MUTATE
-    assert config.tools["send_email"].side_effect_class == (
-        SideEffectClass.NON_IDEMPOTENT_MUTATE
-    )
-    assert config.tools["wire_transfer"].side_effect_class == SideEffectClass.IRREVERSIBLE
+    assert config.tools == {}
 
 
 def test_init_minimal_template(tmp_path: Path) -> None:
