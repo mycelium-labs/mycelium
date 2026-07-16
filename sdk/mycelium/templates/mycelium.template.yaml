@@ -133,62 +133,35 @@ audit_receipt:
   auto: true                              # <TODO: true = emit on ledger complete/fail>
 
 # ---------------------------------------------------------------------------
-# tools  (<TODO: add an entry per Python tool function you wrap>)
+# tools
 # ---------------------------------------------------------------------------
-# Keys = function names (must match @config.apply / action_ledger.tools).
-# For each ledgered tool, set side_effect_class to ONE of:
-#   read                  — no external mutation; poll / reclaim / retry
-#   idempotent_mutate     — mutation; retry-safe as-is
-#   keyed_mutate          — safe only with same provider idempotency key
-#   non_idempotent_mutate — second call = second effect; hard-block on ambiguity
-#   irreversible          — no compensation; ambiguity → human
-# Optional per tool: protect: (AF-006 freshness), bounded: (AF-004 schema/scope).
-# side_effect_class is required only if the name is listed under action_ledger.tools.
-tools: {}
-# Examples (uncomment and rename to your functions):
+# Key = Python function name (must match @config.apply / action_ledger.tools).
+# side_effect_class (required if ledgered) — pick ONE:
+#   read | idempotent_mutate | keyed_mutate | non_idempotent_mutate | irreversible
+# Optional: protect: (freshness), bounded: (schema / path scope).
 #
-# tools:
-#   fetch_customer:                 # read
-#     side_effect_class: read
-#     protect:
-#       entity_param: customer_id
-#       ttl: 60
-#     bounded:
-#       schema:
-#         customer_id: {type: string, required: true}
-#
-#   set_order_status:               # idempotent_mutate
-#     side_effect_class: idempotent_mutate
-#     bounded:
-#       schema:
-#         order_id: {type: string, required: true}
-#         status: {type: string, required: true}
-#
-#   send_payment:                   # keyed_mutate
-#     side_effect_class: keyed_mutate
-#     bounded:
-#       schema:
-#         amount: {type: number, required: true}
-#         recipient: {type: string, required: true}
-#
-#   send_email:                     # non_idempotent_mutate
-#     side_effect_class: non_idempotent_mutate
-#     bounded:
-#       schema:
-#         to: {type: string, required: true}
-#         subject: {type: string, required: true}
-#
-#   wire_transfer:                  # irreversible
-#     side_effect_class: irreversible
-#     bounded:
-#       schema:
-#         amount: {type: number, required: true}
-#         account: {type: string, required: true}
-#
-#   search_docs:                    # not ledgered — bounded only
-#     bounded:
-#       schema:
-#         query: {type: string, required: true}
+# Fill in / delete unused entries:
+tools:
+  "<TODO: your_read_tool>":
+    side_effect_class: read
+    # protect: {entity_param: "<id_param>", ttl: 60}
+    # bounded: {schema: {}}
+
+  "<TODO: your_idempotent_mutate_tool>":
+    side_effect_class: idempotent_mutate
+    # bounded: {schema: {}}
+
+  "<TODO: your_keyed_mutate_tool>":
+    side_effect_class: keyed_mutate
+    # bounded: {schema: {}}
+
+  "<TODO: your_non_idempotent_mutate_tool>":
+    side_effect_class: non_idempotent_mutate
+    # bounded: {schema: {}}
+
+  "<TODO: your_irreversible_tool>":
+    side_effect_class: irreversible
+    # bounded: {schema: {}}
 
 # ---------------------------------------------------------------------------
 # tasks  (per-task config; list ledgered names under task_ledger.tasks above)
