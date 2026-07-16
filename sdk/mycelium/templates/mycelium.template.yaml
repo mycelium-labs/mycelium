@@ -98,15 +98,22 @@ task_ledger:
   #   - process_invoice
 
 # ---------------------------------------------------------------------------
-# state_flush  (cancel/disconnect safety)
+# state_flush  (persist in-progress state when a run aborts mid-stream)
 # ---------------------------------------------------------------------------
+# storage — pick ONE (enum):
+#   memory — process-local; tests / single process only (lost on restart)
+#   file   — single host; needs path: (default below)
+# (redis / postgres are not supported for state_flush)
 state_flush:
-  storage: file
-  path: ./mycelium-state.json
-  flush_on:
+  storage: file            # <TODO: choose memory | file>
+  path: ./mycelium-state.json   # required when storage: file
+  # flush_on: when to write a partial/aborted record (subset of these):
+  #   cancel | disconnect | error
+  flush_on:                # <TODO: keep defaults or trim the list>
     - cancel
     - disconnect
     - error
+  # flush_on_complete: true   # also persist on normal completion (default: true)
 
 # ---------------------------------------------------------------------------
 # audit_receipt  (signed receipts; agent_id lives under transition)
