@@ -116,13 +116,21 @@ state_flush:
   # flush_on_complete: true   # also persist on normal completion (default: true)
 
 # ---------------------------------------------------------------------------
-# audit_receipt  (signed receipts; agent_id lives under transition)
+# audit_receipt  (tamper-evident signed receipts for ledgered actions)
 # ---------------------------------------------------------------------------
+# Requires transition.agent_id (used as the receipt agent identity).
+# signing_key — pick ONE:
+#   signing_key_env: NAME   — load key from that environment variable
+#   signing_key: "..."      — inline key (dev only; do not commit secrets)
+# storage — pick ONE (enum):
+#   memory — process-local; tests / single process only (lost on restart)
+#   file   — single host; needs path: (default below)
+# (redis / postgres are not supported for audit_receipt)
 audit_receipt:
-  signing_key_env: MYCELIUM_SIGNING_KEY
-  storage: file
-  path: ./mycelium-receipts.jsonl
-  auto: true
+  signing_key_env: MYCELIUM_SIGNING_KEY   # <TODO: set this env var, or use signing_key:>
+  storage: file                           # <TODO: choose memory | file>
+  path: ./mycelium-receipts.jsonl         # required when storage: file
+  auto: true                              # <TODO: true = emit on ledger complete/fail>
 
 # ---------------------------------------------------------------------------
 # tools  (side_effect_class required when listed under action_ledger.tools)
