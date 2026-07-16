@@ -33,24 +33,21 @@ def test_init_writes_full_template(tmp_path: Path) -> None:
     text = out.read_text(encoding="utf-8")
     assert "transition:" in text
     assert "action_ledger:" in text
+    assert "tools: {}" in text
+    assert "tasks: {}" in text
     assert "side_effect_class: read" in text
     assert "side_effect_class: idempotent_mutate" in text
     assert "side_effect_class: keyed_mutate" in text
     assert "side_effect_class: non_idempotent_mutate" in text
     assert "side_effect_class: irreversible" in text
-    assert "<TODO: your_read_tool>" in text
+    assert "<TODO: your_read_tool>" not in text
     assert "retry_permission: manual_reconciliation_required" not in text
 
     config = load_config(out)
     assert config.transition is not None
-    assert set(config.tools) == {
-        "<TODO: your_read_tool>",
-        "<TODO: your_idempotent_mutate_tool>",
-        "<TODO: your_keyed_mutate_tool>",
-        "<TODO: your_non_idempotent_mutate_tool>",
-        "<TODO: your_irreversible_tool>",
-    }
-    assert config.tools["<TODO: your_read_tool>"].side_effect_class == SideEffectClass.READ
+    assert config.tools == {}
+    assert config.tasks == {}
+    assert config.registry_allowed == []
 
 
 def test_init_minimal_template(tmp_path: Path) -> None:

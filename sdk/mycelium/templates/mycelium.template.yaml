@@ -79,41 +79,33 @@ audit_receipt:
   auto: true
 
 # ---------------------------------------------------------------------------
-# tools  (rename stubs; delete unused; then list ledgered names in
-#         action_ledger.tools above — step 1)
+# tools  (add real function names; then list ledgered ones in
+#         action_ledger.tools — step 1). Keep empty until you add tools so
+#         registry.auto does not allowlist placeholder names.
 # ---------------------------------------------------------------------------
-tools:
-  "<TODO: your_read_tool>":
-    side_effect_class: read
-    # protect: {entity_param: "<id_param>", ttl: 60}
-    # bounded: {schema: {}}
-
-  "<TODO: your_idempotent_mutate_tool>":
-    side_effect_class: idempotent_mutate
-
-  "<TODO: your_keyed_mutate_tool>":
-    side_effect_class: keyed_mutate
-
-  "<TODO: your_non_idempotent_mutate_tool>":
-    side_effect_class: non_idempotent_mutate
-
-  "<TODO: your_irreversible_tool>":
-    side_effect_class: irreversible
+tools: {}
+# One stub per side_effect_class (uncomment + rename):
+#   your_read_tool:                 {side_effect_class: read}
+#   your_idempotent_mutate_tool:    {side_effect_class: idempotent_mutate}
+#   your_keyed_mutate_tool:         {side_effect_class: keyed_mutate}
+#   your_non_idempotent_mutate_tool:{side_effect_class: non_idempotent_mutate}
+#   your_irreversible_tool:         {side_effect_class: irreversible}
+# Optional per tool: protect: {entity_param, ttl}, bounded: {schema: {}}
 
 # ---------------------------------------------------------------------------
 # tasks  (omit if unused; then list ledgered names in task_ledger.tasks — step 1)
 # ---------------------------------------------------------------------------
-tasks:
-  "<TODO: your_task_function>":
-    ledger: true
-    id_from:
-      - "<TODO: business key param>"
+tasks: {}
+#   your_task_function:
+#     ledger: true
+#     id_from: [your_business_key]
 
 # ---------------------------------------------------------------------------
 # registry / runner / history_guard / message_validator  (omit if unused)
 # ---------------------------------------------------------------------------
 registry:
-  auto: true               # or false + allowed: [tool_a, tool_b]
+  auto: true               # allowlist = keys under tools: (empty until you add tools)
+  # or: auto: false + allowed: [tool_a, tool_b]
 
 runner:
   max_llm_retries: 2
