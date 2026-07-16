@@ -75,8 +75,11 @@ action_ledger:
 # ---------------------------------------------------------------------------
 # task_ledger  (task-level idempotency — CrewAI-style task retries)
 # ---------------------------------------------------------------------------
-# storage — pick ONE (enum): memory | file | redis | postgres
-# (same meanings / companion fields as action_ledger.storage above)
+# storage — pick ONE (enum):
+#   memory   — process-local; tests / single process only (lost on restart)
+#   file     — single host; needs path: (default below)
+#   redis    — multi-worker; needs url: or url_env: (+ optional prefix)
+#   postgres — durable SQL; needs dsn: or dsn_env: (+ optional table)
 task_ledger:
   storage: file            # <TODO: choose memory | file | redis | postgres>
   path: ./mycelium-task-ledger.json   # required when storage: file
