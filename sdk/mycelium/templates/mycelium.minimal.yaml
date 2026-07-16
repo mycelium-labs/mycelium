@@ -29,7 +29,7 @@ audit_receipt:
 
 tools:
   fetch_customer:
-    side_effect_class: read_only
+    side_effect_class: read
     protect:
       entity_param: customer_id
       ttl: 60
@@ -48,7 +48,7 @@ tools:
           required: true
 
   search_docs:
-    side_effect_class: read_only
+    side_effect_class: read
     bounded:
       schema:
         query:
@@ -56,7 +56,7 @@ tools:
           required: true
 
   delete_file:
-    side_effect_class: non_idempotent_write
+    side_effect_class: non_idempotent_mutate
     bounded:
       schema:
         path:

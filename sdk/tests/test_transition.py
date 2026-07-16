@@ -27,7 +27,7 @@ def test_derive_transition_key_is_exported_from_package() -> None:
         tool="send_payment",
         args=(100.0,),
         kwargs={"recipient": "acct_1"},
-        side_effect_class=SideEffectClass.PAYMENT,
+        side_effect_class=SideEffectClass.NON_IDEMPOTENT_MUTATE,
         agent_id="payment-agent",
         policy_version="2026.07.1",
     )
@@ -36,7 +36,7 @@ def test_derive_transition_key_is_exported_from_package() -> None:
 
 
 def _binding(**overrides: object) -> ToolTransitionBinding:
-    side_effect_class = overrides.pop("side_effect_class", SideEffectClass.PAYMENT)
+    side_effect_class = overrides.pop("side_effect_class", SideEffectClass.NON_IDEMPOTENT_MUTATE)
     return ToolTransitionBinding.for_tool(
         agent_id=str(overrides.pop("agent_id", "payment-agent")),
         policy_version=str(overrides.pop("policy_version", "2026.07.1")),
@@ -52,7 +52,7 @@ def test_tool_call_id_is_in_preimage_when_present() -> None:
         tool="send_payment",
         args=(100.0,),
         kwargs={"recipient": "acct_1", "tool_call_id": "call_abc"},
-        side_effect_class=SideEffectClass.PAYMENT,
+        side_effect_class=SideEffectClass.NON_IDEMPOTENT_MUTATE,
         agent_id="payment-agent",
         policy_version="2026.07.1",
     )
@@ -119,19 +119,19 @@ def test_side_effect_class_affects_transition_key() -> None:
             "send_payment",
             (),
             kwargs,
-            _binding(side_effect_class=SideEffectClass.PAYMENT),
+            _binding(side_effect_class=SideEffectClass.NON_IDEMPOTENT_MUTATE),
         )
         read_only = derive_transition_key_for_call(
             "send_payment",
             (),
             kwargs,
-            _binding(side_effect_class=SideEffectClass.READ_ONLY),
+            _binding(side_effect_class=SideEffectClass.READ),
         )
     assert payment != read_only
 
 
 def test_ledger_deduplicates_by_transition_key() -> None:
-    binding = _binding(side_effect_class=SideEffectClass.SUBAGENT)
+    binding = _binding(side_effect_class=SideEffectClass.NON_IDEMPOTENT_MUTATE)
     executions: list[int] = []
 
     @ledger_sync(storage=InMemoryLedgerStorage(), transition_binding=binding)
@@ -162,12 +162,22 @@ action_ledger:
 
 tools:
   send_payment:
-    side_effect_class: payment
+    side_effect_class: keyed_mutate
 """
     config = load_config_from_string(yaml_text)
     assert config.transition is not None
     assert config.transition.agent_id == "payment-agent"
-    assert config.tools["send_payment"].side_effect_class == SideEffectClass.PAYMENT
+    assert config.tools["send_payment"].side_effect_class == SideEffectClass.KEYED_MUTATE
+
+
+def test_legacy_side_effect_class_aliases() -> None:
+    from mycelium.transition import parse_side_effect_class
+
+    assert parse_side_effect_class("read_only") == SideEffectClass.READ
+    assert parse_side_effect_class("payment") == SideEffectClass.NON_IDEMPOTENT_MUTATE
+    assert parse_side_effect_class("subagent") == SideEffectClass.NON_IDEMPOTENT_MUTATE
+    assert parse_side_effect_class("onchain_action") == SideEffectClass.IRREVERSIBLE
+    assert parse_side_effect_class("idempotent_mutate") == SideEffectClass.IDEMPOTENT_MUTATE
 
 
 def test_config_requires_side_effect_class_when_transition_and_ledger() -> None:
@@ -220,7 +230,7 @@ action_ledger:
 
 tools:
   search_docs:
-    side_effect_class: read_only
+    side_effect_class: read
 """
     config = load_config_from_string(yaml_text)
     assert config.transition is not None
@@ -261,7 +271,7 @@ action_ledger:
 
 tools:
   search_docs:
-    side_effect_class: read_only
+    side_effect_class: read
 """
     config = load_config_from_string(yaml_text)
 

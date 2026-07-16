@@ -7,7 +7,7 @@
 
 Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
 
-*Experimental early release (**v1.3.2**). More guards planned.*
+*Experimental early release (**v1.3.3**). More guards planned.*
 
 ## Who it's for
 
@@ -19,7 +19,7 @@ Python 3.10+. Framework-agnostic.
 
 These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools:
 
-- **Duplicate side effects on retry:** classify tools (`read_only` vs `payment`, etc.), hash a durable transition key, resolve duplicates by terminal state — poll reads, hard-block ambiguous writes
+- **Duplicate side effects on retry:** classify tools (`read` vs `keyed_mutate` vs `non_idempotent_mutate`, etc.), hash a durable transition key, resolve duplicates by terminal state — poll reads, hard-block ambiguous writes
 - **Stale or broken context:** fresh tool data, valid message transcripts
 - **Bad tool calls:** block invalid inputs and out-of-scope tools before they run
 
@@ -41,7 +41,7 @@ transition:
 
 tools:
   send_payment:
-    side_effect_class: payment
+    side_effect_class: keyed_mutate
 ```
 
 ```python
@@ -56,7 +56,7 @@ def send_payment(amount: float, recipient: str) -> dict:
 send_payment(amount=100.0, recipient="acct_123", tool_call_id=call["id"])
 ```
 
-Pass `tool_call_id` from your framework. Redispatch resolves the existing transition — read-only tools poll and return; side-effecting tools won't execute twice.
+Pass `tool_call_id` from your framework. Redispatch resolves the existing transition — read tools poll and return; mutating tools won't execute twice unsafely.
 
 Multi-worker / cloud: `pip install 'mycelium-runtime[redis]'`. See the [handbook](https://mycelium-labs.github.io/mycelium/).
 

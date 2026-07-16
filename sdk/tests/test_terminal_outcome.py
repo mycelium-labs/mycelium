@@ -127,7 +127,7 @@ def test_read_only_retry_after_failed_before_effect() -> None:
     binding = ToolTransitionBinding.for_tool(
         agent_id="demo",
         policy_version="1",
-        side_effect_class=SideEffectClass.READ_ONLY,
+        side_effect_class=SideEffectClass.READ,
     )
     storage = InMemoryLedgerStorage()
     attempts = {"count": 0}

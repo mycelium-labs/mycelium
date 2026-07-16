@@ -25,5 +25,5 @@ def test_prove_ledger_deduplication() -> None:
     result = prove_ledger_deduplication()
     assert len(result["executions"]) == 1
     assert result["r1"] == result["r2"]
-    assert result["side_effect_class"] == "subagent"
+    assert result["side_effect_class"] == "non_idempotent_mutate"
     assert result["agent_id"] == "my-agent"

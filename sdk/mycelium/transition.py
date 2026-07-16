@@ -22,16 +22,35 @@ LEDGER_KWARG_KEYS = frozenset(
 
 
 class SideEffectClass(StrEnum):
-    """Per-tool side-effect classification for transition resolution."""
+    """Per-tool side-effect classification for retry/redispatch policy.
 
-    READ_ONLY = "read_only"
-    IDEMPOTENT_WRITE = "idempotent_write"
-    NON_IDEMPOTENT_WRITE = "non_idempotent_write"
-    PAYMENT = "payment"
-    EMAIL = "email"
-    SUBAGENT = "subagent"
-    EXTERNAL_API_MUTATION = "external_api_mutation"
-    ONCHAIN_ACTION = "onchain_action"
+    Classes describe *effect semantics*, not business domains:
+
+    - ``read`` — no external mutation
+    - ``idempotent_mutate`` — mutation; retry-safe as-is
+    - ``keyed_mutate`` — safe only with the same provider idempotency key
+    - ``non_idempotent_mutate`` — second call = second effect
+    - ``irreversible`` — no compensation; ambiguity requires human reconcile
+    """
+
+    READ = "read"
+    IDEMPOTENT_MUTATE = "idempotent_mutate"
+    KEYED_MUTATE = "keyed_mutate"
+    NON_IDEMPOTENT_MUTATE = "non_idempotent_mutate"
+    IRREVERSIBLE = "irreversible"
+
+
+# Legacy YAML / API names accepted by :func:`parse_side_effect_class`.
+SIDE_EFFECT_CLASS_ALIASES: dict[str, SideEffectClass] = {
+    "read_only": SideEffectClass.READ,
+    "idempotent_write": SideEffectClass.IDEMPOTENT_MUTATE,
+    "external_api_mutation": SideEffectClass.KEYED_MUTATE,
+    "non_idempotent_write": SideEffectClass.NON_IDEMPOTENT_MUTATE,
+    "payment": SideEffectClass.NON_IDEMPOTENT_MUTATE,
+    "email": SideEffectClass.NON_IDEMPOTENT_MUTATE,
+    "subagent": SideEffectClass.NON_IDEMPOTENT_MUTATE,
+    "onchain_action": SideEffectClass.IRREVERSIBLE,
+}
 
 
 class TerminalOutcome(StrEnum):
@@ -66,34 +85,28 @@ class RetryPermission(StrEnum):
 
 
 DEFAULT_RETRY_PERMISSION: dict[SideEffectClass, RetryPermission] = {
-    SideEffectClass.READ_ONLY: RetryPermission.SAFE_RETRY,
-    SideEffectClass.IDEMPOTENT_WRITE: RetryPermission.SAFE_RETRY,
-    SideEffectClass.EXTERNAL_API_MUTATION: (
+    SideEffectClass.READ: RetryPermission.SAFE_RETRY,
+    SideEffectClass.IDEMPOTENT_MUTATE: RetryPermission.SAFE_RETRY,
+    SideEffectClass.KEYED_MUTATE: (
         RetryPermission.RETRY_ONLY_WITH_SAME_PROVIDER_IDEMPOTENCY_KEY
     ),
-    SideEffectClass.NON_IDEMPOTENT_WRITE: (
+    SideEffectClass.NON_IDEMPOTENT_MUTATE: (
         RetryPermission.MANUAL_RECONCILIATION_REQUIRED
     ),
-    SideEffectClass.PAYMENT: RetryPermission.MANUAL_RECONCILIATION_REQUIRED,
-    SideEffectClass.EMAIL: RetryPermission.NEVER_RETRY_AUTOMATICALLY,
-    SideEffectClass.SUBAGENT: RetryPermission.MANUAL_RECONCILIATION_REQUIRED,
-    SideEffectClass.ONCHAIN_ACTION: RetryPermission.NEVER_RETRY_AUTOMATICALLY,
+    SideEffectClass.IRREVERSIBLE: RetryPermission.NEVER_RETRY_AUTOMATICALLY,
 }
 
 
 STRICT_SIDE_EFFECT_CLASSES = frozenset(
     {
-        SideEffectClass.PAYMENT,
-        SideEffectClass.NON_IDEMPOTENT_WRITE,
-        SideEffectClass.EMAIL,
-        SideEffectClass.SUBAGENT,
-        SideEffectClass.ONCHAIN_ACTION,
+        SideEffectClass.NON_IDEMPOTENT_MUTATE,
+        SideEffectClass.IRREVERSIBLE,
     }
 )
 
 
 def is_strict_side_effect(side_effect_class: SideEffectClass) -> bool:
-    """Return whether a class requires strict payment-style resolution."""
+    """Return whether a class requires strict hard-block-on-ambiguity resolution."""
     return side_effect_class in STRICT_SIDE_EFFECT_CLASSES
 
 
@@ -303,9 +316,16 @@ class _ExecutionScopeContext(AbstractContextManager[TransitionScope]):
 
 
 def parse_side_effect_class(value: Any) -> SideEffectClass:
-    """Parse and validate a side_effect_class value from YAML."""
+    """Parse and validate a side_effect_class value from YAML.
+
+    Accepts the five canonical classes and legacy aliases
+    (``read_only``, ``payment``, ``subagent``, …).
+    """
     if not isinstance(value, str):
         raise ValueError("side_effect_class must be a string")
+    alias = SIDE_EFFECT_CLASS_ALIASES.get(value)
+    if alias is not None:
+        return alias
     try:
         return SideEffectClass(value)
     except ValueError as exc:
@@ -422,6 +442,7 @@ def derive_transition_key_for_call(
 __all__ = [
     "LEDGER_KWARG_KEYS",
     "SCOPE_FIELDS",
+    "SIDE_EFFECT_CLASS_ALIASES",
     "TRANSITION_SCHEMA",
     "SideEffectClass",
     "SideEffectBoundary",

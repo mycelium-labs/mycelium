@@ -31,7 +31,7 @@ action_ledger:
 
 tools:
   send_payment:
-    side_effect_class: payment
+    side_effect_class: keyed_mutate
     retry_permission: safe_retry
     side_effect_boundary: not_crossed
 """
@@ -54,7 +54,7 @@ transition:
 
 tools:
   send_payment:
-    side_effect_class: payment
+    side_effect_class: keyed_mutate
     retry_permission: retry_forever
 """
     with pytest.raises(ConfigError, match="retry_permission"):
@@ -76,7 +76,7 @@ action_ledger:
 
 tools:
   send_payment:
-    side_effect_class: payment
+    side_effect_class: keyed_mutate
     retry_permission: safe_retry
 """
     config = load_config_from_string(yaml_text)
@@ -115,7 +115,7 @@ def test_crossed_boundary_hard_blocks_even_with_safe_retry() -> None:
     binding = ToolTransitionBinding.for_tool(
         agent_id="demo",
         policy_version="1",
-        side_effect_class=SideEffectClass.IDEMPOTENT_WRITE,
+        side_effect_class=SideEffectClass.IDEMPOTENT_MUTATE,
         retry_permission=RetryPermission.SAFE_RETRY,
     )
     request_id = "crossed-fail"

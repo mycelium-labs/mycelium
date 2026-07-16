@@ -55,7 +55,7 @@ def run_demo() -> int:
 
     _section("[2/2] Guarded: transition envelope (v1.3)")
     print(
-        f"Same scenario with transition + side_effect_class=subagent, "
+        f"Same scenario with transition + side_effect_class=non_idempotent_mutate, "
         f"tool_call_id={scenario['tool_call_id']!r}"
     )
     try:

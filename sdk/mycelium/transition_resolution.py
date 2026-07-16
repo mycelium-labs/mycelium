@@ -72,7 +72,7 @@ def resolve_side_effect_gate(
         if (
             retry == RetryPermission.SAFE_RETRY
             and boundary == SideEffectBoundary.NOT_CROSSED
-            and binding.side_effect_class == SideEffectClass.IDEMPOTENT_WRITE
+            and binding.side_effect_class == SideEffectClass.IDEMPOTENT_MUTATE
         ):
             return TransitionGate.ALLOW
         return TransitionGate.HARD_BLOCK
@@ -89,8 +89,8 @@ def resolve_side_effect_gate(
             return TransitionGate.HARD_BLOCK
         if retry == RetryPermission.RETRY_ONLY_WITH_SAME_PROVIDER_IDEMPOTENCY_KEY:
             if binding.side_effect_class in (
-                SideEffectClass.IDEMPOTENT_WRITE,
-                SideEffectClass.EXTERNAL_API_MUTATION,
+                SideEffectClass.IDEMPOTENT_MUTATE,
+                SideEffectClass.KEYED_MUTATE,
             ):
                 return TransitionGate.ALLOW
             return TransitionGate.HARD_BLOCK

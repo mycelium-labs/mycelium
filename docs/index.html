@@ -28,7 +28,7 @@
         "name": "How do I prevent duplicate tool execution in LangGraph?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Classify each tool (read_only vs payment, etc.), enable transition: in mycelium.yaml, and use @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state — read-only tools poll in-flight; side-effecting tools hard-block ambiguous retries. pip install mycelium-runtime && mycelium demo"
+          "text": "Classify each tool (read vs keyed_mutate vs non_idempotent_mutate, etc.), enable transition: in mycelium.yaml, and use @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state — read-only tools poll in-flight; side-effecting tools hard-block ambiguous retries. pip install mycelium-runtime && mycelium demo"
         }
       },
       {
@@ -333,7 +333,7 @@
       LLM: duplicate tool execution on retry, stale context, invalid tool calls.
       Classify tools, hash a durable transition key, resolve duplicates by terminal
       state — poll reads, hard-block ambiguous writes. Framework-agnostic.
-      Experimental early release (v1.3.2).
+      Experimental early release (v1.3.3).
     </p>
 
     <section id="architecture">
@@ -460,7 +460,7 @@ def fetch_customer(customer_id: str) -> dict:
         Each ledgered tool gets a <code>side_effect_class</code> and a
         <code>transition_key</code> (scope, tool, args, class, policy version).
         Duplicate dispatches resolve by terminal state:
-        <code>read_only</code> tools poll in-flight and reclaim expired leases;
+        <code>read</code> tools poll in-flight and reclaim expired leases;
         <code>payment</code> and write tools return completed results or hard-block
         ambiguous retries (<code>LedgerHardBlockError</code>).
       </p>
@@ -476,7 +476,7 @@ def send_payment(amount: float, recipient: str) -> dict:
 def search_docs(query: str) -> dict:
     return {"query": query, "hits": 3}
 
-# read_only: second call polls and returns cached result
+# read: second call polls and returns cached result
 search_docs(query="billing", tool_call_id="call_read")
 
 # payment: duplicate resolves existing transition; won't charge twice
@@ -522,7 +522,7 @@ audit_receipt:
 
 tools:
   fetch_customer:
-    side_effect_class: read_only
+    side_effect_class: read
     protect: {entity_param: customer_id, ttl: 60}
     bounded:
       schema:
@@ -532,7 +532,7 @@ tools:
         name: {type: string, required: true}
 
   delete_file:
-    side_effect_class: non_idempotent_write
+    side_effect_class: non_idempotent_mutate
     bounded:
       schema:
         path: {type: string, required: true}
@@ -540,7 +540,7 @@ tools:
       path_param: path
 
   send_payment:
-    side_effect_class: payment
+    side_effect_class: keyed_mutate
     retry_permission: manual_reconciliation_required
     bounded:
       schema:
@@ -548,7 +548,7 @@ tools:
         recipient: {type: string, required: true}
 
   search_docs:
-    side_effect_class: read_only
+    side_effect_class: read
     bounded:
       schema:
         query: {type: string, required: true}
@@ -604,7 +604,7 @@ with config.run(thread_id):
           args, class, policy) and resolves duplicates by terminal state — not by re-running
           blindly. LangGraph Cloud can redispatch long tool calls while the first is still
           in flight (<a href="https://github.com/langchain-ai/langgraph/issues/7417">langgraph#7417</a>).
-          <code>read_only</code> tools poll and return the cached result;
+          <code>read</code> tools poll and return the cached result;
           <code>payment</code> / write tools hard-block ambiguous retries.
           <code>pip install mycelium-runtime &amp;&amp; mycelium demo</code>
         </p>
@@ -623,7 +623,7 @@ with config.run(thread_id):
       <div class="faq-item">
         <h3>How do I make AI agent tool calls idempotent in Python?</h3>
         <p>
-          Classify each tool (<code>read_only</code>, <code>payment</code>, etc.), enable
+          Classify each tool (<code>read</code>, <code>keyed_mutate</code>, <code>non_idempotent_mutate</code>, etc.), enable
           <code>transition:</code> in YAML, and wrap with <code>@config.apply</code>.
           On framework retry or worker redispatch, Mycelium resolves the existing transition:
           return completed, poll in-flight, or raise <code>LedgerHardBlockError</code> when

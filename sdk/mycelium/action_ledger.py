@@ -886,7 +886,7 @@ def _is_read_only_binding(
 ) -> bool:
     return (
         transition_binding is not None
-        and transition_binding.side_effect_class == SideEffectClass.READ_ONLY
+        and transition_binding.side_effect_class == SideEffectClass.READ
     )
 
 

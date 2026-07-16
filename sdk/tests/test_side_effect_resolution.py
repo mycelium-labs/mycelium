@@ -27,7 +27,7 @@ def _payment_binding() -> ToolTransitionBinding:
     return ToolTransitionBinding.for_tool(
         agent_id="demo",
         policy_version="1",
-        side_effect_class=SideEffectClass.PAYMENT,
+        side_effect_class=SideEffectClass.NON_IDEMPOTENT_MUTATE,
     )
 
 
@@ -35,7 +35,7 @@ def _idempotent_binding() -> ToolTransitionBinding:
     return ToolTransitionBinding.for_tool(
         agent_id="demo",
         policy_version="1",
-        side_effect_class=SideEffectClass.IDEMPOTENT_WRITE,
+        side_effect_class=SideEffectClass.IDEMPOTENT_MUTATE,
     )
 
 
@@ -102,7 +102,7 @@ def test_payment_hard_blocks_expired_lease() -> None:
             ToolTransitionBinding.for_tool(
                 agent_id="demo",
                 policy_version="1",
-                side_effect_class=SideEffectClass.PAYMENT,
+                side_effect_class=SideEffectClass.NON_IDEMPOTENT_MUTATE,
             ),
         )
 

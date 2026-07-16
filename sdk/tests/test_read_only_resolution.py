@@ -26,7 +26,7 @@ def _read_only_binding() -> ToolTransitionBinding:
     return ToolTransitionBinding.for_tool(
         agent_id="demo-agent",
         policy_version="2026.07.1",
-        side_effect_class=SideEffectClass.READ_ONLY,
+        side_effect_class=SideEffectClass.READ,
     )
 
 

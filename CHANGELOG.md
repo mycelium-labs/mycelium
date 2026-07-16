@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.3.3 (2026-07-16)
+
+Improve `side_effect_class` to five **effect-semantic** buckets for retry/redispatch policy (not business-domain labels).
+
+### Side-effect classes
+
+Canonical values:
+
+| Class | Meaning | Default on ambiguity |
+|-------|---------|----------------------|
+| `read` | no external mutation | poll / reclaim / retry |
+| `idempotent_mutate` | mutation; retry-safe as-is | reclaim if not crossed |
+| `keyed_mutate` | safe only with same provider idempotency key | hard-block unless keyed retry |
+| `non_idempotent_mutate` | second call = second effect | hard-block / reconcile |
+| `irreversible` | no compensation | hard-block → human |
+
+Legacy names still parse: `read_only`, `idempotent_write`, `external_api_mutation`, `non_idempotent_write`, `payment`, `email`, `subagent`, `onchain_action`.
+
+### Docs and templates
+
+- Quickstart / full / minimal YAML templates use the five canonical classes
+- README and handbook version bump to v1.3.3
+
 ## 1.3.2 (2026-07-15)
 
 Transition-envelope hardening: align first-run UX with v1.3, prove crash and durable-backend behavior, and fix a public export defect. No new transition schema fields or policy concepts.

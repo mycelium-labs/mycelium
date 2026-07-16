@@ -16,13 +16,13 @@ def test_init_writes_quickstart_template_by_default(tmp_path: Path) -> None:
     assert "transition:" in text
     assert "action_ledger:" in text
     assert "subagent_task" in text
-    assert "side_effect_class: subagent" in text
+    assert "side_effect_class: non_idempotent_mutate" in text
     assert "send_payment" not in text
 
     config = load_config(out)
     assert config.transition is not None
     assert config.transition.agent_id == "my-agent"
-    assert config.tools["subagent_task"].side_effect_class == SideEffectClass.SUBAGENT
+    assert config.tools["subagent_task"].side_effect_class == SideEffectClass.NON_IDEMPOTENT_MUTATE
 
 
 def test_init_writes_full_template(tmp_path: Path) -> None:
@@ -54,7 +54,7 @@ def test_demo_runs(capsys) -> None:
     assert "langgraph/issues/7417" in out
     assert "PASS" in out
     assert "transition envelope (v1.3)" in out
-    assert "side_effect_class: subagent" in out
+    assert "side_effect_class: non_idempotent_mutate" in out
     assert "load_config" in out
     assert "@ledger_sync()" not in out
     assert "@config.apply" in out

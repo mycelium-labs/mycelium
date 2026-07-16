@@ -309,7 +309,7 @@ audit_receipt:
 
 tools:
   send_payment:
-    side_effect_class: payment
+    side_effect_class: keyed_mutate
 """
     config = load_config_from_string(yaml_text)
 

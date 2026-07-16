@@ -28,7 +28,7 @@ action_ledger:
 
 tools:
   subagent_task:
-    side_effect_class: subagent
+    side_effect_class: non_idempotent_mutate
 """
 
 

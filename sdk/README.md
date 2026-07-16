@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.3.2** (transition envelope).
+Current package: **mycelium-runtime v1.3.3** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -195,7 +195,7 @@ result, messages = await runner.run_with_llm_retry(
 
 ## Quickstart: idempotency & audit receipts (v1.3 transition envelope)
 
-Stop duplicate payments, emails, and API calls when the framework retries. v1.3 adds **side-effect classification** and **transition resolution**: read-only tools poll in-flight duplicates; side-effecting tools hard-block ambiguous states instead of blind re-execute.
+Stop duplicate payments, emails, and API calls when the framework retries. v1.3.3 uses five **effect-semantic** `side_effect_class` values: reads poll in-flight duplicates; mutating tools hard-block ambiguous states instead of blind re-execute.
 
 ### Tool-level idempotency
 
@@ -206,7 +206,7 @@ from mycelium.transition import SideEffectClass, ToolTransitionBinding
 binding = ToolTransitionBinding.for_tool(
     agent_id="payment-agent",
     policy_version="2026.07.1",
-    side_effect_class=SideEffectClass.PAYMENT,
+    side_effect_class=SideEffectClass.KEYED_MUTATE,
 )
 
 @ledger_sync(transition_binding=binding)
@@ -233,10 +233,10 @@ action_ledger:
 
 tools:
   send_payment:
-    side_effect_class: payment
+    side_effect_class: keyed_mutate
     retry_permission: manual_reconciliation_required
   search_docs:
-    side_effect_class: read_only
+    side_effect_class: read
 ```
 
 Async tools:
@@ -253,19 +253,21 @@ async def send_payment(amount: float, recipient: str) -> dict:
 
 - Record every tool invocation in a durable `ActionLedger`
 - Deduplicate retries and redispatches via a rich **transition key** (scope + tool + args + `side_effect_class` + policy), not only `tool_call_id`
-- **`read_only` tools:** poll in-flight, reclaim expired leases, retry failed-before-effect
-- **Side-effecting tools:** return completed results, poll in-flight, **hard-block** ambiguous states (`LedgerHardBlockError`)
+- **`read` tools:** poll in-flight, reclaim expired leases, retry failed-before-effect
+- **Mutating tools:** return completed results, poll in-flight, **hard-block** ambiguous states (`LedgerHardBlockError`)
 - Persist failed attempts with **terminal outcomes** (`FAILED_BEFORE_EFFECT`, `FAILED_AFTER_EFFECT`, etc.) for audit and reconciliation
 
 ### Side-effect classes
 
 | Class | Typical use | Duplicate handling |
 |-------|-------------|-------------------|
-| `read_only` | search, fetch | poll / reclaim / retry |
-| `idempotent_write` | upsert | retry if boundary not crossed |
-| `payment`, `non_idempotent_write`, `email`, `subagent`, `onchain_action` | charges, deletes, sends | hard-block on ambiguity |
+| `read` | search, fetch | poll / reclaim / retry |
+| `idempotent_mutate` | upsert / set status | retry if boundary not crossed |
+| `keyed_mutate` | Stripe-style create/charge | retry only with same provider key |
+| `non_idempotent_mutate` | send email, spawn subagent | hard-block on ambiguity |
+| `irreversible` | wire / on-chain burn | hard-block → human |
 
-Set per tool in YAML with `side_effect_class`. Required when `transition:` is configured and the tool is ledgered.
+Legacy aliases (`read_only`, `payment`, `subagent`, …) still parse. Set per tool in YAML with `side_effect_class`. Required when `transition:` is configured and the tool is ledgered.
 
 Storage backends:
 
@@ -363,21 +365,21 @@ audit_receipt:
 # Per-tool: side_effect_class + schemas
 tools:
   fetch_customer:
-    side_effect_class: read_only
+    side_effect_class: read
     protect: {entity_param: customer_id, ttl: 60}
     bounded:
       schema:
         customer_id: {type: string, required: true, pattern: "^c\\d+$"}
 
   send_payment:
-    side_effect_class: payment
+    side_effect_class: keyed_mutate
     bounded:
       schema:
         amount: {type: number, required: true}
         recipient: {type: string, required: true}
 
   search_docs:
-    side_effect_class: read_only
+    side_effect_class: read
 
 tasks:
   process_invoice:
