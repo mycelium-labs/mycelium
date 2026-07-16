@@ -29,19 +29,28 @@ Not Langfuse. Use both if you want traces and guards.
 
 ```bash
 pip install mycelium-runtime
-mycelium demo          # see the bug and the fix
-mycelium init          # scaffold mycelium.yaml
+mycelium demo              # see the bug and the fix
+mycelium init              # on-ramp: transition + one ledgered tool → mycelium.yaml
+mycelium init --full       # reference: all guards (fill TODOs; not the default)
+mycelium init --minimal    # smaller multi-guard scaffold
 ```
 
+`mycelium init` is the real start path (duplicate-tool fix). Use `--full` when you want every section documented in one file.
+
 ```yaml
-# mycelium.yaml
+# after: mycelium init
 transition:
-  agent_id: payment-agent
+  agent_id: my-agent
   policy_version: "2026.07.1"
 
+action_ledger:
+  storage: file
+  path: ./mycelium-ledger.json
+  tools: [my_side_effect_tool]
+
 tools:
-  send_payment:
-    side_effect_class: keyed_mutate
+  my_side_effect_tool:
+    side_effect_class: non_idempotent_mutate
 ```
 
 ```python
@@ -50,10 +59,10 @@ from mycelium import load_config
 config = load_config("mycelium.yaml")
 
 @config.apply
-def send_payment(amount: float, recipient: str) -> dict:
-    return gateway.charge(amount, recipient)
+def my_side_effect_tool(...) -> dict:
+    ...
 
-send_payment(amount=100.0, recipient="acct_123", tool_call_id=call["id"])
+my_side_effect_tool(..., tool_call_id=call["id"])
 ```
 
 Pass `tool_call_id` from your framework. Redispatch resolves the existing transition — read tools poll and return; mutating tools won't execute twice unsafely.

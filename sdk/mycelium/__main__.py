@@ -68,12 +68,12 @@ def main(argv: list[str] | None = None) -> int:
     init_parser.add_argument(
         "--full",
         action="store_true",
-        help="Full annotated template (all guards)",
+        help="Reference template with all guards (not the default on-ramp)",
     )
     init_parser.add_argument(
         "--minimal",
         action="store_true",
-        help="Smaller multi-guard template (not the default quickstart)",
+        help="Smaller multi-guard scaffold (not the default on-ramp)",
     )
     init_parser.add_argument(
         "--force",

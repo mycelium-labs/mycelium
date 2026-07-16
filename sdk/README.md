@@ -11,9 +11,11 @@ Current package: **mycelium-runtime v1.3.3** (transition envelope).
 
 ```bash
 pip install mycelium-runtime   # Python 3.10+
-mycelium init                  # scaffolds mycelium.yaml with transition: (v1.3)
+mycelium init                  # on-ramp scaffold (transition + one ledgered tool)
+mycelium init --full           # reference scaffold (all guards; fill TODOs)
 mycelium demo                  # see the bug and the fix (no LangGraph required)
 ```
+
 
 ```python
 from mycelium import load_config
@@ -44,8 +46,9 @@ Framework-agnostic. Raw message lists and plain Python functions (LangGraph, Cre
 
 ```bash
 pip install mycelium-runtime
-mycelium init              # quickstart: duplicate-tool fix → ./mycelium.yaml
-mycelium init --full       # all guards, commented examples
+mycelium init              # on-ramp: duplicate-tool fix → ./mycelium.yaml
+mycelium init --full       # reference: every guard section (not the default)
+mycelium init --minimal    # smaller multi-guard scaffold
 mycelium demo              # terminal demo of langgraph#7417
 ```
 
@@ -415,7 +418,7 @@ receipts automatically. Set `transition.agent_id` for receipt identity (replaces
 
 Configs without `transition:` keep v1.2 ledger behavior. See [CHANGELOG](../CHANGELOG.md) for breaking changes.
 
-Legacy per-tool style still works; run `mycelium init` for the full annotated template.
+Legacy per-tool style still works. Start with `mycelium init`; use `mycelium init --full` for the all-guards reference template.
 
 ---
 

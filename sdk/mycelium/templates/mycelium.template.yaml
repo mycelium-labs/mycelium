@@ -1,5 +1,6 @@
-# Mycelium configuration (full template).
-# Scaffold: mycelium init --full | default: mycelium init | slim: mycelium init --minimal
+# Mycelium configuration (full reference template).
+# Scaffold: mycelium init --full
+# On-ramp (default): mycelium init | smaller multi-guard: mycelium init --minimal
 #
 # Required vs optional
 #   Required for transition guards:  transition, action_ledger (+ tools entries you ledger)
