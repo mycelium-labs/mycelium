@@ -73,13 +73,26 @@ action_ledger:
   #   - send_email
 
 # ---------------------------------------------------------------------------
-# task_ledger  (task-level idempotency)
+# task_ledger  (task-level idempotency — CrewAI-style task retries)
 # ---------------------------------------------------------------------------
+# storage — pick ONE (enum): memory | file | redis | postgres
+# (same meanings / companion fields as action_ledger.storage above)
 task_ledger:
-  storage: file
-  path: ./mycelium-task-ledger.json
-  tasks:
-    - process_invoice
+  storage: file            # <TODO: choose memory | file | redis | postgres>
+  path: ./mycelium-task-ledger.json   # required when storage: file
+  # --- if storage: redis ---
+  # url_env: MYCELIUM_REDIS_URL
+  # prefix: mycelium:task:
+  # --- if storage: postgres ---
+  # dsn_env: MYCELIUM_POSTGRES_DSN
+  # table: mycelium_task_ledger
+  #
+  # tasks: allowlist of Python task function names that get claim/settle.
+  # Must match names under tasks: below (and your @config.apply_task defs).
+  tasks: []               # <TODO: list your ledgered task function names>
+  # Example:
+  # tasks:
+  #   - process_invoice
 
 # ---------------------------------------------------------------------------
 # state_flush  (cancel/disconnect safety)
@@ -192,13 +205,15 @@ tools:
       path_param: path
 
 # ---------------------------------------------------------------------------
-# tasks
+# tasks  (per-task config; list ledgered names under task_ledger.tasks above)
 # ---------------------------------------------------------------------------
-tasks:
-  process_invoice:
-    ledger: true
-    id_from:
-      - invoice_id
+tasks: {}
+# Example:
+# tasks:
+#   process_invoice:
+#     ledger: true
+#     id_from:
+#       - invoice_id
 
 # ---------------------------------------------------------------------------
 # registry
