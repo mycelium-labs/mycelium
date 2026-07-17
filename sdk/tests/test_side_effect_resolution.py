@@ -298,3 +298,57 @@ def test_resolve_side_effect_gate_matrix() -> None:
         resolve_side_effect_gate(expired, _payment_binding())
         == TransitionGate.HARD_BLOCK
     )
+    assert (
+        resolve_side_effect_gate(expired, _idempotent_binding())
+        == TransitionGate.ALLOW
+    )
+
+
+def test_spendability_override_allows_expired_reclaim() -> None:
+    from mycelium.transition import RetryPermission, Spendability
+
+    expired = LedgerEntry(
+        request_id="x",
+        tool="t",
+        args=[],
+        kwargs={},
+        status="in-flight",
+        terminal_outcome=TerminalOutcome.IN_FLIGHT.value,
+        lease_until=time.time() - 1,
+        side_effect_boundary=SideEffectBoundary.NOT_CROSSED.value,
+    )
+    payment_multi = ToolTransitionBinding.for_tool(
+        agent_id="demo",
+        policy_version="1",
+        side_effect_class=SideEffectClass.NON_IDEMPOTENT_MUTATE,
+        spendability=Spendability.MULTI_USE,
+        retry_permission=RetryPermission.SAFE_RETRY,
+    )
+    assert resolve_side_effect_gate(expired, payment_multi) == TransitionGate.ALLOW
+    assert (
+        resolve_side_effect_gate(expired, _payment_binding())
+        == TransitionGate.HARD_BLOCK
+    )
+
+
+def test_non_replayable_hard_blocks_expired() -> None:
+    from mycelium.transition import Spendability
+
+    expired = LedgerEntry(
+        request_id="x",
+        tool="t",
+        args=[],
+        kwargs={},
+        status="in-flight",
+        terminal_outcome=TerminalOutcome.IN_FLIGHT.value,
+        lease_until=time.time() - 1,
+        side_effect_boundary=SideEffectBoundary.NOT_CROSSED.value,
+    )
+    binding = ToolTransitionBinding.for_tool(
+        agent_id="demo",
+        policy_version="1",
+        side_effect_class=SideEffectClass.IDEMPOTENT_MUTATE,
+        spendability=Spendability.NON_REPLAYABLE,
+    )
+    assert resolve_side_effect_gate(expired, binding) == TransitionGate.HARD_BLOCK
+

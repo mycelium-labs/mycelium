@@ -67,6 +67,7 @@ from mycelium.transition import (
     RetryPermission,
     SideEffectBoundary,
     SideEffectClass,
+    Spendability,
     TerminalOutcome,
     ToolTransitionBinding,
     TransitionScope,
@@ -75,7 +76,7 @@ from mycelium.transition import (
     execution_scope,
 )
 
-__version__ = "1.3.4"
+__version__ = "1.4.0"
 
 __all__ = [
     "ActionLedger",
@@ -115,6 +116,7 @@ __all__ = [
     "TransitionConfig",
     "SideEffectClass",
     "SideEffectBoundary",
+    "Spendability",
     "RetryPermission",
     "TerminalOutcome",
     "ToolTransitionBinding",

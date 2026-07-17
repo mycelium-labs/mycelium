@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.4.0 (2026-07-17)
+
+Ship `spendability` as an orthogonal axis on the transition binding (minor: new policy field; existing YAML keeps class-derived defaults).
+
+### Spendability
+
+Per-tool values (optional YAML override; defaults from `side_effect_class`):
+
+| Value | Meaning | Default for |
+|-------|---------|-------------|
+| `multi_use` | same intent may produce effects again | `read`, `idempotent_mutate` |
+| `single_use` | one effect; COMPLETED returns stored result; ambiguity hard-blocks | `keyed_mutate`, `non_idempotent_mutate` |
+| `non_replayable` | under ambiguity, hard-block / reconcile | `irreversible` |
+
+Gate behavior: expired leases with `not_crossed` may reclaim only when spendability is `multi_use` and retry permission is `safe_retry`. `single_use` / `non_replayable` hard-block ambiguous/expired states. Same transition key still returns the stored COMPLETED result for all spendability values (a new spend needs a new key).
+
+### Templates / API
+
+- Full YAML template documents spendability defaults and optional per-tool override
+- Export `Spendability` from the package root; parse via `spendability:` on tools
+
 ## 1.3.4 (2026-07-16)
 
 Scaffold and docs polish for the five-class `side_effect_class` model.

@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.3.4** (transition envelope).
+Current package: **mycelium-runtime v1.4.0** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -198,7 +198,7 @@ result, messages = await runner.run_with_llm_retry(
 
 ## Quickstart: idempotency & audit receipts (v1.3 transition envelope)
 
-Stop duplicate payments, emails, and API calls when the framework retries. v1.3.3 uses five **effect-semantic** `side_effect_class` values: reads poll in-flight duplicates; mutating tools hard-block ambiguous states instead of blind re-execute.
+Stop duplicate payments, emails, and API calls when the framework retries. Five **effect-semantic** `side_effect_class` values plus optional `spendability` (`multi_use` / `single_use` / `non_replayable`): reads poll in-flight duplicates; mutating tools hard-block ambiguous states instead of blind re-execute.
 
 ### Tool-level idempotency
 
@@ -237,9 +237,11 @@ action_ledger:
 tools:
   send_payment:
     side_effect_class: keyed_mutate
+    # spendability defaults to single_use for keyed_mutate
     retry_permission: manual_reconciliation_required
   search_docs:
     side_effect_class: read
+    # spendability defaults to multi_use for read
 ```
 
 Async tools:
@@ -271,6 +273,18 @@ async def send_payment(amount: float, recipient: str) -> dict:
 | `irreversible` | wire / on-chain burn | hard-block → human |
 
 Legacy aliases (`read_only`, `payment`, `subagent`, …) still parse. Set per tool in YAML with `side_effect_class`. Required when `transition:` is configured and the tool is ledgered.
+
+### Spendability
+
+Orthogonal to `side_effect_class` — how many times the same intent may produce an effect:
+
+| Value | Meaning | Default for |
+|-------|---------|-------------|
+| `multi_use` | may produce effects again | `read`, `idempotent_mutate` |
+| `single_use` | one effect; COMPLETED returns stored result | `keyed_mutate`, `non_idempotent_mutate` |
+| `non_replayable` | ambiguity → hard-block / reconcile | `irreversible` |
+
+Override with `spendability:` only when the class default is wrong for your tool. Same transition key always returns the COMPLETED result; a deliberate re-spend needs a new key.
 
 Storage backends:
 

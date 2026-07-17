@@ -168,6 +168,57 @@ tools:
     assert config.transition is not None
     assert config.transition.agent_id == "payment-agent"
     assert config.tools["send_payment"].side_effect_class == SideEffectClass.KEYED_MUTATE
+    binding = config.tool_transition_binding(config.tools["send_payment"])
+    assert binding is not None
+    from mycelium.transition import Spendability
+
+    assert binding.spendability == Spendability.SINGLE_USE
+
+
+def test_config_parses_spendability_override() -> None:
+    from mycelium.transition import Spendability
+
+    yaml_text = """
+transition:
+  agent_id: payment-agent
+  policy_version: "2026.07.1"
+
+action_ledger:
+  storage: memory
+  tools: [send_payment]
+
+tools:
+  send_payment:
+    side_effect_class: non_idempotent_mutate
+    spendability: multi_use
+"""
+    config = load_config_from_string(yaml_text)
+    assert config.tools["send_payment"].spendability == Spendability.MULTI_USE
+    binding = config.tool_transition_binding(config.tools["send_payment"])
+    assert binding is not None
+    assert binding.spendability == Spendability.MULTI_USE
+
+
+def test_spendability_defaults_from_side_effect_class() -> None:
+    from mycelium.transition import Spendability, resolve_spendability
+
+    assert resolve_spendability(SideEffectClass.READ, None) == Spendability.MULTI_USE
+    assert (
+        resolve_spendability(SideEffectClass.IDEMPOTENT_MUTATE, None)
+        == Spendability.MULTI_USE
+    )
+    assert (
+        resolve_spendability(SideEffectClass.KEYED_MUTATE, None)
+        == Spendability.SINGLE_USE
+    )
+    assert (
+        resolve_spendability(SideEffectClass.NON_IDEMPOTENT_MUTATE, None)
+        == Spendability.SINGLE_USE
+    )
+    assert (
+        resolve_spendability(SideEffectClass.IRREVERSIBLE, None)
+        == Spendability.NON_REPLAYABLE
+    )
 
 
 def test_legacy_side_effect_class_aliases() -> None:

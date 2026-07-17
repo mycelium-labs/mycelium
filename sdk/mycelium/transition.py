@@ -84,6 +84,24 @@ class RetryPermission(StrEnum):
     NEVER_RETRY_AUTOMATICALLY = "never_retry_automatically"
 
 
+class Spendability(StrEnum):
+    """Whether an intent may produce an external effect more than once.
+
+    Orthogonal to :class:`SideEffectClass`: class describes *what kind* of
+    effect; spendability describes *how many times* the same intent may spend.
+
+    - ``multi_use`` — intent may produce effects again (reads, idempotent upserts)
+    - ``single_use`` — one effect; after COMPLETED return stored result; ambiguity
+      hard-blocks
+    - ``non_replayable`` — under any ambiguity, hard-block / reconcile (never
+      auto-retry a fuzzy second spend)
+    """
+
+    MULTI_USE = "multi_use"
+    SINGLE_USE = "single_use"
+    NON_REPLAYABLE = "non_replayable"
+
+
 DEFAULT_RETRY_PERMISSION: dict[SideEffectClass, RetryPermission] = {
     SideEffectClass.READ: RetryPermission.SAFE_RETRY,
     SideEffectClass.IDEMPOTENT_MUTATE: RetryPermission.SAFE_RETRY,
@@ -94,6 +112,15 @@ DEFAULT_RETRY_PERMISSION: dict[SideEffectClass, RetryPermission] = {
         RetryPermission.MANUAL_RECONCILIATION_REQUIRED
     ),
     SideEffectClass.IRREVERSIBLE: RetryPermission.NEVER_RETRY_AUTOMATICALLY,
+}
+
+
+DEFAULT_SPENDABILITY: dict[SideEffectClass, Spendability] = {
+    SideEffectClass.READ: Spendability.MULTI_USE,
+    SideEffectClass.IDEMPOTENT_MUTATE: Spendability.MULTI_USE,
+    SideEffectClass.KEYED_MUTATE: Spendability.SINGLE_USE,
+    SideEffectClass.NON_IDEMPOTENT_MUTATE: Spendability.SINGLE_USE,
+    SideEffectClass.IRREVERSIBLE: Spendability.NON_REPLAYABLE,
 }
 
 
@@ -108,6 +135,14 @@ STRICT_SIDE_EFFECT_CLASSES = frozenset(
 def is_strict_side_effect(side_effect_class: SideEffectClass) -> bool:
     """Return whether a class requires strict hard-block-on-ambiguity resolution."""
     return side_effect_class in STRICT_SIDE_EFFECT_CLASSES
+
+
+def blocks_on_ambiguous_replay(spendability: Spendability) -> bool:
+    """Whether ambiguous terminal states must hard-block rather than reclaim/retry."""
+    return spendability in (
+        Spendability.SINGLE_USE,
+        Spendability.NON_REPLAYABLE,
+    )
 
 
 def allows_failed_before_retry(side_effect_class: SideEffectClass) -> bool:
@@ -142,6 +177,19 @@ def parse_retry_permission(value: Any) -> RetryPermission:
         ) from exc
 
 
+def parse_spendability(value: Any) -> Spendability:
+    """Parse and validate a spendability value from YAML."""
+    if not isinstance(value, str):
+        raise ValueError("spendability must be a string")
+    try:
+        return Spendability(value)
+    except ValueError as exc:
+        allowed = ", ".join(member.value for member in Spendability)
+        raise ValueError(
+            f"invalid spendability {value!r}; expected one of: {allowed}"
+        ) from exc
+
+
 def resolve_retry_permission(
     side_effect_class: SideEffectClass,
     explicit: RetryPermission | None,
@@ -149,6 +197,16 @@ def resolve_retry_permission(
     if explicit is not None:
         return explicit
     return DEFAULT_RETRY_PERMISSION[side_effect_class]
+
+
+def resolve_spendability(
+    side_effect_class: SideEffectClass,
+    explicit: Spendability | None,
+) -> Spendability:
+    """Resolve spendability from an explicit override or class default."""
+    if explicit is not None:
+        return explicit
+    return DEFAULT_SPENDABILITY[side_effect_class]
 
 
 def resolve_side_effect_boundary_default(
@@ -248,6 +306,7 @@ class ToolTransitionBinding:
     scope_from: dict[str, str] = field(default_factory=dict)
     retry_permission: RetryPermission = RetryPermission.MANUAL_RECONCILIATION_REQUIRED
     side_effect_boundary_default: SideEffectBoundary = SideEffectBoundary.NOT_CROSSED
+    spendability: Spendability = Spendability.SINGLE_USE
 
     @classmethod
     def for_tool(
@@ -259,6 +318,7 @@ class ToolTransitionBinding:
         scope_from: dict[str, str] | None = None,
         retry_permission: RetryPermission | None = None,
         side_effect_boundary: SideEffectBoundary | None = None,
+        spendability: Spendability | None = None,
     ) -> ToolTransitionBinding:
         return cls(
             agent_id=agent_id,
@@ -271,6 +331,7 @@ class ToolTransitionBinding:
             side_effect_boundary_default=resolve_side_effect_boundary_default(
                 side_effect_boundary
             ),
+            spendability=resolve_spendability(side_effect_class, spendability),
         )
 
 
@@ -447,13 +508,16 @@ __all__ = [
     "SideEffectClass",
     "SideEffectBoundary",
     "RetryPermission",
+    "Spendability",
     "DEFAULT_RETRY_PERMISSION",
+    "DEFAULT_SPENDABILITY",
     "STRICT_SIDE_EFFECT_CLASSES",
     "TerminalOutcome",
     "ToolTransitionBinding",
     "TransitionConfig",
     "TransitionScope",
     "args_fingerprint",
+    "blocks_on_ambiguous_replay",
     "build_transition_preimage",
     "canonical_json",
     "derive_dispatch_id",
@@ -465,8 +529,10 @@ __all__ = [
     "parse_side_effect_class",
     "parse_retry_permission",
     "parse_side_effect_boundary",
+    "parse_spendability",
     "parse_terminal_outcome",
     "resolve_retry_permission",
+    "resolve_spendability",
     "resolve_side_effect_boundary_default",
     "resolve_scope",
     "resolve_terminal_outcome",

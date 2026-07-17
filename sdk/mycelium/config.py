@@ -50,6 +50,7 @@ from mycelium.transition import (
     RetryPermission,
     SideEffectBoundary,
     SideEffectClass,
+    Spendability,
     ToolTransitionBinding,
     TransitionConfig,
     TransitionScope,
@@ -57,6 +58,7 @@ from mycelium.transition import (
     parse_retry_permission,
     parse_side_effect_boundary,
     parse_side_effect_class,
+    parse_spendability,
 )
 
 
@@ -76,6 +78,7 @@ class ToolConfig:
     side_effect_class: SideEffectClass | None = None
     retry_permission: RetryPermission | None = None
     side_effect_boundary: SideEffectBoundary | None = None
+    spendability: Spendability | None = None
 
     def is_noop(self) -> bool:
         return (
@@ -320,6 +323,7 @@ class MyceliumConfig:
             scope_from=dict(self.transition.scope_from),
             retry_permission=tool_config.retry_permission,
             side_effect_boundary=tool_config.side_effect_boundary,
+            spendability=tool_config.spendability,
         )
 
     def _ledger_timing_kwargs(self) -> dict[str, float]:
@@ -616,6 +620,13 @@ def _parse_tool_config(
         except ValueError as exc:
             raise ConfigError(f"tool '{name}': {exc}") from exc
 
+    spendability: Spendability | None = None
+    if "spendability" in raw:
+        try:
+            spendability = parse_spendability(raw["spendability"])
+        except ValueError as exc:
+            raise ConfigError(f"tool '{name}': {exc}") from exc
+
     return ToolConfig(
         name=name,
         protect=protect,
@@ -625,6 +636,7 @@ def _parse_tool_config(
         side_effect_class=side_effect_class,
         retry_permission=retry_permission,
         side_effect_boundary=side_effect_boundary,
+        spendability=spendability,
     )
 
 
@@ -710,6 +722,7 @@ def _apply_action_ledger_tools(
             side_effect_class=existing.side_effect_class,
             retry_permission=existing.retry_permission,
             side_effect_boundary=existing.side_effect_boundary,
+            spendability=existing.spendability,
         )
 
 

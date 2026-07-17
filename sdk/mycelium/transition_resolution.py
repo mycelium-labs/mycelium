@@ -9,9 +9,10 @@ from mycelium.transition import (
     RetryPermission,
     SideEffectBoundary,
     SideEffectClass,
+    Spendability,
     TerminalOutcome,
     ToolTransitionBinding,
-    is_strict_side_effect,
+    blocks_on_ambiguous_replay,
 )
 
 
@@ -51,28 +52,27 @@ def resolve_side_effect_gate(
     outcome = existing.resolved_terminal_outcome()
     boundary = _entry_boundary(existing)
     retry = binding.retry_permission
+    spendability = binding.spendability
 
     if outcome == TerminalOutcome.COMPLETED:
+        # Same transition key always returns the stored result. multi_use
+        # re-spend requires a new intent (new key), not replaying this one.
         return TransitionGate.RETURN
     if outcome == TerminalOutcome.IN_FLIGHT:
         return TransitionGate.POLL
 
     if outcome in (TerminalOutcome.BLOCKED, TerminalOutcome.UNKNOWN):
-        if boundary in (SideEffectBoundary.MAYBE_CROSSED, SideEffectBoundary.CROSSED):
-            return TransitionGate.HARD_BLOCK
-        if outcome == TerminalOutcome.UNKNOWN:
-            return TransitionGate.HARD_BLOCK
         return TransitionGate.HARD_BLOCK
 
     if outcome == TerminalOutcome.EXPIRED:
         if boundary in (SideEffectBoundary.MAYBE_CROSSED, SideEffectBoundary.CROSSED):
             return TransitionGate.HARD_BLOCK
-        if is_strict_side_effect(binding.side_effect_class):
+        if blocks_on_ambiguous_replay(spendability):
             return TransitionGate.HARD_BLOCK
         if (
-            retry == RetryPermission.SAFE_RETRY
+            spendability == Spendability.MULTI_USE
+            and retry == RetryPermission.SAFE_RETRY
             and boundary == SideEffectBoundary.NOT_CROSSED
-            and binding.side_effect_class == SideEffectClass.IDEMPOTENT_MUTATE
         ):
             return TransitionGate.ALLOW
         return TransitionGate.HARD_BLOCK
@@ -83,6 +83,8 @@ def resolve_side_effect_gate(
     if outcome == TerminalOutcome.FAILED_BEFORE_EFFECT:
         if boundary in (SideEffectBoundary.MAYBE_CROSSED, SideEffectBoundary.CROSSED):
             return TransitionGate.HARD_BLOCK
+        # Effect never spent — first spend may proceed when retry permission allows,
+        # including non_replayable tools that failed before the boundary.
         if retry == RetryPermission.NEVER_RETRY_AUTOMATICALLY:
             return TransitionGate.HARD_BLOCK
         if retry == RetryPermission.MANUAL_RECONCILIATION_REQUIRED:

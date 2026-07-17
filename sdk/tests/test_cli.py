@@ -40,6 +40,9 @@ def test_init_writes_full_template(tmp_path: Path) -> None:
     assert "side_effect_class: keyed_mutate" in text
     assert "side_effect_class: non_idempotent_mutate" in text
     assert "side_effect_class: irreversible" in text
+    assert "spendability" in text
+    assert "multi_use" in text
+    assert "non_replayable" in text
     assert "<TODO: your_read_tool>" not in text
     assert "retry_permission: manual_reconciliation_required" not in text
 

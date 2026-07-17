@@ -23,6 +23,11 @@
 #
 # side_effect_class (per ledgered tool): read | idempotent_mutate |
 #   keyed_mutate | non_idempotent_mutate | irreversible
+# spendability (optional override; defaults from side_effect_class):
+#   multi_use | single_use | non_replayable
+#   defaults: read/idempotent_mutate → multi_use;
+#             keyed/non_idempotent_mutate → single_use;
+#             irreversible → non_replayable
 
 # ---------------------------------------------------------------------------
 # transition
@@ -91,7 +96,8 @@ tools: {}
 #   your_keyed_mutate_tool:         {side_effect_class: keyed_mutate}
 #   your_non_idempotent_mutate_tool:{side_effect_class: non_idempotent_mutate}
 #   your_irreversible_tool:         {side_effect_class: irreversible}
-# Optional per tool: protect: {entity_param, ttl}, bounded: {schema: {}}
+# Optional per tool: spendability: multi_use|single_use|non_replayable
+#   (omit to use class default), protect: {entity_param, ttl}, bounded: {schema: {}}
 
 # ---------------------------------------------------------------------------
 # tasks  (omit if unused; then list ledgered names in task_ledger.tasks — step 1)
