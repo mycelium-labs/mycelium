@@ -11,7 +11,9 @@ import socket
 import time
 import uuid
 import warnings
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
@@ -65,6 +67,80 @@ class LedgerHardBlockError(LedgerError):
 
 def _ledger_owner() -> str:
     return f"{socket.gethostname()}:{os.getpid()}"
+
+
+# Boundary ordering: a transition may only move forward toward CROSSED.
+_BOUNDARY_RANK: dict[SideEffectBoundary, int] = {
+    SideEffectBoundary.NOT_CROSSED: 0,
+    SideEffectBoundary.MAYBE_CROSSED: 1,
+    SideEffectBoundary.CROSSED: 2,
+}
+
+
+@dataclass(frozen=True)
+class _ActiveTransition:
+    """The side-effecting transition currently executing on this task/thread."""
+
+    ledger: ActionLedger
+    request_id: str
+    binding: ToolTransitionBinding | None
+
+
+_active_transition_var: ContextVar[_ActiveTransition | None] = ContextVar(
+    "mycelium_active_transition",
+    default=None,
+)
+
+
+def get_active_transition() -> _ActiveTransition | None:
+    """Return the transition currently executing in this context, if any."""
+    return _active_transition_var.get()
+
+
+def _advance_active_boundary(boundary: SideEffectBoundary) -> None:
+    active = _active_transition_var.get()
+    if active is None:
+        warnings.warn(
+            "side-effect boundary marker used outside a ledgered tool; ignored",
+            stacklevel=3,
+        )
+        return
+    active.ledger.advance_boundary(active.request_id, boundary)
+
+
+def mark_maybe_crossed() -> None:
+    """Mark the active transition as ``maybe_crossed``.
+
+    Call immediately before performing the external operation. If the tool
+    raises or the process crashes after this point, the durable entry retains
+    ``maybe_crossed`` so a redispatch hard-blocks instead of re-executing a
+    possibly-already-applied side effect.
+    """
+    _advance_active_boundary(SideEffectBoundary.MAYBE_CROSSED)
+
+
+def mark_crossed() -> None:
+    """Mark the active transition as ``crossed`` (effect definitely happened)."""
+    _advance_active_boundary(SideEffectBoundary.CROSSED)
+
+
+@contextmanager
+def side_effect() -> Iterator[None]:
+    """Wrap the external operation of a side-effecting tool.
+
+    On entry the active transition advances to ``maybe_crossed``; on clean exit
+    to ``crossed``. If the body raises, the boundary stays ``maybe_crossed`` so
+    the failure is classified as ambiguous (``UNKNOWN``) rather than
+    ``FAILED_BEFORE_EFFECT``::
+
+        @ledger_sync(transition_binding=binding)
+        def send_payment(amount, recipient):
+            with side_effect():
+                return gateway.charge(amount, recipient)
+    """
+    mark_maybe_crossed()
+    yield
+    mark_crossed()
 
 
 @dataclass(frozen=True)
@@ -784,6 +860,27 @@ class ActionLedger:
         self._storage.set(entry)
         return entry
 
+    def advance_boundary(
+        self, request_id: str, boundary: SideEffectBoundary
+    ) -> LedgerEntry:
+        """Move an entry's side-effect boundary forward (monotonic).
+
+        Only advances toward ``CROSSED`` and never regresses, so concurrent or
+        out-of-order markers cannot weaken a stronger recorded boundary. Backs
+        the :func:`side_effect` marker used by side-effecting tools.
+        """
+        existing = self._storage.get(request_id)
+        if existing is None:
+            raise LedgerError(
+                f"Cannot advance boundary for unknown request {request_id!r}"
+            )
+        current = SideEffectBoundary(existing.side_effect_boundary)
+        if _BOUNDARY_RANK[boundary] <= _BOUNDARY_RANK[current]:
+            return existing
+        entry = replace(existing, side_effect_boundary=boundary.value)
+        self._storage.set(entry)
+        return entry
+
     # --- request id derivation ---
 
     def derive_request_id(
@@ -936,6 +1033,29 @@ async def _claim_for_transition_async(
     return ledger.claim(request_id, tool_name, args, clean_kwargs)
 
 
+def _record_failure(
+    ledger: ActionLedger, request_id: str, exc: BaseException
+) -> None:
+    """Record a tool failure with the terminal outcome implied by the boundary.
+
+    ``not_crossed`` → ``FAILED_BEFORE_EFFECT`` (safe to retry per policy),
+    ``maybe_crossed`` → ``UNKNOWN`` (ambiguous; hard-block for reconcile),
+    ``crossed`` → ``FAILED_AFTER_EFFECT`` (effect happened; hard-block).
+    """
+    entry = ledger.get(request_id)
+    boundary = (
+        SideEffectBoundary(entry.side_effect_boundary)
+        if entry is not None
+        else SideEffectBoundary.NOT_CROSSED
+    )
+    if boundary == SideEffectBoundary.CROSSED:
+        ledger.fail(request_id, exc, failed_after_effect=True)
+    elif boundary == SideEffectBoundary.MAYBE_CROSSED:
+        ledger.mark_unknown(request_id, error=f"{type(exc).__name__}: {exc}")
+    else:
+        ledger.fail(request_id, exc)
+
+
 def _run_ledgered(
     func: Callable[P, R],
     tool_name: str,
@@ -963,12 +1083,17 @@ def _run_ledgered(
     if existing.is_terminal_completed():
         return existing.result
 
+    token = _active_transition_var.set(
+        _ActiveTransition(ledger, request_id, transition_binding)
+    )
     try:
         result = func(*args, **clean_kwargs)
     except Exception as exc:
-        ledger.fail(request_id, exc)
+        _record_failure(ledger, request_id, exc)
         _emit_tool_receipt(audit_emitter, ledger, request_id)
         raise
+    finally:
+        _active_transition_var.reset(token)
 
     ledger.complete(request_id, result)
     _emit_tool_receipt(audit_emitter, ledger, request_id)
@@ -1002,12 +1127,17 @@ async def _run_ledgered_async(
     if existing.is_terminal_completed():
         return existing.result
 
+    token = _active_transition_var.set(
+        _ActiveTransition(ledger, request_id, transition_binding)
+    )
     try:
         result = await func(*args, **clean_kwargs)
     except Exception as exc:
-        ledger.fail(request_id, exc)
+        _record_failure(ledger, request_id, exc)
         _emit_tool_receipt(audit_emitter, ledger, request_id)
         raise
+    finally:
+        _active_transition_var.reset(token)
 
     ledger.complete(request_id, result)
     _emit_tool_receipt(audit_emitter, ledger, request_id)

@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.5.0 (2026-07-18)
+
+Complete the `maybe_crossed` boundary lifecycle so post-effect failures stop being misclassified as retry-safe.
+
+### Side-effect boundary marker
+
+- New `side_effect()` context manager (plus `mark_maybe_crossed()` / `mark_crossed()`) wraps the external operation of a side-effecting tool. On enter the durable entry advances to `maybe_crossed`; on clean exit to `crossed`. Boundary only ever moves forward.
+- Failure classification now reads the boundary instead of always recording `FAILED_BEFORE_EFFECT`:
+
+| Boundary at failure/crash | Terminal outcome | Redispatch |
+|---------------------------|------------------|------------|
+| `not_crossed` | `FAILED_BEFORE_EFFECT` | retry if policy allows |
+| `maybe_crossed` | `UNKNOWN` | hard-block → reconcile |
+| `crossed` | `FAILED_AFTER_EFFECT` | hard-block |
+
+- Because `maybe_crossed` is persisted before the external call, a crash mid-call leaves the entry ambiguous and a redispatch hard-blocks instead of re-executing. Fixes the common case where an effect succeeded but downstream code (e.g. response parsing) threw, previously logged as never-happened.
+- Backward compatible: tools that don't use the marker keep `not_crossed` and behave exactly as before. Works in sync and async tools.
+
+### API
+
+- Export `side_effect`, `mark_maybe_crossed`, `mark_crossed` from the package root
+- New `ActionLedger.advance_boundary()` (monotonic) and `get_active_transition()`
+
 ## 1.4.0 (2026-07-17)
 
 Ship `spendability` as an orthogonal axis on the transition binding (minor: new policy field; existing YAML keeps class-derived defaults).

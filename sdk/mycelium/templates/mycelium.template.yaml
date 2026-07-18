@@ -28,6 +28,9 @@
 #   defaults: read/idempotent_mutate → multi_use;
 #             keyed/non_idempotent_mutate → single_use;
 #             irreversible → non_replayable
+# In tool code, wrap the external call in `with side_effect():` so a failure
+#   after the call is classified FAILED_AFTER_EFFECT / UNKNOWN (not retried),
+#   not FAILED_BEFORE_EFFECT.
 
 # ---------------------------------------------------------------------------
 # transition

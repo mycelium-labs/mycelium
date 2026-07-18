@@ -13,6 +13,9 @@ from mycelium.action_ledger import (
     get_ledger,
     ledger,
     ledger_sync,
+    mark_crossed,
+    mark_maybe_crossed,
+    side_effect,
 )
 from mycelium.audit_receipt import (
     AuditReceiptEmitter,
@@ -76,7 +79,7 @@ from mycelium.transition import (
     execution_scope,
 )
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 __all__ = [
     "ActionLedger",
@@ -91,6 +94,9 @@ __all__ = [
     "get_ledger",
     "ledger",
     "ledger_sync",
+    "side_effect",
+    "mark_maybe_crossed",
+    "mark_crossed",
     "AuditReceiptEmitter",
     "AuditReceiptError",
     "AuditReceiptRecord",

@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.4.0** (transition envelope).
+Current package: **mycelium-runtime v1.5.0** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -285,6 +285,31 @@ Orthogonal to `side_effect_class` — how many times the same intent may produce
 | `non_replayable` | ambiguity → hard-block / reconcile | `irreversible` |
 
 Override with `spendability:` only when the class default is wrong for your tool. Same transition key always returns the COMPLETED result; a deliberate re-spend needs a new key.
+
+### Marking the side-effect boundary (`side_effect()`)
+
+By default a failing tool is recorded as `FAILED_BEFORE_EFFECT` — safe to retry. But if the external call already happened (e.g. the charge succeeded and then response parsing threw), that classification is wrong. Wrap the external operation in `side_effect()` so the ledger knows where the point of no return is:
+
+```python
+from mycelium import ledger_sync, side_effect
+
+@ledger_sync(transition_binding=binding)
+def send_payment(amount: float, recipient: str) -> dict:
+    validate(amount, recipient)          # boundary: not_crossed
+    with side_effect():                  # -> maybe_crossed before the call
+        resp = gateway.charge(amount, recipient)   # -> crossed on clean exit
+    return parse(resp)
+```
+
+The boundary drives failure classification and only ever moves forward (`not_crossed → maybe_crossed → crossed`):
+
+| Boundary when it fails/crashes | Terminal outcome | Redispatch |
+|--------------------------------|------------------|------------|
+| `not_crossed` (before the block) | `FAILED_BEFORE_EFFECT` | retry if policy allows |
+| `maybe_crossed` (inside the block / crash) | `UNKNOWN` | hard-block → reconcile |
+| `crossed` (clean exit, or `mark_crossed()`) | `FAILED_AFTER_EFFECT` | hard-block |
+
+Because `maybe_crossed` is written durably *before* the call, a process crash mid-call leaves the entry ambiguous and a redispatch hard-blocks instead of double-spending. For finer control use `mark_maybe_crossed()` / `mark_crossed()` directly. Works the same inside `async` tools.
 
 Storage backends:
 
