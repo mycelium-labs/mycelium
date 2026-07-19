@@ -389,7 +389,7 @@
       LLM: duplicate tool execution on retry, stale context, invalid tool calls.
       Classify tools, hash a durable transition key, resolve duplicates by terminal
       state — poll reads, hard-block ambiguous writes. Framework-agnostic.
-      Early but API-stable (v1.5.0): breaking changes only at major versions.
+      Early but API-stable (v1.7.0): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
@@ -437,10 +437,13 @@ bounded, bounded_sync, ToolRegistry, ToolRunner
 ledger, ledger_sync, task_ledger, task_ledger_sync
 ActionLedger, TaskLedger, StateFlush, AuditReceiptEmitter, verify_receipt
 LedgerHardBlockError, LedgerPollTimeoutError
+side_effect, mark_maybe_crossed, mark_crossed        # boundary markers (v1.5.0)
+record_external_operation                            # provider handle (v1.6.0)
+Reconciler, ReconcileResult, ReconcileStatus         # provider reconcile (v1.7.0)
 
 # Transition envelope
 TransitionConfig, SideEffectClass, SideEffectBoundary, RetryPermission
-TerminalOutcome, ToolTransitionBinding, execution_scope
+TerminalOutcome, Spendability, ToolTransitionBinding, execution_scope
 derive_transition_key_for_call
 
 # Config
