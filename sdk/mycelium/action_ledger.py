@@ -37,7 +37,9 @@ from mycelium.transition import (
 from mycelium.transition_resolution import (
     TransitionGate,
     hard_block_message,
+    resolve_read_only_gate,
     resolve_side_effect_gate,
+    soft_block_message,
 )
 
 if TYPE_CHECKING:
@@ -65,6 +67,16 @@ class LedgerPollTimeoutError(LedgerError):
 
 class LedgerHardBlockError(LedgerError):
     """Raised when a side-effecting transition requires manual reconciliation."""
+
+
+class LedgerSoftBlockError(LedgerError):
+    """Raised when a reversible (read-only) transition is deferred.
+
+    Signals an ambiguous ``UNKNOWN`` / ``BLOCKED`` outcome on a read-only tool.
+    Unlike :class:`LedgerHardBlockError`, re-running the tool is safe, so this
+    is a *deferral* the caller may retry later rather than a terminal stop. Only
+    raised when the ledger is configured with ``defer_read_only_unknown=True``.
+    """
 
 
 def _ledger_owner() -> str:
@@ -381,12 +393,17 @@ class ActionLedger:
         poll_interval: float = DEFAULT_POLL_INTERVAL,
         poll_timeout: float | None = DEFAULT_POLL_TIMEOUT,
         reconciler: Reconciler | None = None,
+        defer_read_only_unknown: bool = False,
     ) -> None:
         self._storage = storage if storage is not None else InMemoryLedgerStorage()
         self._lease_ttl = lease_ttl
         self._poll_interval = poll_interval
         self._poll_timeout = poll_timeout
         self._reconciler = reconciler
+        # Read-only UNKNOWN/BLOCKED gate resolution: when False (default) the
+        # ambiguous state is safely re-run (SOFT_BLOCK -> retry); when True the
+        # claim raises LedgerSoftBlockError so the caller can defer the retry.
+        self._defer_read_only_unknown = defer_read_only_unknown
 
     # --- public API ---
 
@@ -477,6 +494,14 @@ class ActionLedger:
         poll_deadline = time.time() + timeout if timeout is not None else None
 
         while True:
+            existing = self.get(request_id)
+            if existing is not None and (
+                resolve_read_only_gate(existing) == TransitionGate.SOFT_BLOCK
+            ):
+                return self._resolve_read_only_soft_block(
+                    request_id, tool, args, kwargs, existing
+                )
+
             entry = self._new_inflight_entry(request_id, tool, args, kwargs)
             outcome, existing = self._storage.try_claim_inflight(entry, lease_ttl=ttl)
             if outcome == "completed" and existing is not None:
@@ -494,6 +519,30 @@ class ActionLedger:
             raise LedgerError(
                 f"Unexpected claim outcome {outcome!r} for read-only tool {tool!r}"
             )
+
+    def _resolve_read_only_soft_block(
+        self,
+        request_id: str,
+        tool: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        existing: LedgerEntry,
+    ) -> LedgerEntry:
+        """Resolve a read-only ``SOFT_BLOCK`` (``UNKNOWN`` / ``BLOCKED``).
+
+        Re-running a read-only tool is always safe, so by default the ambiguous
+        entry is reset to a fresh in-flight claim and the tool runs exactly once
+        more. When the ledger is configured with ``defer_read_only_unknown``,
+        raise :class:`LedgerSoftBlockError` instead so an expensive read can be
+        deferred and retried by the caller (cost-dependent).
+        """
+        if self._defer_read_only_unknown:
+            raise LedgerSoftBlockError(
+                soft_block_message(existing, tool=tool, request_id=request_id)
+            )
+        fresh = self._new_inflight_entry(request_id, tool, args, kwargs)
+        self._storage.set(fresh)
+        return fresh
 
     def _poll_read_only(
         self,
@@ -544,6 +593,14 @@ class ActionLedger:
         poll_deadline = time.time() + timeout if timeout is not None else None
 
         while True:
+            existing = self.get(request_id)
+            if existing is not None and (
+                resolve_read_only_gate(existing) == TransitionGate.SOFT_BLOCK
+            ):
+                return self._resolve_read_only_soft_block(
+                    request_id, tool, args, kwargs, existing
+                )
+
             entry = self._new_inflight_entry(request_id, tool, args, kwargs)
             outcome, existing = self._storage.try_claim_inflight(entry, lease_ttl=ttl)
             if outcome == "completed" and existing is not None:
@@ -1355,6 +1412,7 @@ def ledger(
     poll_interval: float | None = None,
     poll_timeout: float | None = None,
     reconciler: Reconciler | None = None,
+    defer_read_only_unknown: bool = False,
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Decorator that records async tool invocations in an ActionLedger."""
 
@@ -1366,7 +1424,10 @@ def ledger(
     if poll_timeout is not None:
         ledger_kwargs["poll_timeout"] = poll_timeout
     action_ledger = ActionLedger(
-        storage=storage, reconciler=reconciler, **ledger_kwargs
+        storage=storage,
+        reconciler=reconciler,
+        defer_read_only_unknown=defer_read_only_unknown,
+        **ledger_kwargs,
     )
 
     def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
@@ -1399,6 +1460,7 @@ def ledger_sync(
     poll_interval: float | None = None,
     poll_timeout: float | None = None,
     reconciler: Reconciler | None = None,
+    defer_read_only_unknown: bool = False,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator that records sync tool invocations in an ActionLedger."""
 
@@ -1410,7 +1472,10 @@ def ledger_sync(
     if poll_timeout is not None:
         ledger_kwargs["poll_timeout"] = poll_timeout
     action_ledger = ActionLedger(
-        storage=storage, reconciler=reconciler, **ledger_kwargs
+        storage=storage,
+        reconciler=reconciler,
+        defer_read_only_unknown=defer_read_only_unknown,
+        **ledger_kwargs,
     )
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:

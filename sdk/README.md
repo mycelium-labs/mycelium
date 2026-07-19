@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.8.0** (transition envelope).
+Current package: **mycelium-runtime v1.9.0** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -258,7 +258,7 @@ async def send_payment(amount: float, recipient: str) -> dict:
 
 - Record every tool invocation in a durable `ActionLedger`
 - Deduplicate retries and redispatches via a rich **transition key** (scope + tool + args + `side_effect_class` + policy), not only `tool_call_id`
-- **`read` tools:** poll in-flight, reclaim expired leases, retry failed-before-effect
+- **`read` tools:** poll in-flight, reclaim expired leases, retry failed-before-effect, **soft-block** ambiguous `UNKNOWN`/`BLOCKED` states (safe to re-run; opt into deferral with `defer_read_only_unknown=True` → `LedgerSoftBlockError`)
 - **Mutating tools:** return completed results, poll in-flight, **hard-block** ambiguous states (`LedgerHardBlockError`)
 - Persist failed attempts with **terminal outcomes** (`FAILED_BEFORE_EFFECT`, `FAILED_AFTER_EFFECT`, etc.) for audit and reconciliation
 
@@ -266,7 +266,7 @@ async def send_payment(amount: float, recipient: str) -> dict:
 
 | Class | Typical use | Duplicate handling |
 |-------|-------------|-------------------|
-| `read` | search, fetch | poll / reclaim / retry |
+| `read` | search, fetch | poll / reclaim / retry / soft-block on `UNKNOWN` |
 | `idempotent_mutate` | upsert / set status | retry if boundary not crossed |
 | `keyed_mutate` | Stripe-style create/charge | retry only with same provider key |
 | `non_idempotent_mutate` | send email, spawn subagent | hard-block on ambiguity |

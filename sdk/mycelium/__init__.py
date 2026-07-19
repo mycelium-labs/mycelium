@@ -9,6 +9,7 @@ from mycelium.action_ledger import (
     LedgerHardBlockError,
     LedgerPendingError,
     LedgerPollTimeoutError,
+    LedgerSoftBlockError,
     LedgerStorage,
     get_ledger,
     ledger,
@@ -81,7 +82,7 @@ from mycelium.transition import (
     execution_scope,
 )
 
-__version__ = "1.8.0"
+__version__ = "1.9.0"
 
 __all__ = [
     "ActionLedger",
@@ -92,6 +93,7 @@ __all__ = [
     "LedgerHardBlockError",
     "LedgerPendingError",
     "LedgerPollTimeoutError",
+    "LedgerSoftBlockError",
     "LedgerStorage",
     "get_ledger",
     "ledger",

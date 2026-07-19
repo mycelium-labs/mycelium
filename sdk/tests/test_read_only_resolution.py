@@ -13,13 +13,16 @@ from mycelium import (
     LedgerEntry,
     LedgerPendingError,
     LedgerPollTimeoutError,
+    LedgerSoftBlockError,
     SideEffectClass,
     TerminalOutcome,
     ToolTransitionBinding,
     TransitionScope,
     execution_scope,
+    get_ledger,
     ledger_sync,
 )
+from mycelium.transition_resolution import TransitionGate, resolve_read_only_gate
 
 
 def _read_only_binding() -> ToolTransitionBinding:
@@ -161,3 +164,129 @@ def test_read_only_poll_timeout() -> None:
 
     with pytest.raises(LedgerPollTimeoutError):
         ledger.claim_read_only("stuck", "search_docs", (), {})
+
+
+def _entry(
+    outcome: TerminalOutcome,
+    *,
+    lease_until: float | None = None,
+) -> LedgerEntry:
+    return LedgerEntry(
+        request_id="ro",
+        tool="search_docs",
+        args=[],
+        kwargs={"query": "billing"},
+        status="in-flight",
+        terminal_outcome=outcome.value,
+        lease_until=lease_until,
+        idempotency_key="ro",
+    )
+
+
+def test_resolve_read_only_gate_matrix() -> None:
+    assert (
+        resolve_read_only_gate(_entry(TerminalOutcome.COMPLETED))
+        == TransitionGate.RETURN
+    )
+    assert (
+        resolve_read_only_gate(
+            _entry(TerminalOutcome.IN_FLIGHT, lease_until=time.time() + 100)
+        )
+        == TransitionGate.POLL
+    )
+    # A stale in-flight lease resolves to EXPIRED -> safe to reclaim.
+    assert (
+        resolve_read_only_gate(
+            _entry(TerminalOutcome.IN_FLIGHT, lease_until=time.time() - 1)
+        )
+        == TransitionGate.RECLAIM
+    )
+    assert (
+        resolve_read_only_gate(_entry(TerminalOutcome.FAILED_BEFORE_EFFECT))
+        == TransitionGate.RECLAIM
+    )
+    assert (
+        resolve_read_only_gate(_entry(TerminalOutcome.UNKNOWN))
+        == TransitionGate.SOFT_BLOCK
+    )
+    assert (
+        resolve_read_only_gate(_entry(TerminalOutcome.BLOCKED))
+        == TransitionGate.SOFT_BLOCK
+    )
+
+
+def test_read_only_unknown_soft_block_retries_by_default() -> None:
+    storage = InMemoryLedgerStorage()
+    ledger = ActionLedger(storage=storage, poll_interval=0.01)
+    request_id = "ro-unknown"
+    storage.set(
+        LedgerEntry(
+            request_id=request_id,
+            tool="search_docs",
+            args=[],
+            kwargs={"query": "billing"},
+            status="failed",
+            terminal_outcome=TerminalOutcome.UNKNOWN.value,
+            idempotency_key=request_id,
+        )
+    )
+
+    claimed = ledger.claim_read_only(
+        request_id, "search_docs", (), {"query": "billing"}
+    )
+
+    # Reversible read is reset to a fresh in-flight claim so it runs once more.
+    assert claimed.status == "in-flight"
+    assert claimed.resolved_terminal_outcome() == TerminalOutcome.IN_FLIGHT
+
+
+def test_read_only_unknown_soft_block_defers_when_configured() -> None:
+    storage = InMemoryLedgerStorage()
+    ledger = ActionLedger(storage=storage, defer_read_only_unknown=True)
+    request_id = "ro-unknown-defer"
+    storage.set(
+        LedgerEntry(
+            request_id=request_id,
+            tool="search_docs",
+            args=[],
+            kwargs={"query": "billing"},
+            status="failed",
+            terminal_outcome=TerminalOutcome.UNKNOWN.value,
+            idempotency_key=request_id,
+        )
+    )
+
+    with pytest.raises(LedgerSoftBlockError):
+        ledger.claim_read_only(request_id, "search_docs", (), {"query": "billing"})
+
+
+def test_read_only_unknown_reexecutes_via_decorator() -> None:
+    storage = InMemoryLedgerStorage()
+    binding = _read_only_binding()
+    attempts = {"count": 0}
+
+    @ledger_sync(storage=storage, transition_binding=binding)
+    def search_docs(query: str) -> dict[str, object]:
+        attempts["count"] += 1
+        return {"query": query, "hits": attempts["count"]}
+
+    inner = get_ledger(search_docs)
+    assert inner is not None
+
+    with execution_scope(TransitionScope(thread_id="t1", run_id="r1")):
+        first = search_docs(query="billing", tool_call_id="call_ro")
+        assert first == {"query": "billing", "hits": 1}
+
+        # Simulate an ambiguous crash-after-claim recorded as UNKNOWN.
+        request_id = inner.derive_request_id(
+            "search_docs",
+            (),
+            {"query": "billing", "tool_call_id": "call_ro"},
+            transition_binding=binding,
+        )
+        inner.mark_unknown(request_id, error="ambiguous crash")
+
+        second = search_docs(query="billing", tool_call_id="call_ro")
+
+    assert attempts["count"] == 2
+    assert second == {"query": "billing", "hits": 2}
