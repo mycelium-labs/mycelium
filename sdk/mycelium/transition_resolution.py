@@ -30,7 +30,32 @@ class TransitionGate(StrEnum):
     RETURN = "RETURN"
     POLL = "POLL"
     RECLAIM = "RECLAIM"
+    SOFT_BLOCK = "SOFT_BLOCK"
     HARD_BLOCK = "HARD_BLOCK"
+
+
+def resolve_read_only_gate(existing: _ExistingTransition) -> TransitionGate:
+    """Decide how to handle an existing transition for a *read-only* tool.
+
+    Read-only tools produce no external effect, so re-running is always safe.
+    The gate is therefore lighter than the side-effecting resolver:
+
+    - ``COMPLETED`` → ``RETURN`` the stored result
+    - ``IN_FLIGHT`` → ``POLL`` while another worker holds a valid lease
+    - ``EXPIRED`` / ``FAILED_BEFORE_EFFECT`` / ``FAILED_AFTER_EFFECT`` →
+      ``RECLAIM`` (safe to re-execute)
+    - ``BLOCKED`` / ``UNKNOWN`` → ``SOFT_BLOCK`` — an ambiguous terminal state
+      must not hard-block a reversible read, so the caller defers or retries
+      (cost-dependent) instead of parking it for a human.
+    """
+    outcome = existing.resolved_terminal_outcome()
+    if outcome == TerminalOutcome.COMPLETED:
+        return TransitionGate.RETURN
+    if outcome == TerminalOutcome.IN_FLIGHT:
+        return TransitionGate.POLL
+    if outcome in (TerminalOutcome.BLOCKED, TerminalOutcome.UNKNOWN):
+        return TransitionGate.SOFT_BLOCK
+    return TransitionGate.RECLAIM
 
 
 def _entry_boundary(existing: _ExistingTransition) -> SideEffectBoundary:
@@ -151,8 +176,23 @@ def hard_block_message(
     )
 
 
+def soft_block_message(
+    existing: _ExistingTransition,
+    *,
+    tool: str,
+    request_id: str,
+) -> str:
+    outcome = existing.resolved_terminal_outcome()
+    return (
+        f"Read-only tool {tool!r} request {request_id!r} is {outcome.value}; "
+        "soft-blocked — safe to defer and retry"
+    )
+
+
 __all__ = [
     "TransitionGate",
     "hard_block_message",
+    "resolve_read_only_gate",
     "resolve_side_effect_gate",
+    "soft_block_message",
 ]

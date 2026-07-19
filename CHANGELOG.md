@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.0 (2026-07-19)
+
+Ship the `SOFT_BLOCK` gate for read-only tools. An ambiguous `UNKNOWN` / `BLOCKED` terminal outcome on a reversible read no longer polls to a `LedgerPollTimeoutError`; it resolves through a dedicated read-only gate.
+
+### Read-only SOFT_BLOCK
+
+- New `SOFT_BLOCK` member on `TransitionGate` and a `resolve_read_only_gate(entry)` resolver describing the full read-only taxonomy: `COMPLETED` → `RETURN`, `IN_FLIGHT` → `POLL`, `EXPIRED` / `FAILED_BEFORE_EFFECT` / `FAILED_AFTER_EFFECT` → `RECLAIM`, `BLOCKED` / `UNKNOWN` → `SOFT_BLOCK`.
+- Because re-running a read-only tool is always safe, a `SOFT_BLOCK` resolves **by default to a retry**: the ambiguous entry is reset to a fresh in-flight claim and the tool runs exactly once more.
+- Opt into deferral with `ActionLedger(defer_read_only_unknown=True)` (or the `@ledger` / `@ledger_sync` `defer_read_only_unknown=` argument). The claim then raises the new `LedgerSoftBlockError` so an expensive read can be deferred and retried later by the caller (cost-dependent) instead of re-executing immediately.
+- `LedgerSoftBlockError` is a *deferral*, not a terminal stop — distinct from the payment/non-idempotent `LedgerHardBlockError`, which still requires manual reconciliation. Side-effecting `UNKNOWN` resolution is unchanged (still hard-blocks / reconciles).
+- Export `LedgerSoftBlockError` from the package root. Works in sync and async claim paths.
+
 ## 1.8.0 (2026-07-19)
 
 Enforce `retry_only_with_same_provider_idempotency_key` instead of trusting it. When a tool opts in, a retry is allowed only if it provably reuses the same provider idempotency key; otherwise it hard-blocks.
