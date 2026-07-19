@@ -14,6 +14,11 @@ build/
 !.env.example
 .cache/
 proof/fixtures/af002/_hf_af002_index.json
+# Local / private (not for public repo)
+.cursor/
+.opencode/
+pitch/
 randm/
 READING_LIST.md
 TODO.md
+rules.md

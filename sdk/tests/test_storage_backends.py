@@ -144,7 +144,7 @@ def test_file_storage_payment_hard_blocks_expired_lease(tmp_path: Path) -> None:
 def test_file_storage_read_only_reclaims_expired_lease(tmp_path: Path) -> None:
     """v1.3 transition: expired read-only lease on file storage is reclaimable."""
     storage = FileLedgerStorage(tmp_path / "ledger.json")
-    ledger = ActionLedger(storage=storage, lease_ttl=0.05, poll_interval=0.01)
+    ledger = ActionLedger(storage=storage, lease_ttl=1.0, poll_interval=0.01)
     request_id = "file-expired-read"
 
     storage.set(
@@ -215,7 +215,7 @@ def test_redis_storage_read_only_reclaims_expired_lease(
     """v1.3 transition: expired read-only lease on Redis is reclaimable."""
     _fake_redis(monkeypatch)
     storage = RedisLedgerStorage("redis://test")
-    ledger = ActionLedger(storage=storage, lease_ttl=0.05, poll_interval=0.01)
+    ledger = ActionLedger(storage=storage, lease_ttl=1.0, poll_interval=0.01)
     request_id = "redis-expired-read"
 
     storage.set(

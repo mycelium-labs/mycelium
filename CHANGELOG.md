@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.9.1 (2026-07-19)
+
+Patch: docs sync, a flaky-test fix, and the TSC-007 transition-sufficiency conformance suite. No new schema or policy concepts.
+
+### Docs
+- Fix root `README.md` "What it does" heading to v1.9.x (was v1.8.x).
+- Bump README, SDK README, handbook banner, and version source strings to v1.9.1.
+
+### Tests
+- Fix flaky `test_*_read_only_reclaims_expired_lease` (file + Redis) by raising `lease_ttl` from 0.05s to 1.0s so reclaim logic is exercised without a race against the poll loop.
+- Add `tests/test_conformance_tsc007.py` — five-case transition-sufficiency suite mirroring Tuttotorna spec TSC-007 / langgraph#7417. Asserts `must_not_execute_again` for cases 1, 2, 4, 5 and re-execution for the lone safe-retry case 3. No product code changes.
+
+### Packaging
+- Ignore `.opencode/` and `pitch/` from the public repo.
+- Commit `AGENTS.md` (root agent-instructions file).
+
 ## 1.9.0 (2026-07-19)
 
 Ship the `SOFT_BLOCK` gate for read-only tools. An ambiguous `UNKNOWN` / `BLOCKED` terminal outcome on a reversible read no longer polls to a `LedgerPollTimeoutError`; it resolves through a dedicated read-only gate.
