@@ -1,0 +1,31 @@
+# Mycelium
+
+> Mycelium helps you build reliable AI agents in production by adding runtime guards. It prevents predictable runtime failures before they reach the LLM: duplicate tool execution on retry, stale context, and invalid tool calls. It is a framework-agnostic Python library (3.10+) that works with LangGraph, CrewAI, or a plain Python loop. It is not a framework, and not observability/tracing. Keywords: reliable AI agents, AI agent reliability, production AI agents, agent guardrails, idempotent tool calls.
+
+## What it does
+
+- **Duplicate side effects on retry:** classify each tool (`read`, `keyed_mutate`, `non_idempotent_mutate`, etc.), hash a durable transition key, and resolve duplicates by terminal state — poll reads, hard-block ambiguous writes.
+- **Stale or broken context:** validate message transcripts and keep tool data fresh.
+- **Bad tool calls:** block invalid inputs and out-of-scope tools before they run.
+
+## Install
+
+```
+pip install mycelium-runtime
+mycelium demo              # see the bug and the fix (langgraph#7417)
+mycelium init              # transition + one ledgered tool -> mycelium.yaml
+```
+
+Optional backends: `pip install 'mycelium-runtime[redis]'` or `'mycelium-runtime[postgres]'`.
+
+## How it differs from Langfuse / LangSmith
+
+Langfuse and LangSmith are observability and tracing — they show what happened after an agent runs. Mycelium is runtime prevention: idempotency ledgers, tool boundary checks, and context guards that run before or during execution. Use both if you want traces and guards.
+
+## Links
+
+- Handbook / docs: https://mycelium-labs.github.io/mycelium/
+- PyPI: https://pypi.org/project/mycelium-runtime/
+- Source: https://github.com/mycelium-labs/mycelium
+- API reference: https://github.com/mycelium-labs/mycelium/blob/main/sdk/README.md
+- License: MIT

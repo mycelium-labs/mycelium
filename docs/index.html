@@ -4,25 +4,39 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mycelium: runtime guards for AI agents</title>
-  <meta name="description" content="Mycelium: runtime guards for AI agents — transition envelope, side-effect classification, tool boundaries, and context validation. Framework-agnostic.">
-  <meta name="keywords" content="AI agents, LangGraph, agent idempotency, duplicate tool execution, tool calling, agent reliability, CrewAI, runtime guards, Python LLM agents">
+  <meta name="description" content="Build reliable AI agents in production. Mycelium adds runtime guards that prevent duplicate tool execution on retry, stale context, and bad tool calls before they reach the LLM. Framework-agnostic Python for LangGraph, CrewAI, and plain loops.">
+  <meta name="keywords" content="reliable AI agents, AI agent reliability, production AI agents, AI agent guardrails, LangGraph reliability, CrewAI reliability, agent idempotency, duplicate tool execution, tool calling, runtime guards, Python LLM agents, prevent agent failures">
+  <meta name="author" content="Mycelium Labs">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <meta name="theme-color" content="#181818">
+  <link rel="canonical" href="https://mycelium-labs.github.io/mycelium/">
   <meta property="og:title" content="Mycelium: runtime guards for AI agents">
-  <meta property="og:description" content="Prevent duplicate tool execution on retry, stale context, and bad tool calls. Plain Python.">
+  <meta property="og:description" content="Build reliable AI agents. Prevent duplicate tool execution on retry, stale context, and bad tool calls before they reach the LLM. Plain Python.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://mycelium-labs.github.io/mycelium/">
   <meta property="og:image" content="https://mycelium-labs.github.io/mycelium/og-image.png">
   <meta property="og:image:width" content="1536">
   <meta property="og:image:height" content="1024">
   <meta property="og:image:alt" content="Mycelium: runtime guards for AI agents">
+  <meta property="og:site_name" content="Mycelium">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://mycelium-labs.github.io/mycelium/og-image.png">
   <meta name="twitter:title" content="Mycelium: runtime guards for AI agents">
-  <meta name="twitter:description" content="Python runtime guards: idempotent tool calls, context validation, tool boundaries. Framework-agnostic.">
+  <meta name="twitter:description" content="Reliable AI agents in production: idempotent tool calls, context validation, tool boundaries. Framework-agnostic Python.">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How do I build reliable AI agents in production?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Most agent failures in production are not reasoning failures — they are runtime failures: a tool runs twice on retry, context goes stale, or the model emits an invalid tool call. Make agents reliable by guarding the runtime, not just the prompt. Mycelium sits between your agent loop and your tools: it classifies each tool by side effect, hashes a durable transition key, and resolves duplicate dispatches by terminal state (poll reads, hard-block ambiguous writes), while validating message history and tool inputs before execution. It is framework-agnostic and works with LangGraph, CrewAI, or a plain Python loop. pip install mycelium-runtime"
+        }
+      },
       {
         "@type": "Question",
         "name": "How do I prevent duplicate tool execution in LangGraph?",
@@ -48,6 +62,47 @@
         }
       }
     ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Mycelium",
+    "alternateName": "mycelium-runtime",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "OS Independent",
+    "description": "Runtime guards for AI agents. Prevents predictable failures before they reach the LLM: duplicate tool execution on retry, stale context, and invalid tool calls. Framework-agnostic Python library for LangGraph, CrewAI, and plain Python loops.",
+    "url": "https://mycelium-labs.github.io/mycelium/",
+    "downloadUrl": "https://pypi.org/project/mycelium-runtime/",
+    "codeRepository": "https://github.com/mycelium-labs/mycelium",
+    "programmingLanguage": "Python",
+    "license": "https://opensource.org/licenses/MIT",
+    "keywords": "AI agents, LangGraph, CrewAI, idempotency, duplicate tool execution, agent reliability, runtime guards, tool calling",
+    "author": {
+      "@type": "Organization",
+      "name": "Mycelium Labs",
+      "url": "https://github.com/mycelium-labs"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Mycelium",
+    "url": "https://mycelium-labs.github.io/mycelium/",
+    "description": "Runtime guards for AI agents — idempotent tool calls, context validation, and tool boundaries. Framework-agnostic Python.",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Mycelium Labs",
+      "url": "https://github.com/mycelium-labs"
+    }
   }
   </script>
   <style>
@@ -595,6 +650,19 @@ with config.run(thread_id):
 
     <section id="common-searches">
       <h2>Common searches</h2>
+
+      <div class="faq-item">
+        <h3>How do I build reliable AI agents in production?</h3>
+        <p>
+          Most agent failures in production aren't reasoning failures — they're
+          <strong>runtime failures</strong>: a tool runs twice on retry, context goes stale,
+          or the model emits an invalid tool call. To make AI agents reliable, guard the
+          runtime, not just the prompt. Mycelium classifies each tool by side effect, hashes a
+          durable transition key, and resolves duplicate dispatches by terminal state — while
+          validating message history and tool inputs before anything executes. Framework-agnostic:
+          LangGraph, CrewAI, or plain Python. <code>pip install mycelium-runtime</code>
+        </p>
+      </div>
 
       <div class="faq-item">
         <h3>How do I prevent duplicate tool execution in LangGraph?</h3>
