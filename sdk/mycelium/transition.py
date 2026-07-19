@@ -307,6 +307,7 @@ class ToolTransitionBinding:
     retry_permission: RetryPermission = RetryPermission.MANUAL_RECONCILIATION_REQUIRED
     side_effect_boundary_default: SideEffectBoundary = SideEffectBoundary.NOT_CROSSED
     spendability: Spendability = Spendability.SINGLE_USE
+    provider_idempotency_key_param: str | None = None
 
     @classmethod
     def for_tool(
@@ -319,6 +320,7 @@ class ToolTransitionBinding:
         retry_permission: RetryPermission | None = None,
         side_effect_boundary: SideEffectBoundary | None = None,
         spendability: Spendability | None = None,
+        provider_idempotency_key_param: str | None = None,
     ) -> ToolTransitionBinding:
         return cls(
             agent_id=agent_id,
@@ -332,6 +334,7 @@ class ToolTransitionBinding:
                 side_effect_boundary
             ),
             spendability=resolve_spendability(side_effect_class, spendability),
+            provider_idempotency_key_param=provider_idempotency_key_param,
         )
 
 
@@ -478,21 +481,50 @@ def derive_transition_key(preimage: dict[str, Any]) -> str:
     return hashlib.sha256(canonical_json(preimage).encode()).hexdigest()
 
 
+def extract_provider_idempotency_key(
+    kwargs: dict[str, Any],
+    binding: ToolTransitionBinding,
+) -> str | None:
+    """Return the declared provider idempotency key from a call's kwargs.
+
+    Returns ``None`` when the tool does not opt into enforcement (no
+    ``provider_idempotency_key_param``) or the kwarg is absent.
+    """
+    param = binding.provider_idempotency_key_param
+    if param is None:
+        return None
+    value = kwargs.get(param)
+    return str(value) if value is not None else None
+
+
 def derive_transition_key_for_call(
     tool: str,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     binding: ToolTransitionBinding,
 ) -> str:
-    """Derive the transition key for a tool invocation."""
+    """Derive the transition key for a tool invocation.
+
+    When the tool declares a ``provider_idempotency_key_param``, that kwarg is
+    excluded from the args fingerprint so a retry that changes the key still
+    maps to the *same* transition. This lets the gate compare the stored key
+    against the incoming one and hard-block a retry that does not reuse it.
+    """
     scope = resolve_scope(scope_from=binding.scope_from, kwargs=kwargs)
     dispatch_id = derive_dispatch_id(kwargs)
+    fingerprint_kwargs = kwargs
+    if binding.provider_idempotency_key_param is not None:
+        fingerprint_kwargs = {
+            key: value
+            for key, value in kwargs.items()
+            if key != binding.provider_idempotency_key_param
+        }
     preimage = build_transition_preimage(
         scope=scope,
         dispatch_id=dispatch_id,
         tool=tool,
         args=args,
-        kwargs=kwargs,
+        kwargs=fingerprint_kwargs,
         side_effect_class=binding.side_effect_class,
         agent_id=binding.agent_id,
         policy_version=binding.policy_version,
@@ -523,6 +555,7 @@ __all__ = [
     "derive_dispatch_id",
     "derive_transition_key",
     "derive_transition_key_for_call",
+    "extract_provider_idempotency_key",
     "execution_scope",
     "get_active_execution_scope",
     "legacy_status_from_terminal",

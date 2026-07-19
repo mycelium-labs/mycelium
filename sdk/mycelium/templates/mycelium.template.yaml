@@ -28,6 +28,12 @@
 #   defaults: read/idempotent_mutate → multi_use;
 #             keyed/non_idempotent_mutate → single_use;
 #             irreversible → non_replayable
+# provider_idempotency_key_param (optional, per tool): names the kwarg that
+#   carries the provider idempotency key. When set, a
+#   retry_only_with_same_provider_idempotency_key retry is ALLOWED only if it
+#   reuses the same key, else HARD_BLOCK. Omit to keep the cooperative default.
+#   e.g.  your_keyed_mutate_tool: {side_effect_class: keyed_mutate,
+#                                  provider_idempotency_key_param: idempotency_key}
 # In tool code, wrap the external call in `with side_effect():` so a failure
 #   after the call is classified FAILED_AFTER_EFFECT / UNKNOWN (not retried),
 #   not FAILED_BEFORE_EFFECT. Inside it call

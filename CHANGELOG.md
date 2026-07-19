@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.0 (2026-07-19)
+
+Enforce `retry_only_with_same_provider_idempotency_key` instead of trusting it. When a tool opts in, a retry is allowed only if it provably reuses the same provider idempotency key; otherwise it hard-blocks.
+
+### Provider idempotency key enforcement
+
+- New opt-in `provider_idempotency_key_param` on the transition binding (and `provider_idempotency_key_param:` in YAML) naming the kwarg that carries the provider idempotency key.
+- New durable `provider_idempotency_key` on `LedgerEntry`, captured at claim time from that kwarg (serialized across all backends; old records default to `None`, no migration).
+- Gate change: for `retry_only_with_same_provider_idempotency_key` on a `keyed_mutate` / `idempotent_mutate` tool that failed before the effect, the retry is `ALLOW` only when the incoming key equals the stored key; a missing or different key is `HARD_BLOCK`.
+- The declared key is excluded from the transition-key fingerprint, so a retry that changes the key still maps to the same transition (and is caught) rather than silently forking a new one.
+- **Backward compatible / opt-in**: tools that do not declare the param keep the old cooperative behavior (retry allowed, key trusted). Works in sync and async claim paths.
+
 ## 1.7.0 (2026-07-19)
 
 Add the automated reconciliation loop (Phase 2): when an ambiguous transition recorded an `external_operation_ref`, a `Reconciler` can query the provider and resolve it automatically instead of hard-blocking for a human.

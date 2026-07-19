@@ -29,6 +29,7 @@ from mycelium.transition import (
     TerminalOutcome,
     ToolTransitionBinding,
     derive_transition_key_for_call,
+    extract_provider_idempotency_key,
     legacy_status_from_terminal,
     resolve_terminal_outcome,
     terminal_from_legacy_status,
@@ -186,6 +187,7 @@ class LedgerEntry:
     receipt_ref: str | None = None
     side_effect_boundary: str = SideEffectBoundary.NOT_CROSSED.value
     external_operation_ref: str | None = None
+    provider_idempotency_key: str | None = None
 
     def resolved_terminal_outcome(self, *, now: float | None = None) -> TerminalOutcome:
         return resolve_terminal_outcome(
@@ -223,6 +225,7 @@ class LedgerEntry:
             "receipt_ref": self.receipt_ref,
             "side_effect_boundary": self.side_effect_boundary,
             "external_operation_ref": self.external_operation_ref,
+            "provider_idempotency_key": self.provider_idempotency_key,
         }
 
     @classmethod
@@ -261,6 +264,7 @@ class LedgerEntry:
                 data.get("side_effect_boundary", SideEffectBoundary.NOT_CROSSED.value)
             ),
             external_operation_ref=data.get("external_operation_ref"),
+            provider_idempotency_key=data.get("provider_idempotency_key"),
         )
 
 
@@ -404,6 +408,11 @@ class ActionLedger:
             if binding is not None
             else SideEffectBoundary.NOT_CROSSED.value
         )
+        provider_key = (
+            extract_provider_idempotency_key(kwargs, binding)
+            if binding is not None
+            else None
+        )
         return LedgerEntry(
             request_id=request_id,
             tool=tool,
@@ -414,6 +423,7 @@ class ActionLedger:
             owner=_ledger_owner(),
             idempotency_key=request_id,
             side_effect_boundary=boundary,
+            provider_idempotency_key=provider_key,
         )
 
     def claim(
@@ -726,11 +736,16 @@ class ActionLedger:
         interval = self._poll_interval if poll_interval is None else poll_interval
         timeout = self._poll_timeout if poll_timeout is None else poll_timeout
         poll_deadline = time.time() + timeout if timeout is not None else None
+        incoming_key = extract_provider_idempotency_key(kwargs, binding)
 
         while True:
             existing = self.get(request_id)
             if existing is not None:
-                gate = resolve_side_effect_gate(existing, binding)
+                gate = resolve_side_effect_gate(
+                    existing,
+                    binding,
+                    incoming_provider_idempotency_key=incoming_key,
+                )
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
@@ -753,7 +768,11 @@ class ActionLedger:
             if outcome == "completed" and existing is not None:
                 return existing
             if outcome == "in_flight" and existing is not None:
-                gate = resolve_side_effect_gate(existing, binding)
+                gate = resolve_side_effect_gate(
+                    existing,
+                    binding,
+                    incoming_provider_idempotency_key=incoming_key,
+                )
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
@@ -835,11 +854,16 @@ class ActionLedger:
         interval = self._poll_interval if poll_interval is None else poll_interval
         timeout = self._poll_timeout if poll_timeout is None else poll_timeout
         poll_deadline = time.time() + timeout if timeout is not None else None
+        incoming_key = extract_provider_idempotency_key(kwargs, binding)
 
         while True:
             existing = self.get(request_id)
             if existing is not None:
-                gate = resolve_side_effect_gate(existing, binding)
+                gate = resolve_side_effect_gate(
+                    existing,
+                    binding,
+                    incoming_provider_idempotency_key=incoming_key,
+                )
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
@@ -862,7 +886,11 @@ class ActionLedger:
             if outcome == "completed" and existing is not None:
                 return existing
             if outcome == "in_flight" and existing is not None:
-                gate = resolve_side_effect_gate(existing, binding)
+                gate = resolve_side_effect_gate(
+                    existing,
+                    binding,
+                    incoming_provider_idempotency_key=incoming_key,
+                )
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:

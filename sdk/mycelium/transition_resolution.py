@@ -18,6 +18,7 @@ from mycelium.transition import (
 
 class _ExistingTransition(Protocol):
     side_effect_boundary: str
+    provider_idempotency_key: str | None
 
     def resolved_terminal_outcome(self, *, now: float | None = None) -> TerminalOutcome: ...
 
@@ -44,11 +45,31 @@ def _retry_allows_failed_before(retry: RetryPermission) -> bool:
     )
 
 
+def _same_provider_idempotency_key(
+    existing: _ExistingTransition,
+    incoming_provider_idempotency_key: str | None,
+) -> bool:
+    """True when the retry provably reuses the stored provider idempotency key."""
+    stored = getattr(existing, "provider_idempotency_key", None)
+    if stored is None or incoming_provider_idempotency_key is None:
+        return False
+    return incoming_provider_idempotency_key == stored
+
+
 def resolve_side_effect_gate(
     existing: _ExistingTransition,
     binding: ToolTransitionBinding,
+    *,
+    incoming_provider_idempotency_key: str | None = None,
 ) -> TransitionGate:
-    """Decide how to handle an existing transition for a side-effecting tool."""
+    """Decide how to handle an existing transition for a side-effecting tool.
+
+    ``incoming_provider_idempotency_key`` is the provider idempotency key of the
+    redispatched call. It is only consulted when the tool opts into enforcement
+    via ``binding.provider_idempotency_key_param``; otherwise the
+    ``retry_only_with_same_provider_idempotency_key`` permission stays
+    cooperative (backward compatible).
+    """
     outcome = existing.resolved_terminal_outcome()
     boundary = _entry_boundary(existing)
     retry = binding.retry_permission
@@ -94,6 +115,15 @@ def resolve_side_effect_gate(
                 SideEffectClass.IDEMPOTENT_MUTATE,
                 SideEffectClass.KEYED_MUTATE,
             ):
+                # Opt-in enforcement: only allow the retry when it provably
+                # reuses the same provider idempotency key, so the provider
+                # dedupes the second attempt. Without the declaration the
+                # permission stays cooperative (allow), as before.
+                if binding.provider_idempotency_key_param is not None:
+                    if not _same_provider_idempotency_key(
+                        existing, incoming_provider_idempotency_key
+                    ):
+                        return TransitionGate.HARD_BLOCK
                 return TransitionGate.ALLOW
             return TransitionGate.HARD_BLOCK
         if retry == RetryPermission.SAFE_RETRY:

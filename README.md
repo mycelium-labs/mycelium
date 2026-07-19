@@ -8,7 +8,7 @@
 
 Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
 
-*Early but API-stable (**v1.7.0**): breaking changes only at major versions. More guards planned.*
+*Early but API-stable (**v1.8.0**): breaking changes only at major versions. More guards planned.*
 
 ## Who it's for
 
@@ -16,7 +16,7 @@ Developers running **agents with side-effect tools** in production (payments, em
 
 Python 3.10+. Framework-agnostic.
 
-## What it does (v1.7.x)
+## What it does (v1.8.x)
 
 These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools:
 

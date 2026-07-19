@@ -81,7 +81,7 @@ from mycelium.transition import (
     execution_scope,
 )
 
-__version__ = "1.7.0"
+__version__ = "1.8.0"
 
 __all__ = [
     "ActionLedger",

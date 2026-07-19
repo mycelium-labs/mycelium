@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.7.0** (transition envelope).
+Current package: **mycelium-runtime v1.8.0** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -359,6 +359,29 @@ def send_payment(amount, recipient):
 | `UNKNOWN` | hard-blocks, exactly as if no reconciler were set |
 
 Reconciliation is **fail-closed**: no ref, no reconciler, or a reconciler that raises/times out all resolve to a hard-block — an exception in the reconciler never propagates. Async tools can implement `reconcile_async`; the async claim path prefers it and falls back to `reconcile`. Wire a reconciler via `@ledger` / `@ledger_sync` or `ActionLedger(reconciler=...)`.
+
+### Enforcing the same provider idempotency key (`provider_idempotency_key_param`)
+
+`retry_only_with_same_provider_idempotency_key` (the default for `keyed_mutate`) means "a retry is safe *only if* it reuses the same provider idempotency key so the provider dedupes." By default Mycelium trusts you to reuse it. To have Mycelium **enforce** it, declare which kwarg carries the key:
+
+```yaml
+tools:
+  send_payment:
+    side_effect_class: keyed_mutate          # retry_only_with_same_provider_idempotency_key
+    provider_idempotency_key_param: idempotency_key
+```
+
+or in code: `ToolTransitionBinding.for_tool(..., provider_idempotency_key_param="idempotency_key")`.
+
+With it declared, on a retry of a transition that failed before the effect:
+
+| Incoming key vs stored key | Gate |
+|----------------------------|------|
+| same key | `ALLOW` (retry proceeds; provider dedupes) |
+| different key | `HARD_BLOCK` (would risk a second, undeduped effect) |
+| missing on either side | `HARD_BLOCK` |
+
+The declared key is excluded from the transition-key fingerprint, so a retry that swaps the key still resolves to the *same* transition and is caught rather than silently starting a new one. This is **opt-in**: tools that don't declare the param keep the previous cooperative behavior.
 
 Storage backends:
 

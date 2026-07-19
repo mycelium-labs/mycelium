@@ -79,6 +79,7 @@ class ToolConfig:
     retry_permission: RetryPermission | None = None
     side_effect_boundary: SideEffectBoundary | None = None
     spendability: Spendability | None = None
+    provider_idempotency_key_param: str | None = None
 
     def is_noop(self) -> bool:
         return (
@@ -324,6 +325,9 @@ class MyceliumConfig:
             retry_permission=tool_config.retry_permission,
             side_effect_boundary=tool_config.side_effect_boundary,
             spendability=tool_config.spendability,
+            provider_idempotency_key_param=(
+                tool_config.provider_idempotency_key_param
+            ),
         )
 
     def _ledger_timing_kwargs(self) -> dict[str, float]:
@@ -627,6 +631,15 @@ def _parse_tool_config(
         except ValueError as exc:
             raise ConfigError(f"tool '{name}': {exc}") from exc
 
+    provider_idempotency_key_param: str | None = None
+    if "provider_idempotency_key_param" in raw:
+        value = raw["provider_idempotency_key_param"]
+        if not isinstance(value, str):
+            raise ConfigError(
+                f"tool '{name}': provider_idempotency_key_param must be a string"
+            )
+        provider_idempotency_key_param = value
+
     return ToolConfig(
         name=name,
         protect=protect,
@@ -637,6 +650,7 @@ def _parse_tool_config(
         retry_permission=retry_permission,
         side_effect_boundary=side_effect_boundary,
         spendability=spendability,
+        provider_idempotency_key_param=provider_idempotency_key_param,
     )
 
 
@@ -723,6 +737,7 @@ def _apply_action_ledger_tools(
             retry_permission=existing.retry_permission,
             side_effect_boundary=existing.side_effect_boundary,
             spendability=existing.spendability,
+            provider_idempotency_key_param=existing.provider_idempotency_key_param,
         )
 
 
