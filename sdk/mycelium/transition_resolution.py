@@ -110,9 +110,13 @@ def hard_block_message(
 ) -> str:
     outcome = existing.resolved_terminal_outcome()
     boundary = _entry_boundary(existing)
+    op_ref = getattr(existing, "external_operation_ref", None)
+    ref_hint = (
+        f" (external_operation_ref={op_ref!r})" if op_ref else ""
+    )
     return (
         f"Side-effecting tool {tool!r} request {request_id!r} is "
-        f"{outcome.value} with boundary {boundary.value}; "
+        f"{outcome.value} with boundary {boundary.value}{ref_hint}; "
         "manual reconciliation required"
     )
 

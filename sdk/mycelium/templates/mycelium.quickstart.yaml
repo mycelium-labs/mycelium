@@ -14,7 +14,10 @@
 #
 #        @config.apply
 #        def subagent_task(task: str, duration_seconds: int) -> dict:
-#            return run_slow_subagent(task)
+#            with side_effect():                 # marks the point of no return
+#                run = run_slow_subagent(task)
+#                record_external_operation(run.id)  # provider handle for reconcile
+#            return run
 
 transition:
   agent_id: "<TODO: fill with your agent id — used in transition keys and receipts>"

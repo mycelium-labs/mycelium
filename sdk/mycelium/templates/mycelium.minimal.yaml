@@ -4,6 +4,8 @@
 #
 # side_effect_class required only for tools listed under action_ledger.tools:
 #   read | idempotent_mutate | keyed_mutate | non_idempotent_mutate | irreversible
+# In side-effecting tools, wrap the external call in `with side_effect():` and
+#   call `record_external_operation(ref)` inside it for later reconciliation.
 
 transition:
   agent_id: "<TODO: fill with your agent id — used in transition keys and receipts>"

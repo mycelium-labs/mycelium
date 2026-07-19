@@ -124,6 +124,28 @@ def mark_crossed() -> None:
     _advance_active_boundary(SideEffectBoundary.CROSSED)
 
 
+def record_external_operation(ref: str) -> None:
+    """Attach the provider's operation handle to the active transition.
+
+    ``ref`` is the external system's identifier for the effect this call
+    produced — a provider id (e.g. Stripe ``pi_...``) or the idempotency key
+    sent to the provider. It is stored durably so an ambiguous transition
+    (``UNKNOWN`` / ``FAILED_AFTER_EFFECT`` / ``maybe_crossed``) can later be
+    reconciled against the provider instead of hard-blocking blindly.
+
+    Record it as early as possible — ideally the idempotency key *before* the
+    call, or the returned id immediately after — inside ``side_effect()``.
+    """
+    active = _active_transition_var.get()
+    if active is None:
+        warnings.warn(
+            "record_external_operation() used outside a ledgered tool; ignored",
+            stacklevel=2,
+        )
+        return
+    active.ledger.attach_external_operation_ref(active.request_id, ref)
+
+
 @contextmanager
 def side_effect() -> Iterator[None]:
     """Wrap the external operation of a side-effecting tool.
@@ -162,6 +184,7 @@ class LedgerEntry:
     idempotency_key: str | None = None
     receipt_ref: str | None = None
     side_effect_boundary: str = SideEffectBoundary.NOT_CROSSED.value
+    external_operation_ref: str | None = None
 
     def resolved_terminal_outcome(self, *, now: float | None = None) -> TerminalOutcome:
         return resolve_terminal_outcome(
@@ -198,6 +221,7 @@ class LedgerEntry:
             "idempotency_key": self.idempotency_key,
             "receipt_ref": self.receipt_ref,
             "side_effect_boundary": self.side_effect_boundary,
+            "external_operation_ref": self.external_operation_ref,
         }
 
     @classmethod
@@ -235,6 +259,7 @@ class LedgerEntry:
             side_effect_boundary=str(
                 data.get("side_effect_boundary", SideEffectBoundary.NOT_CROSSED.value)
             ),
+            external_operation_ref=data.get("external_operation_ref"),
         )
 
 
@@ -827,6 +852,23 @@ class ActionLedger:
         if existing is None:
             raise LedgerError(f"Cannot attach receipt to unknown request {request_id!r}")
         entry = replace(existing, receipt_ref=receipt_ref)
+        self._storage.set(entry)
+        return entry
+
+    def attach_external_operation_ref(
+        self, request_id: str, ref: str
+    ) -> LedgerEntry:
+        """Store the provider's operation handle on a transition entry.
+
+        Durable and used later for reconciliation. Backs
+        :func:`record_external_operation`.
+        """
+        existing = self._storage.get(request_id)
+        if existing is None:
+            raise LedgerError(
+                f"Cannot attach external operation ref to unknown request {request_id!r}"
+            )
+        entry = replace(existing, external_operation_ref=ref)
         self._storage.set(entry)
         return entry
 

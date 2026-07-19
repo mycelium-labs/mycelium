@@ -30,7 +30,9 @@
 #             irreversible → non_replayable
 # In tool code, wrap the external call in `with side_effect():` so a failure
 #   after the call is classified FAILED_AFTER_EFFECT / UNKNOWN (not retried),
-#   not FAILED_BEFORE_EFFECT.
+#   not FAILED_BEFORE_EFFECT. Inside it call
+#   `record_external_operation(provider_id_or_idempotency_key)` so an ambiguous
+#   transition can later be reconciled against the provider.
 
 # ---------------------------------------------------------------------------
 # transition

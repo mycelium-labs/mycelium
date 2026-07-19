@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.5.0** (transition envelope).
+Current package: **mycelium-runtime v1.6.0** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -310,6 +310,23 @@ The boundary drives failure classification and only ever moves forward (`not_cro
 | `crossed` (clean exit, or `mark_crossed()`) | `FAILED_AFTER_EFFECT` | hard-block |
 
 Because `maybe_crossed` is written durably *before* the call, a process crash mid-call leaves the entry ambiguous and a redispatch hard-blocks instead of double-spending. For finer control use `mark_maybe_crossed()` / `mark_crossed()` directly. Works the same inside `async` tools.
+
+### Recording the provider handle (`record_external_operation()`)
+
+When a side-effecting tool talks to a provider, record the provider's operation handle — its returned id (Stripe `pi_...`, a message id, a run id) or the idempotency key you sent — so an ambiguous transition can later be **reconciled** against the provider instead of parked for a human:
+
+```python
+from mycelium import ledger_sync, side_effect, record_external_operation
+
+@ledger_sync(transition_binding=binding)
+def send_payment(amount, recipient):
+    with side_effect():
+        intent = gateway.charge(amount, recipient, idempotency_key=key)
+        record_external_operation(intent.id)   # durable on the ledger entry
+    return intent
+```
+
+The ref is stored on the entry (`external_operation_ref`) across all backends and shown in the hard-block message, so an operator (today) or automated reconcile (planned) can ask the provider "did operation X actually complete?" Prefer recording the **idempotency key before the call** for keyed providers — it survives a crash mid-call, unlike a returned id. Automated provider reconcile (turning `UNKNOWN` → `COMPLETED`/retry) is the next release.
 
 Storage backends:
 

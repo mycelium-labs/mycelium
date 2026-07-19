@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.0 (2026-07-19)
+
+Add `external_operation_ref` — the provider's handle for a side effect — so ambiguous transitions can be reconciled against the provider (Phase 1: record + surface; automated reconcile lands next).
+
+### External operation ref
+
+- New durable `external_operation_ref` field on every `LedgerEntry` (serialized across memory/file/redis/postgres; old records default to `None`, no migration).
+- New `record_external_operation(ref)` marker (uses the active-transition context, sibling to `side_effect()` / `mark_crossed()`) and `ActionLedger.attach_external_operation_ref()`. `ref` is a provider id (e.g. Stripe `pi_...`) or the idempotency key sent to the provider.
+- The ref survives an ambiguous failure (`UNKNOWN` / `FAILED_AFTER_EFFECT` / `maybe_crossed`) and is included in the `LedgerHardBlockError` message, so a manual reconcile has the provider handle instead of nothing.
+- Export `record_external_operation` from the package root.
+
+### Not in this release (planned)
+
+- Automated provider reconcile loop (`Reconciler` protocol; resolve `UNKNOWN` → `COMPLETED`/retry by querying the provider) — next minor.
+
 ## 1.5.0 (2026-07-18)
 
 Complete the `maybe_crossed` boundary lifecycle so post-effect failures stop being misclassified as retry-safe.
