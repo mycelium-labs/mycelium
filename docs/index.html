@@ -34,7 +34,7 @@
         "name": "How do I build reliable AI agents in production?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Most agent failures in production are not reasoning failures — they are runtime failures: a tool runs twice on retry, context goes stale, or the model emits an invalid tool call. Make agents reliable by guarding the runtime, not just the prompt. Mycelium sits between your agent loop and your tools: it classifies each tool by side effect, hashes a durable transition key, and resolves duplicate dispatches by terminal state (poll reads, hard-block ambiguous writes), while validating message history and tool inputs before execution. It is framework-agnostic and works with LangGraph, CrewAI, or a plain Python loop. pip install mycelium-runtime"
+          "text": "Most agent failures in production are not reasoning failures; they are runtime failures: a tool runs twice on retry, context goes stale, or the model emits an invalid tool call. Make agents reliable by guarding the runtime, not just the prompt. Mycelium sits between your agent loop and your tools: it classifies each tool by side effect, hashes a durable transition key, and resolves duplicate dispatches by terminal state (poll reads, hard-block ambiguous writes), while validating message history and tool inputs before execution. It is framework-agnostic and works with LangGraph, CrewAI, or a plain Python loop. pip install mycelium-runtime"
         }
       },
       {
@@ -42,7 +42,7 @@
         "name": "How do I prevent duplicate tool execution in LangGraph?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Classify each tool (read vs keyed_mutate vs non_idempotent_mutate, etc.), enable transition: in mycelium.yaml, and use @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state — read-only tools poll in-flight; side-effecting tools hard-block ambiguous retries. pip install mycelium-runtime && mycelium demo"
+          "text": "Classify each tool (read vs keyed_mutate vs non_idempotent_mutate, etc.), enable transition: in mycelium.yaml, and use @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state: read-only tools poll in-flight; side-effecting tools hard-block ambiguous retries. pip install mycelium-runtime && mycelium demo"
         }
       },
       {
@@ -97,7 +97,7 @@
     "@type": "WebSite",
     "name": "Mycelium",
     "url": "https://mycelium-labs.github.io/mycelium/",
-    "description": "Runtime guards for AI agents — idempotent tool calls, context validation, and tool boundaries. Framework-agnostic Python.",
+    "description": "Runtime guards for AI agents: idempotent tool calls, context validation, and tool boundaries. Framework-agnostic Python.",
     "publisher": {
       "@type": "Organization",
       "name": "Mycelium Labs",
@@ -388,7 +388,7 @@
       Runtime guards for AI agents. Prevents predictable failures before they reach the
       LLM: duplicate tool execution on retry, stale context, invalid tool calls.
       Classify tools, hash a durable transition key, resolve duplicates by terminal
-      state — poll reads, hard-block ambiguous writes. Framework-agnostic.
+      state: poll reads, hard-block ambiguous writes. Framework-agnostic.
       Early but API-stable (v1.7.0): breaking changes only at major versions.
     </p>
 
@@ -397,7 +397,7 @@
       <p class="arch-caption">
         Mycelium wraps your agent loop. Guards run on messages and tools before side effects
         and before the next LLM call. The transition envelope classifies each tool, hashes
-        a durable key per dispatch, and resolves duplicates by terminal state — not by
+        a durable key per dispatch, and resolves duplicates by terminal state, not by
         re-running blindly. Not a framework. Not observability.
       </p>
       <div class="arch-flow">
@@ -658,11 +658,11 @@ with config.run(thread_id):
       <div class="faq-item">
         <h3>How do I build reliable AI agents in production?</h3>
         <p>
-          Most agent failures in production aren't reasoning failures — they're
+          Most agent failures in production aren't reasoning failures; they're
           <strong>runtime failures</strong>: a tool runs twice on retry, context goes stale,
           or the model emits an invalid tool call. To make AI agents reliable, guard the
           runtime, not just the prompt. Mycelium classifies each tool by side effect, hashes a
-          durable transition key, and resolves duplicate dispatches by terminal state — while
+          durable transition key, and resolves duplicate dispatches by terminal state, while
           validating message history and tool inputs before anything executes. Framework-agnostic:
           LangGraph, CrewAI, or plain Python. <code>pip install mycelium-runtime</code>
         </p>
@@ -673,7 +673,7 @@ with config.run(thread_id):
         <p>
           Add <code>transition:</code> and <code>side_effect_class</code> per tool in
           <code>mycelium.yaml</code>. Mycelium hashes a durable transition key (scope, tool,
-          args, class, policy) and resolves duplicates by terminal state — not by re-running
+          args, class, policy) and resolves duplicates by terminal state, not by re-running
           blindly. LangGraph Cloud can redispatch long tool calls while the first is still
           in flight (<a href="https://github.com/langchain-ai/langgraph/issues/7417">langgraph#7417</a>).
           <code>read</code> tools poll and return the cached result;
