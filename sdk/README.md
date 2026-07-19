@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.6.0** (transition envelope).
+Current package: **mycelium-runtime v1.7.0** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -326,7 +326,39 @@ def send_payment(amount, recipient):
     return intent
 ```
 
-The ref is stored on the entry (`external_operation_ref`) across all backends and shown in the hard-block message, so an operator (today) or automated reconcile (planned) can ask the provider "did operation X actually complete?" Prefer recording the **idempotency key before the call** for keyed providers — it survives a crash mid-call, unlike a returned id. Automated provider reconcile (turning `UNKNOWN` → `COMPLETED`/retry) is the next release.
+The ref is stored on the entry (`external_operation_ref`) across all backends and shown in the hard-block message. Prefer recording the **idempotency key before the call** for keyed providers — it survives a crash mid-call, unlike a returned id.
+
+### Reconciling automatically (`Reconciler`)
+
+Instead of parking an ambiguous transition for a human, give the ledger a **read-only** `Reconciler` that asks the provider "did operation X actually complete?" using the recorded ref. It runs only when a side-effecting transition would otherwise hard-block *and* a ref is present:
+
+```python
+from mycelium import ledger_sync, Reconciler, ReconcileResult
+
+class StripeReconciler:  # read-only: never charges, never retries
+    def reconcile(self, entry) -> ReconcileResult:
+        pi = stripe.PaymentIntent.retrieve(entry.external_operation_ref)
+        if pi.status == "succeeded":
+            return ReconcileResult.completed(pi)
+        if pi.status in ("canceled", "requires_payment_method"):
+            return ReconcileResult.not_executed()
+        return ReconcileResult.unknown()
+
+@ledger_sync(transition_binding=binding, reconciler=StripeReconciler())
+def send_payment(amount, recipient):
+    with side_effect():
+        intent = gateway.charge(amount, recipient, idempotency_key=key)
+        record_external_operation(intent.id)
+    return intent
+```
+
+| Reconcile result | What happens on redispatch |
+|------------------|-----------------------------|
+| `COMPLETED` | returns the reconciled result — the tool body does **not** run again |
+| `NOT_EXECUTED` | the tool is allowed to run **exactly once** more |
+| `UNKNOWN` | hard-blocks, exactly as if no reconciler were set |
+
+Reconciliation is **fail-closed**: no ref, no reconciler, or a reconciler that raises/times out all resolve to a hard-block — an exception in the reconciler never propagates. Async tools can implement `reconcile_async`; the async claim path prefers it and falls back to `reconcile`. Wire a reconciler via `@ledger` / `@ledger_sync` or `ActionLedger(reconciler=...)`.
 
 Storage backends:
 

@@ -33,6 +33,10 @@
 #   not FAILED_BEFORE_EFFECT. Inside it call
 #   `record_external_operation(provider_id_or_idempotency_key)` so an ambiguous
 #   transition can later be reconciled against the provider.
+# To reconcile automatically instead of hard-blocking, pass a read-only
+#   Reconciler in code: `@ledger_sync(reconciler=...)` or
+#   `ActionLedger(reconciler=...)`. It returns COMPLETED / NOT_EXECUTED /
+#   UNKNOWN and is fail-closed (reconcilers can't be declared in YAML).
 
 # ---------------------------------------------------------------------------
 # transition

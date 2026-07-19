@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.7.0 (2026-07-19)
+
+Add the automated reconciliation loop (Phase 2): when an ambiguous transition recorded an `external_operation_ref`, a `Reconciler` can query the provider and resolve it automatically instead of hard-blocking for a human.
+
+### Reconciliation
+
+- New `Reconciler` protocol with a read-only `reconcile(entry) -> ReconcileResult` (and optional `reconcile_async` for async tools). Implementations look up `entry.external_operation_ref` at the provider and must never create, mutate, or retry the effect.
+- New `ReconcileResult` / `ReconcileStatus` with three outcomes:
+
+| Reconcile result | Effect on the transition |
+|------------------|--------------------------|
+| `COMPLETED` | marked completed with the reconciled result; redispatch returns it, **no re-execution** |
+| `NOT_EXECUTED` | reset to a fresh in-flight claim; the tool runs **exactly once** more |
+| `UNKNOWN` | hard-block for manual reconciliation (unchanged behavior) |
+
+- Wire a reconciler via `ActionLedger(reconciler=...)` or the `@ledger` / `@ledger_sync` `reconciler=` argument.
+- The reconciler is only consulted when a side-effecting transition would otherwise hard-block **and** an `external_operation_ref` is present.
+- **Fail-closed**: a missing ref, no reconciler, or a raising/timing-out reconciler all resolve to hard-block. A reconcile exception never propagates.
+- Export `Reconciler`, `ReconcileResult`, `ReconcileStatus` from the package root.
+
 ## 1.6.0 (2026-07-19)
 
 Add `external_operation_ref` — the provider's handle for a side effect — so ambiguous transitions can be reconciled against the provider (Phase 1: record + surface; automated reconcile lands next).

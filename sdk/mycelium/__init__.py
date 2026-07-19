@@ -36,6 +36,7 @@ from mycelium.config import (
 from mycelium.history_guard import HistoryGuard, HistoryTruncatedError
 from mycelium.message_validator import MessageValidationError, MessageValidator
 from mycelium.protect import protect, protect_sync
+from mycelium.reconcile import Reconciler, ReconcileResult, ReconcileStatus
 from mycelium.session import Session
 from mycelium.state_flush import (
     FileStateFlushStorage,
@@ -80,7 +81,7 @@ from mycelium.transition import (
     execution_scope,
 )
 
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 
 __all__ = [
     "ActionLedger",
@@ -99,6 +100,9 @@ __all__ = [
     "mark_maybe_crossed",
     "mark_crossed",
     "record_external_operation",
+    "Reconciler",
+    "ReconcileResult",
+    "ReconcileStatus",
     "AuditReceiptEmitter",
     "AuditReceiptError",
     "AuditReceiptRecord",

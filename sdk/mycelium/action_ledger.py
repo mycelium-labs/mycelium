@@ -18,6 +18,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
+from mycelium.reconcile import Reconciler, ReconcileStatus
 from mycelium.session import Session, _session_var
 from mycelium.storage._helpers import claim_inflight_outcome, default_try_claim_inflight, with_lease
 from mycelium.storage.json_file import LockedJsonDictFile
@@ -375,11 +376,13 @@ class ActionLedger:
         lease_ttl: float = DEFAULT_LEASE_TTL,
         poll_interval: float = DEFAULT_POLL_INTERVAL,
         poll_timeout: float | None = DEFAULT_POLL_TIMEOUT,
+        reconciler: Reconciler | None = None,
     ) -> None:
         self._storage = storage if storage is not None else InMemoryLedgerStorage()
         self._lease_ttl = lease_ttl
         self._poll_interval = poll_interval
         self._poll_timeout = poll_timeout
+        self._reconciler = reconciler
 
     # --- public API ---
 
@@ -594,6 +597,118 @@ class ActionLedger:
         message = hard_block_message(existing, tool=tool, request_id=request_id)
         raise LedgerHardBlockError(message)
 
+    def _apply_reconcile_result(
+        self,
+        request_id: str,
+        tool: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        binding: ToolTransitionBinding,
+        result: Any,
+    ) -> LedgerEntry | None:
+        """Map a reconcile result onto the ledger.
+
+        ``COMPLETED`` marks the transition done (redispatch returns the stored
+        result, no re-execution). ``NOT_EXECUTED`` resets the entry to a fresh
+        in-flight claim so the tool runs exactly once. ``UNKNOWN`` returns None
+        so the caller hard-blocks.
+        """
+        if result.status == ReconcileStatus.COMPLETED:
+            return self.complete(request_id, result.result)
+        if result.status == ReconcileStatus.NOT_EXECUTED:
+            fresh = self._new_inflight_entry(
+                request_id, tool, args, kwargs, binding=binding
+            )
+            self._storage.set(fresh)
+            return fresh
+        return None
+
+    def _attempt_reconcile(
+        self,
+        request_id: str,
+        tool: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        existing: LedgerEntry,
+        binding: ToolTransitionBinding,
+    ) -> LedgerEntry | None:
+        """Reconcile an ambiguous transition; None means fall through to block.
+
+        Fail-closed: a missing reconciler, missing ref, or a raising reconciler
+        all resolve to None (hard-block).
+        """
+        if self._reconciler is None or not existing.external_operation_ref:
+            return None
+        try:
+            result = self._reconciler.reconcile(existing)
+        except Exception:
+            return None
+        return self._apply_reconcile_result(
+            request_id, tool, args, kwargs, binding, result
+        )
+
+    async def _attempt_reconcile_async(
+        self,
+        request_id: str,
+        tool: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        existing: LedgerEntry,
+        binding: ToolTransitionBinding,
+    ) -> LedgerEntry | None:
+        """Async variant of :meth:`_attempt_reconcile`.
+
+        Prefers ``reconcile_async`` when the reconciler provides it, otherwise
+        falls back to the sync :meth:`Reconciler.reconcile`.
+        """
+        if self._reconciler is None or not existing.external_operation_ref:
+            return None
+        try:
+            reconcile_async = getattr(self._reconciler, "reconcile_async", None)
+            if reconcile_async is not None:
+                result = await reconcile_async(existing)
+            else:
+                result = self._reconciler.reconcile(existing)
+        except Exception:
+            return None
+        return self._apply_reconcile_result(
+            request_id, tool, args, kwargs, binding, result
+        )
+
+    def _reconcile_or_hard_block(
+        self,
+        request_id: str,
+        tool: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        existing: LedgerEntry,
+        binding: ToolTransitionBinding,
+    ) -> LedgerEntry:
+        resolved = self._attempt_reconcile(
+            request_id, tool, args, kwargs, existing, binding
+        )
+        if resolved is not None:
+            return resolved
+        self._raise_hard_block(request_id, tool, existing)
+        raise AssertionError("unreachable")  # _raise_hard_block always raises
+
+    async def _reconcile_or_hard_block_async(
+        self,
+        request_id: str,
+        tool: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        existing: LedgerEntry,
+        binding: ToolTransitionBinding,
+    ) -> LedgerEntry:
+        resolved = await self._attempt_reconcile_async(
+            request_id, tool, args, kwargs, existing, binding
+        )
+        if resolved is not None:
+            return resolved
+        self._raise_hard_block(request_id, tool, existing)
+        raise AssertionError("unreachable")  # _raise_hard_block always raises
+
     def claim_side_effecting(
         self,
         request_id: str,
@@ -619,7 +734,9 @@ class ActionLedger:
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
-                    self._raise_hard_block(request_id, tool, existing)
+                    return self._reconcile_or_hard_block(
+                        request_id, tool, args, kwargs, existing, binding
+                    )
                 if gate == TransitionGate.POLL:
                     self._poll_side_effecting(
                         request_id,
@@ -640,7 +757,9 @@ class ActionLedger:
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
-                    self._raise_hard_block(request_id, tool, existing)
+                    return self._reconcile_or_hard_block(
+                        request_id, tool, args, kwargs, existing, binding
+                    )
                 self._poll_side_effecting(
                     request_id,
                     tool=tool,
@@ -652,7 +771,9 @@ class ActionLedger:
                 claimed = self.get(request_id)
                 return claimed if claimed is not None else entry
             if existing is not None:
-                self._raise_hard_block(request_id, tool, existing)
+                return self._reconcile_or_hard_block(
+                    request_id, tool, args, kwargs, existing, binding
+                )
             raise LedgerError(
                 f"Unexpected claim outcome {outcome!r} for side-effecting tool {tool!r}"
             )
@@ -722,7 +843,9 @@ class ActionLedger:
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
-                    self._raise_hard_block(request_id, tool, existing)
+                    return await self._reconcile_or_hard_block_async(
+                        request_id, tool, args, kwargs, existing, binding
+                    )
                 if gate == TransitionGate.POLL:
                     await self._poll_side_effecting_async(
                         request_id,
@@ -743,7 +866,9 @@ class ActionLedger:
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
-                    self._raise_hard_block(request_id, tool, existing)
+                    return await self._reconcile_or_hard_block_async(
+                        request_id, tool, args, kwargs, existing, binding
+                    )
                 await self._poll_side_effecting_async(
                     request_id,
                     tool=tool,
@@ -755,7 +880,9 @@ class ActionLedger:
                 claimed = self.get(request_id)
                 return claimed if claimed is not None else entry
             if existing is not None:
-                self._raise_hard_block(request_id, tool, existing)
+                return await self._reconcile_or_hard_block_async(
+                    request_id, tool, args, kwargs, existing, binding
+                )
             raise LedgerError(
                 f"Unexpected claim outcome {outcome!r} for side-effecting tool {tool!r}"
             )
@@ -1199,6 +1326,7 @@ def ledger(
     lease_ttl: float | None = None,
     poll_interval: float | None = None,
     poll_timeout: float | None = None,
+    reconciler: Reconciler | None = None,
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Decorator that records async tool invocations in an ActionLedger."""
 
@@ -1209,7 +1337,9 @@ def ledger(
         ledger_kwargs["poll_interval"] = poll_interval
     if poll_timeout is not None:
         ledger_kwargs["poll_timeout"] = poll_timeout
-    action_ledger = ActionLedger(storage=storage, **ledger_kwargs)
+    action_ledger = ActionLedger(
+        storage=storage, reconciler=reconciler, **ledger_kwargs
+    )
 
     def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
         tool_name = func.__name__
@@ -1240,6 +1370,7 @@ def ledger_sync(
     lease_ttl: float | None = None,
     poll_interval: float | None = None,
     poll_timeout: float | None = None,
+    reconciler: Reconciler | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator that records sync tool invocations in an ActionLedger."""
 
@@ -1250,7 +1381,9 @@ def ledger_sync(
         ledger_kwargs["poll_interval"] = poll_interval
     if poll_timeout is not None:
         ledger_kwargs["poll_timeout"] = poll_timeout
-    action_ledger = ActionLedger(storage=storage, **ledger_kwargs)
+    action_ledger = ActionLedger(
+        storage=storage, reconciler=reconciler, **ledger_kwargs
+    )
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         tool_name = func.__name__
