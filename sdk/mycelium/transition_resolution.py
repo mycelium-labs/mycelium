@@ -89,6 +89,12 @@ def resolve_side_effect_gate(
 ) -> TransitionGate:
     """Decide how to handle an existing transition for a side-effecting tool.
 
+    Lease validity is consulted first via ``resolved_terminal_outcome()``:
+    a still-``HELD`` lease stays ``IN_FLIGHT`` → ``POLL``; an ``EXPIRED`` lease
+    becomes ``EXPIRED`` and then reclaim / hard-block by class and boundary.
+    ``lease_until`` is not part of the transition key — renew it while work
+    continues so peers keep polling instead of reclaiming.
+
     ``incoming_provider_idempotency_key`` is the provider idempotency key of the
     redispatched call. It is only consulted when the tool opts into enforcement
     via ``binding.provider_idempotency_key_param``; otherwise the
@@ -174,9 +180,13 @@ def hard_block_message(
     ref_hint = (
         f" (external_operation_ref={op_ref!r})" if op_ref else ""
     )
+    lease_hint = ""
+    if outcome == TerminalOutcome.EXPIRED:
+        lease_until = getattr(existing, "lease_until", None)
+        lease_hint = f", lease_until={lease_until!r}"
     return (
         f"Side-effecting tool {tool!r} request {request_id!r} is "
-        f"{outcome.value} with boundary {boundary.value}{ref_hint}; "
+        f"{outcome.value} with boundary {boundary.value}{lease_hint}{ref_hint}; "
         "manual reconciliation required"
     )
 

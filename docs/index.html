@@ -392,7 +392,7 @@
       Classify tools, hash a durable transition key, resolve duplicates by terminal
       state and resolution gates (poll / soft-block reads, hard-block or reconcile
       writes via <code>external_operation_ref</code>). Framework-agnostic.
-      Early but API-stable (v1.9.3): breaking changes only at major versions.
+      Early but API-stable (v1.10.0): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
@@ -401,7 +401,10 @@
         Mycelium wraps your agent loop. Guards run on messages and tools before side effects
         and before the next LLM call. The transition envelope classifies each tool, hashes
         a durable key per dispatch, and resolves duplicates through gates and terminal
-        outcomes — not by re-running blindly. Not a framework. Not observability.
+        outcomes — not by re-running blindly.
+        <strong>Do not redispatch unless the previous transition is proven terminal or
+        safely recoverable.</strong>
+        Not a framework. Not observability.
       </p>
       <div class="arch-flow">
         <div class="arch-box">Your agent loop<br><span style="font-weight:400;color:var(--ink-muted)">LangGraph · CrewAI · Python</span></div>
@@ -443,6 +446,7 @@ LedgerHardBlockError, LedgerPollTimeoutError
 LedgerSoftBlockError                                 # read-only UNKNOWN defer (v1.9.0)
 side_effect, mark_maybe_crossed, mark_crossed        # boundary markers (v1.5.0)
 record_external_operation                            # provider handle (v1.6.0)
+renew_lease, LeaseValidity, resolve_lease_validity   # lease window (v1.10.0)
 Reconciler, ReconcileResult, ReconcileStatus         # provider reconcile (v1.7.0)
 
 # Transition envelope
@@ -556,6 +560,13 @@ process_invoice(invoice_id="inv-42", amount=200.0)  # returns first result</pre>
     <section id="resolution">
       <h2>Resolution</h2>
       <p>
+        <strong>Invariant:</strong> do not redispatch unless the previous transition is
+        proven terminal (e.g. <code>COMPLETED</code> → return stored) or safely
+        recoverable (poll in-flight, soft-block/retry a read <code>UNKNOWN</code>, or
+        reconcile via <code>external_operation_ref</code>). Otherwise hard-block —
+        never blind re-execute a side effect.
+      </p>
+      <p>
         Each duplicate dispatch is classified to a <strong>gate</strong>. Read-only and
         side-effecting tools use different resolvers.
       </p>
@@ -566,6 +577,14 @@ POLL          IN_FLIGHT (valid lease)            wait for other worker
 RECLAIM       read EXPIRED / FAILED_*            take over stale lease
 SOFT_BLOCK    read UNKNOWN / BLOCKED only        retry by default (v1.9.0)
 HARD_BLOCK    ambiguous mutating transition      stop; reconcile if ref present</pre>
+      <p>
+        <strong>Lease validity (v1.10.0):</strong> <code>lease_until</code> is resolution
+        metadata — not part of <code>transition_key</code>. Resolution checks
+        <code>LeaseValidity</code> (<code>HELD</code> → poll, <code>EXPIRED</code> →
+        reclaim / hard-block by class) before allowing another attempt. Call
+        <code>renew_lease()</code> inside long-running ledgered tools so peers keep
+        polling instead of reclaiming.
+      </p>
       <p>
         <strong>Read</strong> (<code>side_effect_class: read</code>): poll, reclaim,
         retry failed-before-effect. Ambiguous <code>UNKNOWN</code> →

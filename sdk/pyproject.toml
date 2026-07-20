@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mycelium-runtime"
-version = "1.9.3"
+version = "1.10.0"
 description = "Runtime guards for AI agents: stale context, bad tool calls, duplicate side effects on retry"
 keywords = [
   "ai-agents",

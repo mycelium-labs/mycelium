@@ -65,6 +65,38 @@ class TerminalOutcome(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class LeaseValidity(StrEnum):
+    """Whether an in-flight execution lease is still held.
+
+    Lease is resolution metadata, not part of ``transition_key``. Gates check
+    validity before reclaim/retry: ``HELD`` → poll; ``EXPIRED`` → reclaim or
+    hard-block by class; ``UNBOUNDED`` → no TTL (never auto-expires).
+    """
+
+    HELD = "HELD"
+    EXPIRED = "EXPIRED"
+    UNBOUNDED = "UNBOUNDED"
+
+
+def resolve_lease_validity(
+    lease_until: float | None,
+    *,
+    now: float | None = None,
+) -> LeaseValidity:
+    """Classify the execution lease window for resolution.
+
+    Call this *before* deciding whether a duplicate dispatch may reclaim or
+    must poll. ``lease_until`` is not hashed into the transition key — it is
+    mutable (renewable) while the same transition stays in flight.
+    """
+    if lease_until is None:
+        return LeaseValidity.UNBOUNDED
+    now = now if now is not None else time.time()
+    if now >= lease_until:
+        return LeaseValidity.EXPIRED
+    return LeaseValidity.HELD
+
+
 class SideEffectBoundary(StrEnum):
     """Whether an external side-effect boundary was crossed."""
 
@@ -243,10 +275,8 @@ def terminal_from_legacy_status(
     if status == "failed":
         return TerminalOutcome.FAILED_BEFORE_EFFECT
     if status == "in-flight":
-        if lease_until is not None:
-            now = now if now is not None else time.time()
-            if now >= lease_until:
-                return TerminalOutcome.EXPIRED
+        if resolve_lease_validity(lease_until, now=now) == LeaseValidity.EXPIRED:
+            return TerminalOutcome.EXPIRED
         return TerminalOutcome.IN_FLIGHT
     return TerminalOutcome.UNKNOWN
 
@@ -271,15 +301,20 @@ def resolve_terminal_outcome(
     lease_until: float | None,
     now: float | None = None,
 ) -> TerminalOutcome:
-    """Return the effective terminal outcome, treating stale leases as ``EXPIRED``."""
+    """Return the effective terminal outcome after lease-validity check.
+
+    For ``IN_FLIGHT`` entries, lease validity is consulted first: an
+    ``EXPIRED`` lease becomes ``TerminalOutcome.EXPIRED`` so resolution can
+    reclaim or hard-block; a ``HELD`` / ``UNBOUNDED`` lease stays in-flight
+    (poll).
+    """
     outcome = (
         terminal_outcome
         if isinstance(terminal_outcome, TerminalOutcome)
         else parse_terminal_outcome(terminal_outcome)
     )
-    if outcome == TerminalOutcome.IN_FLIGHT and lease_until is not None:
-        now = now if now is not None else time.time()
-        if now >= lease_until:
+    if outcome == TerminalOutcome.IN_FLIGHT:
+        if resolve_lease_validity(lease_until, now=now) == LeaseValidity.EXPIRED:
             return TerminalOutcome.EXPIRED
     return outcome
 
@@ -545,6 +580,7 @@ __all__ = [
     "DEFAULT_SPENDABILITY",
     "STRICT_SIDE_EFFECT_CLASSES",
     "TerminalOutcome",
+    "LeaseValidity",
     "ToolTransitionBinding",
     "TransitionConfig",
     "TransitionScope",
@@ -564,6 +600,7 @@ __all__ = [
     "parse_side_effect_boundary",
     "parse_spendability",
     "parse_terminal_outcome",
+    "resolve_lease_validity",
     "resolve_retry_permission",
     "resolve_spendability",
     "resolve_side_effect_boundary_default",

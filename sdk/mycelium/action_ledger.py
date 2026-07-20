@@ -24,6 +24,7 @@ from mycelium.storage._helpers import claim_inflight_outcome, default_try_claim_
 from mycelium.storage.json_file import LockedJsonDictFile
 from mycelium.transition import (
     LEDGER_KWARG_KEYS,
+    LeaseValidity,
     SideEffectBoundary,
     SideEffectClass,
     TerminalOutcome,
@@ -31,6 +32,7 @@ from mycelium.transition import (
     derive_transition_key_for_call,
     extract_provider_idempotency_key,
     legacy_status_from_terminal,
+    resolve_lease_validity,
     resolve_terminal_outcome,
     terminal_from_legacy_status,
 )
@@ -160,6 +162,26 @@ def record_external_operation(ref: str) -> None:
     active.ledger.attach_external_operation_ref(active.request_id, ref)
 
 
+def renew_lease(*, lease_ttl: float | None = None) -> None:
+    """Extend the active transition's execution lease.
+
+    Call during long-running side-effecting work so a still-alive worker does
+    not look ``EXPIRED`` to a redispatched peer. Lease is resolution metadata
+    (not part of ``transition_key``); renewing keeps the same transition
+    ``IN_FLIGHT`` / ``POLL`` instead of opening a reclaim path.
+
+    Outside a ledgered tool this is a no-op with a warning.
+    """
+    active = _active_transition_var.get()
+    if active is None:
+        warnings.warn(
+            "renew_lease() used outside a ledgered tool; ignored",
+            stacklevel=2,
+        )
+        return
+    active.ledger.renew_lease(active.request_id, lease_ttl=lease_ttl)
+
+
 @contextmanager
 def side_effect() -> Iterator[None]:
     """Wrap the external operation of a side-effecting tool.
@@ -207,6 +229,10 @@ class LedgerEntry:
             lease_until=self.lease_until,
             now=now,
         )
+
+    def lease_validity(self, *, now: float | None = None) -> LeaseValidity:
+        """Return whether this entry's execution lease is still held."""
+        return resolve_lease_validity(self.lease_until, now=now)
 
     def is_terminal_completed(self, *, now: float | None = None) -> bool:
         return self.resolved_terminal_outcome(now=now) == TerminalOutcome.COMPLETED
@@ -1103,6 +1129,49 @@ class ActionLedger:
         self._storage.set(entry)
         return entry
 
+    def renew_lease(
+        self,
+        request_id: str,
+        *,
+        lease_ttl: float | None = None,
+        now: float | None = None,
+    ) -> LedgerEntry:
+        """Extend ``lease_until`` for an in-flight transition.
+
+        Only applies while the stored terminal outcome is still ``IN_FLIGHT``
+        (before lease expiry is applied). Renewing after the lease has already
+        expired raises :class:`LedgerError` — reclaim/reconcile must run instead
+        of silently re-asserting ownership.
+
+        Backs :func:`renew_lease`.
+        """
+        existing = self._storage.get(request_id)
+        if existing is None:
+            raise LedgerError(f"Cannot renew lease for unknown request {request_id!r}")
+        now = now if now is not None else time.time()
+        stored = (
+            existing.terminal_outcome
+            if isinstance(existing.terminal_outcome, TerminalOutcome)
+            else TerminalOutcome(str(existing.terminal_outcome))
+        )
+        if stored != TerminalOutcome.IN_FLIGHT:
+            raise LedgerError(
+                f"Cannot renew lease for request {request_id!r}: "
+                f"terminal_outcome is {stored.value}, not IN_FLIGHT"
+            )
+        validity = resolve_lease_validity(existing.lease_until, now=now)
+        if validity == LeaseValidity.EXPIRED:
+            raise LedgerError(
+                f"Cannot renew lease for request {request_id!r}: "
+                "lease already expired — reclaim or reconcile instead"
+            )
+        ttl = self._lease_ttl if lease_ttl is None else lease_ttl
+        if ttl <= 0:
+            raise LedgerError("lease_ttl must be positive to renew")
+        entry = replace(existing, lease_until=now + ttl)
+        self._storage.set(entry)
+        return entry
+
     def mark_blocked(self, request_id: str, *, error: str | None = None) -> LedgerEntry:
         existing = self._storage.get(request_id)
         if existing is None:
@@ -1540,4 +1609,9 @@ __all__ = [
     "get_ledger",
     "ledger",
     "ledger_sync",
+    "mark_crossed",
+    "mark_maybe_crossed",
+    "record_external_operation",
+    "renew_lease",
+    "side_effect",
 ]

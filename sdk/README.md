@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.9.3** (transition envelope).
+Current package: **mycelium-runtime v1.10.0** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -263,16 +263,20 @@ async def send_payment(amount: float, recipient: str) -> dict:
 
 ### Resolution gates
 
+**Invariant:** do not redispatch unless the previous transition is **proven terminal** (e.g. `COMPLETED` → return stored) or **safely recoverable** (poll in-flight, soft-block/retry a read `UNKNOWN`, or reconcile via `external_operation_ref`). Otherwise hard-block — never blind re-execute a side effect.
+
 Each duplicate dispatch is classified to a gate. Read-only and side-effecting tools use different resolvers.
 
 | Gate | Typical trigger | What happens |
 |------|-----------------|--------------|
 | `ALLOW` | no prior transition, or policy permits retry (e.g. `FAILED_BEFORE_EFFECT` + same provider key) | tool runs |
 | `RETURN` | `COMPLETED` | return stored result — no re-execution |
-| `POLL` | `IN_FLIGHT` with valid lease | wait for the other worker |
+| `POLL` | `IN_FLIGHT` with valid lease (`LeaseValidity.HELD`) | wait for the other worker |
 | `RECLAIM` | read-only `EXPIRED` / `FAILED_*` | take over stale lease and run |
 | `SOFT_BLOCK` | read-only `UNKNOWN` / `BLOCKED` only | **retry by default** (safe — reads don't spend); opt into deferral with `defer_read_only_unknown=True` → `LedgerSoftBlockError` |
 | `HARD_BLOCK` | ambiguous mutating transition | stop; run `Reconciler` when `external_operation_ref` is present, else fail-closed |
+
+**Lease validity (v1.10.0):** `lease_until` is resolution metadata — **not** part of `transition_key` (so renewals do not fork identity). Before reclaim/retry, resolution classifies the window via `LeaseValidity` (`HELD` → poll, `EXPIRED` → reclaim or hard-block by class, `UNBOUNDED` → no TTL). During long work call `renew_lease()` inside the ledgered tool to keep peers on `POLL`.
 
 **Read-only** (`side_effect_class: read`): poll, reclaim, retry failed-before-effect, soft-block on ambiguous `UNKNOWN`/`BLOCKED`.
 

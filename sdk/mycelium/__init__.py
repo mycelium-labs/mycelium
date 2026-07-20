@@ -17,6 +17,7 @@ from mycelium.action_ledger import (
     mark_crossed,
     mark_maybe_crossed,
     record_external_operation,
+    renew_lease,
     side_effect,
 )
 from mycelium.audit_receipt import (
@@ -70,6 +71,7 @@ from mycelium.tool_boundary import (
 from mycelium.tool_registry import ToolRegistry
 from mycelium.tool_runner import ToolRunner
 from mycelium.transition import (
+    LeaseValidity,
     RetryPermission,
     SideEffectBoundary,
     SideEffectClass,
@@ -80,9 +82,10 @@ from mycelium.transition import (
     derive_transition_key,
     derive_transition_key_for_call,
     execution_scope,
+    resolve_lease_validity,
 )
 
-__version__ = "1.9.3"
+__version__ = "1.10.0"
 
 __all__ = [
     "ActionLedger",
@@ -102,6 +105,7 @@ __all__ = [
     "mark_maybe_crossed",
     "mark_crossed",
     "record_external_operation",
+    "renew_lease",
     "Reconciler",
     "ReconcileResult",
     "ReconcileStatus",
@@ -133,11 +137,13 @@ __all__ = [
     "Spendability",
     "RetryPermission",
     "TerminalOutcome",
+    "LeaseValidity",
     "ToolTransitionBinding",
     "TransitionScope",
     "derive_transition_key",
     "derive_transition_key_for_call",
     "execution_scope",
+    "resolve_lease_validity",
     "load_config",
     "load_config_from_string",
     "protect",

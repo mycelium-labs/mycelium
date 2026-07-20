@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.10.0 (2026-07-20)
+
+Minor: make the execution **lease validity window** first-class in resolution, and add lease renew for long-running tools. No change to `transition_key` (lease stays mutable metadata, not identity).
+
+### Lease validity
+
+- Add `LeaseValidity` (`HELD` / `EXPIRED` / `UNBOUNDED`) and `resolve_lease_validity()` — gates already checked time via `resolve_terminal_outcome`; that path now goes through the named validity helper.
+- `LedgerEntry.lease_validity()` exposes the same check on durable entries.
+- Hard-block messages for `EXPIRED` include `lease_until` for operators.
+
+### Lease renew
+
+- `ActionLedger.renew_lease(request_id)` extends `lease_until` while still `IN_FLIGHT` and not yet expired (rejects completed / already-expired).
+- Module helper `renew_lease()` for use inside `@ledger` / `@ledger_sync` tools — keeps peers on `POLL` instead of opening a reclaim path mid-work.
+
+### Docs / packaging
+
+- Document that lease is resolution-first-class (check validity before reclaim/retry), not part of the transition key.
+- Bump to v1.10.0.
+
 ## 1.9.3 (2026-07-20)
 
 Docs patch: republish so PyPI’s project description matches the current `sdk/README.md`, and document the transition-envelope field stack in the handbook.
