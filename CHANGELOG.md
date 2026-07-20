@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.3 (2026-07-20)
+
+Docs patch: republish so PyPI’s project description matches the current `sdk/README.md`, and document the transition-envelope field stack in the handbook.
+
+### Docs
+
+- Document the six transition-envelope fields in priority order (`side_effect_class` → `spendability` → `side_effect_boundary` → `terminal_outcome` → `external_operation_ref` → `retry_permission`) and the invariant: required fields for a tool class must be supported/recorded before a redispatch is treated as a safe retry.
+- Handbook `#envelope` section + root / SDK README pointers (Mycelium branding; no third-party product names).
+- Bump version banners to v1.9.3 so the PyPI long description ships with Resolution gates, SOFT_BLOCK, EXPIRED reclaim, and the envelope field stack.
+
 ## 1.9.2 (2026-07-20)
 
 Patch: close the remaining gap on **EXPIRED + not_crossed → reclaim only if provable** via `external_operation_ref` reconcile. No new schema or policy concepts.

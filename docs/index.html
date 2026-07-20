@@ -371,6 +371,7 @@
       <li><a href="#tools">Tools</a></li>
       <li><a href="#actions">Actions</a></li>
       <li><a href="#resolution">Resolution</a></li>
+      <li><a href="#envelope">Envelope</a></li>
       <li><a href="#yaml">YAML</a></li>
       <li><a href="#common-searches">FAQ</a></li>
     </ol>
@@ -391,7 +392,7 @@
       Classify tools, hash a durable transition key, resolve duplicates by terminal
       state and resolution gates (poll / soft-block reads, hard-block or reconcile
       writes via <code>external_operation_ref</code>). Framework-agnostic.
-      Early but API-stable (v1.9.2): breaking changes only at major versions.
+      Early but API-stable (v1.9.3): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
@@ -612,6 +613,37 @@ crossed                 FAILED_AFTER_EFFECT     hard-block
 EXPIRED + not_crossed + ref + NOT_EXECUTED   → reclaim (v1.9.2)
 EXPIRED + not_crossed, no ref                → hard-block (not provable)
 EXPIRED + maybe_crossed / crossed            → hard-block</pre>
+    </section>
+
+    <section id="envelope">
+      <h2>Envelope fields</h2>
+      <p>
+        Six fields decide whether an unresolved prior execution is merely
+        <strong>wasteful</strong> (safe to retry or poll) or <strong>unsafe</strong>
+        (must not re-run). Listed in priority order:
+      </p>
+      <pre>#  Field                    Role
+1  side_effect_class        kind of effect (read, keyed_mutate, …)
+2  spendability             how many times this intent may spend
+3  side_effect_boundary     not_crossed / maybe_crossed / crossed
+4  terminal_outcome         IN_FLIGHT, COMPLETED, UNKNOWN, EXPIRED, …
+5  external_operation_ref   provider handle for read-only reconcile
+6  retry_permission         whether auto-retry is allowed (same-key opt-in)</pre>
+      <p>
+        <strong>Invariant:</strong> for a given tool class, the fields that class
+        <em>requires</em> must already be <em>supported and recorded</em> on the
+        transition before a redispatch is treated as a safe retry. Reads need a
+        lighter set (class + terminal + lease). Payment, write, email, and subagent
+        tools need spendability, boundary, terminal outcome, and usually an external
+        receipt or ref. Without them, a second dispatch is an
+        <strong>unsupported second transition</strong>, not a retry.
+      </p>
+      <p>
+        Also on the durable record: <code>transition_key</code>,
+        <code>idempotency_key</code>, <code>owner</code>, <code>lease_until</code>,
+        <code>receipt_ref</code>. Resolution gates above decide what to do once
+        those fields are present.
+      </p>
     </section>
 
     <section id="yaml">
