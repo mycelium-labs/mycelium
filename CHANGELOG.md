@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.10.1 (2026-07-20)
+
+Docs/packaging patch: fix stale PyPI/README version badge and root README heading. No code changes.
+
+### Docs
+
+- Bust the shields.io PyPI badge cache key (`&release=1.10.1`) — the old `?cacheSeconds=60` URL was Cloudflare-cached at **v1.9.3** for hours after 1.10.0 published.
+- Root README: `What it does (v1.9.x)` → `(v1.10.x)`; version banners → v1.10.1.
+- Republish so PyPI’s project description picks up the new badge URL and current version line.
+
 ## 1.10.0 (2026-07-20)
 
 Minor: make the execution **lease validity window** first-class in resolution, and add lease renew for long-running tools. No change to `transition_key` (lease stays mutable metadata, not identity).
