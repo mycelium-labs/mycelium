@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.9.1** (transition envelope).
+Current package: **mycelium-runtime v1.9.2** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -259,7 +259,7 @@ async def send_payment(amount: float, recipient: str) -> dict:
 - Record every tool invocation in a durable `ActionLedger`
 - Deduplicate retries and redispatches via a rich **transition key** (scope + tool + args + `side_effect_class` + policy), not only `tool_call_id`
 - **`read` tools:** poll in-flight, reclaim expired leases, retry failed-before-effect, **soft-block** ambiguous `UNKNOWN`/`BLOCKED` states (safe to re-run; opt into deferral with `defer_read_only_unknown=True` → `LedgerSoftBlockError`)
-- **Mutating tools:** return completed results, poll in-flight, **hard-block** ambiguous states (`LedgerHardBlockError`)
+- **Mutating tools:** return completed results, poll in-flight, **hard-block** ambiguous states (`LedgerHardBlockError`). For `EXPIRED + not_crossed`, reclaim only when an `external_operation_ref` reconcile proves `NOT_EXECUTED` (fail-closed without a ref)
 - Persist failed attempts with **terminal outcomes** (`FAILED_BEFORE_EFFECT`, `FAILED_AFTER_EFFECT`, etc.) for audit and reconciliation
 
 ### Side-effect classes

@@ -111,6 +111,11 @@ def resolve_side_effect_gate(
         return TransitionGate.HARD_BLOCK
 
     if outcome == TerminalOutcome.EXPIRED:
+        # maybe_crossed / crossed: effect may have happened → HARD_BLOCK.
+        # Strict spendability (single_use / non_replayable) also HARD_BLOCKs
+        # even on not_crossed: reclaim is only safe when a Reconciler proves
+        # NOT_EXECUTED via external_operation_ref (see ActionLedger claim path).
+        # multi_use + SAFE_RETRY + not_crossed may ALLOW (idempotent reclaim).
         if boundary in (SideEffectBoundary.MAYBE_CROSSED, SideEffectBoundary.CROSSED):
             return TransitionGate.HARD_BLOCK
         if blocks_on_ambiguous_replay(spendability):

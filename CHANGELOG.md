@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.2 (2026-07-20)
+
+Patch: close the remaining gap on **EXPIRED + not_crossed → reclaim only if provable** via `external_operation_ref` reconcile. No new schema or policy concepts.
+
+### EXPIRED reclaim (prove via reconcile)
+
+- Side-effecting poll loops (`_poll_side_effecting` / async) no longer hard-block immediately when a lease expires mid-poll. They return so the outer claim loop can resolve `HARD_BLOCK` through the existing `Reconciler` path.
+- Strict classes (`single_use` / payment / etc.) still gate `EXPIRED + not_crossed` as `HARD_BLOCK`; reclaim happens only when an `external_operation_ref` is present and the reconciler returns `NOT_EXECUTED` (unchanged fail-closed rule when ref/reconciler is missing).
+- Clearer hard-block error text for stale leases: distinguishes `not_crossed` (reclaim only if reconcile proves `NOT_EXECUTED`) from `maybe_crossed` / `crossed` (effect may have happened).
+- Tests: reclaim on `EXPIRED + not_crossed + ref + NOT_EXECUTED`; hard-block without ref; poll-return then reconcile.
+
 ## 1.9.1 (2026-07-19)
 
 Patch: docs sync, a flaky-test fix, and the TSC-007 transition-sufficiency conformance suite. No new schema or policy concepts.

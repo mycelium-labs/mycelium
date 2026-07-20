@@ -238,3 +238,183 @@ def test_async_reconcile_completed_returns_result() -> None:
     assert result == {"charged": True}
     assert len(calls) == 1
     assert len(reconciler.calls) == 1
+
+
+def test_expired_not_crossed_reclaims_when_reconcile_proves_not_executed() -> None:
+    """EXPIRED + not_crossed + external_operation_ref + NOT_EXECUTED → reclaim.
+
+    Strict (payment) classes hard-block EXPIRED at the gate; reclaim is only
+    allowed when a Reconciler proves the provider never executed the effect.
+    """
+    import time
+
+    from mycelium import LedgerEntry, SideEffectBoundary, get_ledger
+
+    storage = InMemoryLedgerStorage()
+    reconciler = StubReconciler(ReconcileResult.not_executed())
+    calls: list[float] = []
+
+    @ledger_sync(
+        storage=storage,
+        transition_binding=_binding(),
+        reconciler=reconciler,
+        lease_ttl=3600.0,
+    )
+    def charge(amount: float) -> dict[str, bool]:
+        calls.append(amount)
+        return {"charged": True}
+
+    ledger_inst = get_ledger(charge)
+    assert ledger_inst is not None
+
+    with execution_scope(_scope()):
+        # Seed a stale in-flight claim that never crossed the side-effect
+        # boundary but recorded a provider handle before the worker died.
+        request_id = ledger_inst.derive_request_id(
+            "charge",
+            (),
+            {"amount": 10.0, "tool_call_id": "c_expired"},
+            transition_binding=_binding(),
+        )
+        storage.set(
+            LedgerEntry(
+                request_id=request_id,
+                tool="charge",
+                args=[],
+                kwargs={"amount": 10.0},
+                status="in-flight",
+                terminal_outcome=TerminalOutcome.IN_FLIGHT.value,
+                lease_until=time.time() - 1,
+                side_effect_boundary=SideEffectBoundary.NOT_CROSSED.value,
+                external_operation_ref="pi_expired_1",
+                idempotency_key=request_id,
+            )
+        )
+
+        result = charge(amount=10.0, tool_call_id="c_expired")
+
+    assert result == {"charged": True}
+    assert calls == [10.0]
+    assert reconciler.calls == [request_id]
+    entry = storage.get(request_id)
+    assert entry is not None
+    assert entry.resolved_terminal_outcome() == TerminalOutcome.COMPLETED
+
+
+def test_expired_not_crossed_hard_blocks_without_external_ref() -> None:
+    """EXPIRED + not_crossed without external_operation_ref is not provable."""
+    import time
+
+    from mycelium import LedgerEntry, SideEffectBoundary, get_ledger
+
+    storage = InMemoryLedgerStorage()
+    reconciler = StubReconciler(ReconcileResult.not_executed())
+
+    @ledger_sync(
+        storage=storage,
+        transition_binding=_binding(),
+        reconciler=reconciler,
+    )
+    def charge(amount: float) -> dict[str, bool]:
+        return {"charged": True}
+
+    ledger_inst = get_ledger(charge)
+    assert ledger_inst is not None
+
+    with execution_scope(_scope()):
+        request_id = ledger_inst.derive_request_id(
+            "charge",
+            (),
+            {"amount": 10.0, "tool_call_id": "c_expired_noref"},
+            transition_binding=_binding(),
+        )
+        storage.set(
+            LedgerEntry(
+                request_id=request_id,
+                tool="charge",
+                args=[],
+                kwargs={"amount": 10.0},
+                status="in-flight",
+                terminal_outcome=TerminalOutcome.IN_FLIGHT.value,
+                lease_until=time.time() - 1,
+                side_effect_boundary=SideEffectBoundary.NOT_CROSSED.value,
+                external_operation_ref=None,
+                idempotency_key=request_id,
+            )
+        )
+
+        with pytest.raises(LedgerHardBlockError, match="not_crossed"):
+            charge(amount=10.0, tool_call_id="c_expired_noref")
+
+    assert reconciler.calls == []  # no ref → no provider lookup
+
+
+def test_expired_after_poll_reconciles_instead_of_blind_hard_block() -> None:
+    """Poll returns on EXPIRED so the claim loop can reconcile before blocking.
+
+    Previously ``_poll_side_effecting`` raised ``LedgerHardBlockError`` on
+    EXPIRED without consulting the Reconciler.
+    """
+    import time
+    from dataclasses import replace
+
+    from mycelium import ActionLedger, LedgerEntry, SideEffectBoundary
+    from mycelium.transition_resolution import TransitionGate, resolve_side_effect_gate
+
+    storage = InMemoryLedgerStorage()
+    reconciler = StubReconciler(ReconcileResult.not_executed())
+    ledger = ActionLedger(
+        storage=storage,
+        reconciler=reconciler,
+        poll_interval=0.01,
+        poll_timeout=1.0,
+        lease_ttl=3600.0,
+    )
+    binding = _binding()
+    request_id = "expired-after-poll"
+
+    storage.set(
+        LedgerEntry(
+            request_id=request_id,
+            tool="charge",
+            args=[],
+            kwargs={"amount": 10.0},
+            status="in-flight",
+            terminal_outcome=TerminalOutcome.IN_FLIGHT.value,
+            lease_until=time.time() + 3600,  # valid → POLL
+            side_effect_boundary=SideEffectBoundary.NOT_CROSSED.value,
+            external_operation_ref="pi_poll_expired",
+            idempotency_key=request_id,
+        )
+    )
+    assert (
+        resolve_side_effect_gate(storage.get(request_id), binding)
+        == TransitionGate.POLL
+    )
+
+    # Expire the lease mid-poll observation window.
+    current = storage.get(request_id)
+    assert current is not None
+    storage.set(replace(current, lease_until=time.time() - 1))
+
+    # Poll must return (not raise) so the outer claim can reconcile.
+    ledger._poll_side_effecting(
+        request_id,
+        tool="charge",
+        interval=0.01,
+        poll_deadline=time.time() + 1.0,
+    )
+
+    claimed = ledger.claim_side_effecting(
+        request_id,
+        "charge",
+        (),
+        {"amount": 10.0},
+        binding,
+    )
+
+    assert reconciler.calls == [request_id]
+    # Reconcile NOT_EXECUTED resets to a fresh in-flight claim (tool may run once).
+    assert claimed.status == "in-flight"
+    assert claimed.resolved_terminal_outcome() == TerminalOutcome.IN_FLIGHT
+    assert claimed.external_operation_ref is None  # fresh claim
