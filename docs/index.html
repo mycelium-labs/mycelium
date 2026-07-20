@@ -34,7 +34,7 @@
         "name": "How do I build reliable AI agents in production?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Most agent failures in production are not reasoning failures; they are runtime failures: a tool runs twice on retry, context goes stale, or the model emits an invalid tool call. Make agents reliable by guarding the runtime, not just the prompt. Mycelium sits between your agent loop and your tools: it classifies each tool by side effect, hashes a durable transition key, and resolves duplicate dispatches by terminal state (poll reads, hard-block ambiguous writes), while validating message history and tool inputs before execution. It is framework-agnostic and works with LangGraph, CrewAI, or a plain Python loop. pip install mycelium-runtime"
+          "text": "Most agent failures in production are not reasoning failures; they are runtime failures: a tool runs twice on retry, context goes stale, or the model emits an invalid tool call. Make agents reliable by guarding the runtime, not just the prompt. Mycelium classifies each tool by side effect, hashes a durable transition key, and resolves duplicate dispatches through resolution gates (poll reads, soft-block ambiguous reads, hard-block ambiguous writes, reconcile via external_operation_ref when a provider lookup can prove run-or-not). Framework-agnostic. pip install mycelium-runtime"
         }
       },
       {
@@ -42,7 +42,7 @@
         "name": "How do I prevent duplicate tool execution in LangGraph?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Classify each tool (read vs keyed_mutate vs non_idempotent_mutate, etc.), enable transition: in mycelium.yaml, and use @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state: read-only tools poll in-flight; side-effecting tools hard-block ambiguous retries. pip install mycelium-runtime && mycelium demo"
+          "text": "Classify each tool (read vs keyed_mutate vs non_idempotent_mutate, etc.), enable transition: in mycelium.yaml, and use @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state and resolution gates: read tools poll or soft-block UNKNOWN; mutating tools hard-block or reconcile against the provider when you record external_operation_ref. pip install mycelium-runtime && mycelium demo"
         }
       },
       {
@@ -72,7 +72,7 @@
     "alternateName": "mycelium-runtime",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "OS Independent",
-    "description": "Runtime guards for AI agents. Prevents predictable failures before they reach the LLM: duplicate tool execution on retry, stale context, and invalid tool calls. Framework-agnostic Python library for LangGraph, CrewAI, and plain Python loops.",
+    "description": "Runtime guards for AI agents. Prevents predictable failures before they reach the LLM: duplicate tool execution on retry, stale context, and invalid tool calls. Transition envelope with resolution gates, external_operation_ref reconcile, and framework-agnostic Python for LangGraph, CrewAI, and plain loops.",
     "url": "https://mycelium-labs.github.io/mycelium/",
     "downloadUrl": "https://pypi.org/project/mycelium-runtime/",
     "codeRepository": "https://github.com/mycelium-labs/mycelium",
@@ -370,6 +370,7 @@
       <li><a href="#context">Context</a></li>
       <li><a href="#tools">Tools</a></li>
       <li><a href="#actions">Actions</a></li>
+      <li><a href="#resolution">Resolution</a></li>
       <li><a href="#yaml">YAML</a></li>
       <li><a href="#common-searches">FAQ</a></li>
     </ol>
@@ -388,7 +389,8 @@
       Runtime guards for AI agents. Prevents predictable failures before they reach the
       LLM: duplicate tool execution on retry, stale context, invalid tool calls.
       Classify tools, hash a durable transition key, resolve duplicates by terminal
-      state: poll reads, hard-block ambiguous writes. Framework-agnostic.
+      state and resolution gates (poll / soft-block reads, hard-block or reconcile
+      writes via <code>external_operation_ref</code>). Framework-agnostic.
       Early but API-stable (v1.9.2): breaking changes only at major versions.
     </p>
 
@@ -397,8 +399,8 @@
       <p class="arch-caption">
         Mycelium wraps your agent loop. Guards run on messages and tools before side effects
         and before the next LLM call. The transition envelope classifies each tool, hashes
-        a durable key per dispatch, and resolves duplicates by terminal state, not by
-        re-running blindly. Not a framework. Not observability.
+        a durable key per dispatch, and resolves duplicates through gates and terminal
+        outcomes — not by re-running blindly. Not a framework. Not observability.
       </p>
       <div class="arch-flow">
         <div class="arch-box">Your agent loop<br><span style="font-weight:400;color:var(--ink-muted)">LangGraph · CrewAI · Python</span></div>
@@ -519,10 +521,8 @@ def fetch_customer(customer_id: str) -> dict:
       <p>
         Each ledgered tool gets a <code>side_effect_class</code> and a
         <code>transition_key</code> (scope, tool, args, class, policy version).
-        Duplicate dispatches resolve by terminal state:
-        <code>read</code> tools poll in-flight and reclaim expired leases;
-        <code>payment</code> and write tools return completed results or hard-block
-        ambiguous retries (<code>LedgerHardBlockError</code>).
+        Duplicate dispatches resolve through <a href="#resolution">gates</a> and
+        terminal outcomes — not blind re-execution.
       </p>
       <pre>from mycelium import load_config
 
@@ -536,7 +536,7 @@ def send_payment(amount: float, recipient: str) -> dict:
 def search_docs(query: str) -> dict:
     return {"query": query, "hits": 3}
 
-# read: second call polls and returns cached result
+# read: second call polls or soft-blocks UNKNOWN (safe retry by default)
 search_docs(query="billing", tool_call_id="call_read")
 
 # payment: duplicate resolves existing transition; won't charge twice
@@ -550,6 +550,68 @@ def process_invoice(invoice_id: str, amount: float) -> dict:
 
 process_invoice(invoice_id="inv-42", amount=100.0)
 process_invoice(invoice_id="inv-42", amount=200.0)  # returns first result</pre>
+    </section>
+
+    <section id="resolution">
+      <h2>Resolution</h2>
+      <p>
+        Each duplicate dispatch is classified to a <strong>gate</strong>. Read-only and
+        side-effecting tools use different resolvers.
+      </p>
+      <pre>Gate          Typical trigger                    Effect
+ALLOW         fresh claim / policy allows retry    tool runs
+RETURN        COMPLETED                          return stored result
+POLL          IN_FLIGHT (valid lease)            wait for other worker
+RECLAIM       read EXPIRED / FAILED_*            take over stale lease
+SOFT_BLOCK    read UNKNOWN / BLOCKED only        retry by default (v1.9.0)
+HARD_BLOCK    ambiguous mutating transition      stop; reconcile if ref present</pre>
+      <p>
+        <strong>Read</strong> (<code>side_effect_class: read</code>): poll, reclaim,
+        retry failed-before-effect. Ambiguous <code>UNKNOWN</code> →
+        <code>SOFT_BLOCK</code> (safe retry). Opt into deferral with
+        <code>defer_read_only_unknown=True</code> → <code>LedgerSoftBlockError</code>.
+      </p>
+      <p>
+        <strong>Mutating</strong> (payment, email, subagent, irreversible): return
+        completed, poll in-flight, hard-block ambiguity. Stale lease
+        (<code>EXPIRED + not_crossed</code>): hard-block until reconcile proves
+        <code>NOT_EXECUTED</code> (fail-closed without <code>external_operation_ref</code>).
+      </p>
+      <pre>from mycelium import ledger_sync, side_effect, record_external_operation
+from mycelium import Reconciler, ReconcileResult
+
+@ledger_sync(transition_binding=binding)
+def send_payment(amount, recipient, *, idempotency_key: str):
+    with side_effect():                              # maybe_crossed → UNKNOWN on crash
+        record_external_operation(idempotency_key)   # handle for provider lookup
+        return gateway.charge(amount, recipient, idempotency_key=idempotency_key)
+
+class StripeReconciler:  # read-only: never charges
+    def reconcile(self, entry) -> ReconcileResult:
+        pi = stripe.PaymentIntent.retrieve(entry.external_operation_ref)
+        if pi.status == "succeeded":
+            return ReconcileResult.completed(pi)
+        if pi.status in ("canceled", "requires_payment_method"):
+            return ReconcileResult.not_executed()
+        return ReconcileResult.unknown()
+
+@ledger_sync(transition_binding=binding, reconciler=StripeReconciler())
+def send_payment(...): ...</pre>
+      <p>
+        <code>external_operation_ref</code> is the provider handle (id or idempotency key),
+        not proof by itself. The <code>Reconciler</code> does a read-only lookup:
+        <code>COMPLETED</code> → return result;
+        <code>NOT_EXECUTED</code> → run exactly once more;
+        <code>UNKNOWN</code> / no ref / no reconciler → <code>LedgerHardBlockError</code>.
+      </p>
+      <pre>Boundary at failure     Terminal outcome        Redispatch
+not_crossed             FAILED_BEFORE_EFFECT    retry if policy allows
+maybe_crossed           UNKNOWN                 hard-block → reconcile
+crossed                 FAILED_AFTER_EFFECT     hard-block
+
+EXPIRED + not_crossed + ref + NOT_EXECUTED   → reclaim (v1.9.2)
+EXPIRED + not_crossed, no ref                → hard-block (not provable)
+EXPIRED + maybe_crossed / crossed            → hard-block</pre>
     </section>
 
     <section id="yaml">
@@ -663,8 +725,9 @@ with config.run(thread_id):
           <strong>runtime failures</strong>: a tool runs twice on retry, context goes stale,
           or the model emits an invalid tool call. To make AI agents reliable, guard the
           runtime, not just the prompt. Mycelium classifies each tool by side effect, hashes a
-          durable transition key, and resolves duplicate dispatches by terminal state, while
-          validating message history and tool inputs before anything executes. Framework-agnostic:
+          durable transition key, and resolves duplicate dispatches through resolution
+          gates (poll reads, soft-block ambiguous reads, hard-block or reconcile writes),
+          while validating message history and tool inputs before anything executes. Framework-agnostic:
           LangGraph, CrewAI, or plain Python. <code>pip install mycelium-runtime</code>
         </p>
       </div>
@@ -674,11 +737,11 @@ with config.run(thread_id):
         <p>
           Add <code>transition:</code> and <code>side_effect_class</code> per tool in
           <code>mycelium.yaml</code>. Mycelium hashes a durable transition key (scope, tool,
-          args, class, policy) and resolves duplicates by terminal state, not by re-running
-          blindly. LangGraph Cloud can redispatch long tool calls while the first is still
-          in flight (<a href="https://github.com/langchain-ai/langgraph/issues/7417">langgraph#7417</a>).
-          <code>read</code> tools poll and return the cached result;
-          <code>payment</code> / write tools hard-block ambiguous retries.
+          args, class, policy) and resolves duplicates through gates: return completed,
+          poll in-flight, soft-block ambiguous reads, hard-block or reconcile mutating
+          tools when <code>external_operation_ref</code> is recorded. LangGraph Cloud
+          can redispatch long tool calls while the first is still in flight
+          (<a href="https://github.com/langchain-ai/langgraph/issues/7417">langgraph#7417</a>).
           <code>pip install mycelium-runtime &amp;&amp; mycelium demo</code>
         </p>
       </div>
@@ -698,9 +761,11 @@ with config.run(thread_id):
         <p>
           Classify each tool (<code>read</code>, <code>keyed_mutate</code>, <code>non_idempotent_mutate</code>, etc.), enable
           <code>transition:</code> in YAML, and wrap with <code>@config.apply</code>.
-          On framework retry or worker redispatch, Mycelium resolves the existing transition:
-          return completed, poll in-flight, or raise <code>LedgerHardBlockError</code> when
-          reconciliation is required. Framework-agnostic.
+          On framework retry or worker redispatch, Mycelium resolves the existing
+          transition: return completed, poll in-flight, soft-block ambiguous reads,
+          or raise <code>LedgerHardBlockError</code> / reconcile via
+          <code>Reconciler</code> when <code>external_operation_ref</code> is present.
+          Framework-agnostic.
         </p>
       </div>
     </section>
