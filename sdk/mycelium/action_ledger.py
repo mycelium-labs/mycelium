@@ -657,10 +657,19 @@ class ActionLedger:
     ) -> None:
         outcome = existing.resolved_terminal_outcome()
         if outcome == TerminalOutcome.EXPIRED:
-            existing = self.mark_blocked(
-                request_id,
-                error="stale in-flight lease; side-effect boundary unknown",
-            )
+            boundary = SideEffectBoundary(existing.side_effect_boundary)
+            if boundary == SideEffectBoundary.NOT_CROSSED:
+                error = (
+                    "stale in-flight lease with not_crossed boundary; "
+                    "reclaim only if an external_operation_ref reconcile "
+                    "proves NOT_EXECUTED"
+                )
+            else:
+                error = (
+                    "stale in-flight lease; side-effect boundary "
+                    f"{boundary.value} — effect may have happened"
+                )
+            existing = self.mark_blocked(request_id, error=error)
         message = hard_block_message(existing, tool=tool, request_id=request_id)
         raise LedgerHardBlockError(message)
 
@@ -862,7 +871,11 @@ class ActionLedger:
         interval: float,
         poll_deadline: float | None,
     ) -> None:
-        """Wait for an in-flight side-effecting transition; never auto-reclaim."""
+        """Wait for an in-flight side-effecting transition; never auto-reclaim.
+
+        When the lease expires mid-poll, return so the outer claim loop can
+        re-resolve the gate and attempt provider reconcile before hard-blocking.
+        """
         while True:
             if poll_deadline is not None and time.time() >= poll_deadline:
                 current = self.get(request_id)
@@ -882,8 +895,11 @@ class ActionLedger:
             outcome = current.resolved_terminal_outcome()
             if outcome == TerminalOutcome.COMPLETED:
                 return
+            # Leave EXPIRED to the outer claim loop so HARD_BLOCK can attempt
+            # reconcile (EXPIRED + not_crossed + external_operation_ref →
+            # reclaim only when the provider proves NOT_EXECUTED).
             if outcome == TerminalOutcome.EXPIRED:
-                self._raise_hard_block(request_id, tool, current)
+                return
             if outcome == TerminalOutcome.IN_FLIGHT:
                 continue
             if outcome in (
@@ -999,8 +1015,11 @@ class ActionLedger:
             outcome = current.resolved_terminal_outcome()
             if outcome == TerminalOutcome.COMPLETED:
                 return
+            # Leave EXPIRED to the outer claim loop so HARD_BLOCK can attempt
+            # reconcile (EXPIRED + not_crossed + external_operation_ref →
+            # reclaim only when the provider proves NOT_EXECUTED).
             if outcome == TerminalOutcome.EXPIRED:
-                self._raise_hard_block(request_id, tool, current)
+                return
             if outcome == TerminalOutcome.IN_FLIGHT:
                 continue
             if outcome in (

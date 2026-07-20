@@ -8,7 +8,7 @@
 
 Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
 
-*Early but API-stable (**v1.9.1**): breaking changes only at major versions. More guards planned.*
+*Early but API-stable (**v1.9.2**): breaking changes only at major versions. More guards planned.*
 
 ## Who it's for
 
