@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.9.2** (transition envelope).
+Current package: **mycelium-runtime v1.9.3** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -279,6 +279,23 @@ Each duplicate dispatch is classified to a gate. Read-only and side-effecting to
 **Mutating** (payment, email, subagent, irreversible, …): return completed, poll in-flight, hard-block ambiguity. For **`EXPIRED + not_crossed`**, the gate is `HARD_BLOCK` until a reconciler proves the effect never ran — see [Stale lease + reconcile](#stale-lease--reconcile-exired--not_crossed).
 
 `REPAIR` (fix missing durable context before execute) is planned; not shipped yet.
+
+### Transition envelope fields
+
+Six fields decide whether an unresolved prior execution is merely **wasteful** (safe to retry/poll) or **unsafe** (must not re-run). Priority order:
+
+| # | Field | Role |
+|---|-------|------|
+| 1 | `side_effect_class` | What kind of effect (`read`, `keyed_mutate`, `non_idempotent_mutate`, …) |
+| 2 | `spendability` | How many times the same intent may spend (`multi_use` / `single_use` / `non_replayable`) |
+| 3 | `side_effect_boundary` | Whether the external call was crossed (`not_crossed` / `maybe_crossed` / `crossed`) |
+| 4 | `terminal_outcome` | Where the prior attempt ended (`IN_FLIGHT`, `COMPLETED`, `UNKNOWN`, `EXPIRED`, …) |
+| 5 | `external_operation_ref` | Provider handle for read-only reconcile (id or idempotency key) |
+| 6 | `retry_permission` | Whether automatic retry is allowed (and same-key enforcement when opted in) |
+
+**Invariant:** for a given tool class, the fields that class **requires** must already be **supported and recorded** on the transition before a redispatch is treated as a safe retry. Reads need a lighter set (class + terminal + lease). Payment / write / email / subagent need spendability, boundary, terminal outcome, and usually an external receipt/ref — without them, a second dispatch is an **unsupported second transition**, not a retry.
+
+Also on the durable record: `transition_key`, `idempotency_key`, `owner`, `lease_until`, `receipt_ref`.
 
 ### Side-effect classes
 
