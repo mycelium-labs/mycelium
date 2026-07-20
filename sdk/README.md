@@ -36,7 +36,7 @@ subagent_task(task="analyze_market", tool_call_id=call["id"])
 |---------|-------------------|
 | **Stale or broken context** | TTL cache, message repair, history limits; agent sees fresh, valid data |
 | **Bad or unauthorized tool calls** | Validate inputs/outputs, allowlists, scoped paths; block before execution |
-| **Duplicate side effects on retry** | v1.3 transition envelope (side-effect class, poll / hard-block), ledgers, state flush, signed receipts |
+| **Duplicate side effects on retry** | Transition envelope (v1.3+): `side_effect_class`, terminal outcomes, resolution **gates** (`POLL` / `SOFT_BLOCK` / `HARD_BLOCK`), `external_operation_ref` + `Reconciler`, ledgers, signed receipts |
 
 Framework-agnostic. Raw message lists and plain Python functions (LangGraph, CrewAI, OpenAI tool loops, etc.).
 
@@ -258,15 +258,33 @@ async def send_payment(amount: float, recipient: str) -> dict:
 
 - Record every tool invocation in a durable `ActionLedger`
 - Deduplicate retries and redispatches via a rich **transition key** (scope + tool + args + `side_effect_class` + policy), not only `tool_call_id`
-- **`read` tools:** poll in-flight, reclaim expired leases, retry failed-before-effect, **soft-block** ambiguous `UNKNOWN`/`BLOCKED` states (safe to re-run; opt into deferral with `defer_read_only_unknown=True` → `LedgerSoftBlockError`)
-- **Mutating tools:** return completed results, poll in-flight, **hard-block** ambiguous states (`LedgerHardBlockError`). For `EXPIRED + not_crossed`, reclaim only when an `external_operation_ref` reconcile proves `NOT_EXECUTED` (fail-closed without a ref)
-- Persist failed attempts with **terminal outcomes** (`FAILED_BEFORE_EFFECT`, `FAILED_AFTER_EFFECT`, etc.) for audit and reconciliation
+- Resolve redispatches through **gates** (see [Resolution gates](#resolution-gates)) instead of re-running blindly
+- Persist failed attempts with **terminal outcomes** (`FAILED_BEFORE_EFFECT`, `FAILED_AFTER_EFFECT`, `UNKNOWN`, `EXPIRED`, etc.) for audit and reconciliation
+
+### Resolution gates
+
+Each duplicate dispatch is classified to a gate. Read-only and side-effecting tools use different resolvers.
+
+| Gate | Typical trigger | What happens |
+|------|-----------------|--------------|
+| `ALLOW` | no prior transition, or policy permits retry (e.g. `FAILED_BEFORE_EFFECT` + same provider key) | tool runs |
+| `RETURN` | `COMPLETED` | return stored result — no re-execution |
+| `POLL` | `IN_FLIGHT` with valid lease | wait for the other worker |
+| `RECLAIM` | read-only `EXPIRED` / `FAILED_*` | take over stale lease and run |
+| `SOFT_BLOCK` | read-only `UNKNOWN` / `BLOCKED` only | **retry by default** (safe — reads don't spend); opt into deferral with `defer_read_only_unknown=True` → `LedgerSoftBlockError` |
+| `HARD_BLOCK` | ambiguous mutating transition | stop; run `Reconciler` when `external_operation_ref` is present, else fail-closed |
+
+**Read-only** (`side_effect_class: read`): poll, reclaim, retry failed-before-effect, soft-block on ambiguous `UNKNOWN`/`BLOCKED`.
+
+**Mutating** (payment, email, subagent, irreversible, …): return completed, poll in-flight, hard-block ambiguity. For **`EXPIRED + not_crossed`**, the gate is `HARD_BLOCK` until a reconciler proves the effect never ran — see [Stale lease + reconcile](#stale-lease--reconcile-exired--not_crossed).
+
+`REPAIR` (fix missing durable context before execute) is planned; not shipped yet.
 
 ### Side-effect classes
 
 | Class | Typical use | Duplicate handling |
 |-------|-------------|-------------------|
-| `read` | search, fetch | poll / reclaim / retry / soft-block on `UNKNOWN` |
+| `read` | search, fetch | poll / reclaim / retry; `SOFT_BLOCK` on `UNKNOWN` |
 | `idempotent_mutate` | upsert / set status | retry if boundary not crossed |
 | `keyed_mutate` | Stripe-style create/charge | retry only with same provider key |
 | `non_idempotent_mutate` | send email, spawn subagent | hard-block on ambiguity |
@@ -311,6 +329,20 @@ The boundary drives failure classification and only ever moves forward (`not_cro
 
 Because `maybe_crossed` is written durably *before* the call, a process crash mid-call leaves the entry ambiguous and a redispatch hard-blocks instead of double-spending. For finer control use `mark_maybe_crossed()` / `mark_crossed()` directly. Works the same inside `async` tools.
 
+### Read-only `SOFT_BLOCK` (v1.9.0)
+
+When a read-only tool ends in `UNKNOWN` or `BLOCKED`, the resolver returns `SOFT_BLOCK` — not a terminal stop. Re-running a read is always safe, so the default is **retry** (reset to a fresh in-flight claim and run once more). For expensive reads, opt into deferral:
+
+```python
+from mycelium import ledger_sync, LedgerSoftBlockError
+
+@ledger_sync(transition_binding=read_binding, defer_read_only_unknown=True)
+def search_docs(query: str) -> dict:
+    ...
+```
+
+With `defer_read_only_unknown=True`, ambiguous read-only states raise `LedgerSoftBlockError` so the caller can retry later (cost-dependent). Side-effecting tools never use `SOFT_BLOCK`; they use `HARD_BLOCK` / reconcile.
+
 ### Recording the provider handle (`record_external_operation()`)
 
 When a side-effecting tool talks to a provider, record the provider's operation handle — its returned id (Stripe `pi_...`, a message id, a run id) or the idempotency key you sent — so an ambiguous transition can later be **reconciled** against the provider instead of parked for a human:
@@ -327,6 +359,8 @@ def send_payment(amount, recipient):
 ```
 
 The ref is stored on the entry (`external_operation_ref`) across all backends and shown in the hard-block message. Prefer recording the **idempotency key before the call** for keyed providers — it survives a crash mid-call, unlike a returned id.
+
+`external_operation_ref` is the **handle** for provider lookup; it is not proof by itself. Proof comes from the reconciler's read-only query (below).
 
 ### Reconciling automatically (`Reconciler`)
 
@@ -359,6 +393,22 @@ def send_payment(amount, recipient):
 | `UNKNOWN` | hard-blocks, exactly as if no reconciler were set |
 
 Reconciliation is **fail-closed**: no ref, no reconciler, or a reconciler that raises/times out all resolve to a hard-block — an exception in the reconciler never propagates. Async tools can implement `reconcile_async`; the async claim path prefers it and falls back to `reconcile`. Wire a reconciler via `@ledger` / `@ledger_sync` or `ActionLedger(reconciler=...)`.
+
+### Stale lease + reconcile (`EXPIRED + not_crossed`)
+
+When a worker dies or a lease expires while a side-effecting tool is still `IN_FLIGHT`, the transition becomes `EXPIRED`. Resolution depends on boundary and class:
+
+| Situation | Gate | Reclaim? |
+|-----------|------|----------|
+| `EXPIRED` + `maybe_crossed` / `crossed` | `HARD_BLOCK` | no — effect may have happened |
+| `EXPIRED` + `not_crossed`, strict class, **no** `external_operation_ref` | `HARD_BLOCK` | no — not provable |
+| `EXPIRED` + `not_crossed` + ref + reconciler → `NOT_EXECUTED` | reconcile → fresh claim | yes — provider proves effect never ran |
+| `EXPIRED` + `not_crossed` + ref + reconciler → `COMPLETED` | `RETURN` | no — return stored/reconciled result |
+| `EXPIRED` + `not_crossed`, `multi_use` + `SAFE_RETRY` (e.g. idempotent read/write) | `ALLOW` | yes — reclaim without reconcile |
+
+If a duplicate worker is **polling** an in-flight transition and the lease expires mid-poll, the poll loop returns (v1.9.2) so the claim path can reconcile instead of hard-blocking immediately.
+
+Record `external_operation_ref` early (ideally the idempotency key before the provider call) so stale-lease and `UNKNOWN` cases can be resolved automatically instead of parking for a human.
 
 ### Enforcing the same provider idempotency key (`provider_idempotency_key_param`)
 

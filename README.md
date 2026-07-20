@@ -20,11 +20,14 @@ Python 3.10+. Framework-agnostic.
 
 These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools:
 
-- **Duplicate side effects on retry:** classify tools (`read` vs `keyed_mutate` vs `non_idempotent_mutate`, etc.), hash a durable transition key, resolve duplicates by terminal state — poll reads, hard-block ambiguous writes
+- **Duplicate side effects on retry:** classify tools (`read` vs `keyed_mutate` vs `non_idempotent_mutate`, etc.), hash a durable **transition key**, resolve duplicates by **terminal state** — not blind re-execute
+  - **Read tools:** poll in-flight, reclaim expired leases, **soft-block** ambiguous `UNKNOWN` (safe retry by default)
+  - **Mutating tools:** hard-block ambiguity; **reconcile** via `external_operation_ref` when a provider lookup can prove run-or-not (`COMPLETED` / `NOT_EXECUTED` / still blocked)
+  - **Stale lease (`EXPIRED`):** strict classes reclaim only when reconcile proves `NOT_EXECUTED` (fail-closed without a ref)
 - **Stale or broken context:** fresh tool data, valid message transcripts
 - **Bad tool calls:** block invalid inputs and out-of-scope tools before they run
 
-Not Langfuse. Use both if you want traces and guards.
+Not Langfuse. Use both if you want traces and guards. Full resolution rules: [sdk/README.md](sdk/README.md#resolution-gates).
 
 ## Use it
 
@@ -66,7 +69,7 @@ def my_side_effect_tool(...) -> dict:
 my_side_effect_tool(..., tool_call_id=call["id"])
 ```
 
-Pass `tool_call_id` from your framework. Redispatch resolves the existing transition — read tools poll and return; mutating tools won't execute twice unsafely.
+Pass `tool_call_id` from your framework. Redispatch resolves the existing transition: read tools poll/soft-block; mutating tools hard-block or reconcile against the provider when you record `external_operation_ref`.
 
 Multi-worker / cloud: `pip install 'mycelium-runtime[redis]'`. See the [handbook](https://mycelium-labs.github.io/mycelium/).
 
