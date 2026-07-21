@@ -421,6 +421,7 @@
       <h2>Install</h2>
       <p>Requires Python 3.10 or later.</p>
       <pre>pip install mycelium-runtime
+pip install 'mycelium-runtime[langgraph]'   # automatic ToolRuntime IDs
 pip install 'mycelium-runtime[redis]'   # optional
 pip install 'mycelium-runtime[postgres]'
 
@@ -428,6 +429,14 @@ mycelium init              # on-ramp (transition + one ledgered tool)
 mycelium init --full       # reference: all guards (fill TODOs; not default)
 mycelium init --minimal    # smaller multi-guard scaffold
 mycelium demo              # langgraph#7417 bug and fix</pre>
+      <p>
+        The default LangGraph on-ramp enables
+        <code>integrations.langgraph</code>. With <code>@config.apply</code>,
+        Mycelium adds LangGraph’s trusted, hidden <code>ToolRuntime</code>
+        parameter and maps its tool-call, thread, run, and node identifiers into
+        the generic transition key. Explicit IDs still override captured values;
+        custom tool executors may pass them manually.
+      </p>
     </section>
 
     <section id="api">

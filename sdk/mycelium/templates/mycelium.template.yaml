@@ -4,7 +4,7 @@
 #
 # Required vs optional
 #   Required for transition guards:  transition, action_ledger (+ tools entries you ledger)
-#   Optional:  task_ledger, state_flush, audit_receipt, registry, runner,
+#   Optional:  integrations, task_ledger, state_flush, audit_receipt, registry, runner,
 #              history_guard, message_validator — delete unused sections
 #
 # Next steps
@@ -39,10 +39,20 @@
 #   not FAILED_BEFORE_EFFECT. Inside it call
 #   `record_external_operation(provider_id_or_idempotency_key)` so an ambiguous
 #   transition can later be reconciled against the provider.
+# LangGraph: install `mycelium-runtime[langgraph]`, then enable the optional
+#   integration below. `@config.apply` adds an injected ToolRuntime parameter
+#   and maps tool_call_id / thread_id / run_id / node into transition identity.
 # To reconcile automatically instead of hard-blocking, pass a read-only
 #   Reconciler in code: `@ledger_sync(reconciler=...)` or
 #   `ActionLedger(reconciler=...)`. It returns COMPLETED / NOT_EXECUTED /
 #   UNKNOWN and is fail-closed (reconcilers can't be declared in YAML).
+
+# ---------------------------------------------------------------------------
+# integrations (optional framework metadata; core remains framework-agnostic)
+# ---------------------------------------------------------------------------
+integrations:
+  langgraph:
+    enabled: false
 
 # ---------------------------------------------------------------------------
 # transition

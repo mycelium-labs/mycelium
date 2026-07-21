@@ -31,6 +31,7 @@ from mycelium.transition import (
     ToolTransitionBinding,
     derive_transition_key_for_call,
     extract_provider_idempotency_key,
+    get_active_dispatch_id,
     legacy_status_from_terminal,
     resolve_lease_validity,
     resolve_terminal_outcome,
@@ -1256,6 +1257,9 @@ class ActionLedger:
             return str(kwargs["request_id"])
         if "tool_call_id" in kwargs:
             return str(kwargs["tool_call_id"])
+        active_dispatch_id = get_active_dispatch_id()
+        if active_dispatch_id is not None:
+            return active_dispatch_id
 
         session = _session_var.get()
         if session is not None:
