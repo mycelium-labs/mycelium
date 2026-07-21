@@ -1,14 +1,14 @@
 # Mycelium
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.11.0)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.12.0)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 [![Downloads](https://static.pepy.tech/badge/mycelium-runtime)](https://pepy.tech/project/mycelium-runtime)
 
-**Runtime guards for AI agents.**
+**Runtime guards and zero-touch YAML auto-instrumentation for AI agents.**
 
 Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
 
-*Early but API-stable (**v1.11.0**): breaking changes only at major versions. More guards planned.*
+*Early but API-stable (**v1.12.0**): breaking changes only at major versions. More guards planned.*
 
 ## Who it's for
 
@@ -16,7 +16,7 @@ Developers running **agents with side-effect tools** in production (payments, em
 
 Python 3.10+. Framework-agnostic.
 
-## What it does (v1.11.x)
+## What it does (v1.12.x)
 
 These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools:
 

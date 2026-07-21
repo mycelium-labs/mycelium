@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mycelium: runtime guards for AI agents</title>
-  <meta name="description" content="Build reliable AI agents in production. Mycelium adds runtime guards that prevent duplicate tool execution on retry, stale context, and bad tool calls before they reach the LLM. Framework-agnostic Python for LangGraph, CrewAI, and plain loops.">
+  <meta name="description" content="Build reliable AI agents with runtime guards and zero-touch YAML auto-instrumentation. Prevent duplicate tool execution, stale context, and bad tool calls in LangGraph, CrewAI, and plain Python.">
   <meta name="keywords" content="reliable AI agents, AI agent reliability, production AI agents, AI agent guardrails, LangGraph reliability, CrewAI reliability, agent idempotency, duplicate tool execution, tool calling, runtime guards, Python LLM agents, prevent agent failures">
   <meta name="author" content="Mycelium Labs">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
   <meta name="theme-color" content="#181818">
   <link rel="canonical" href="https://mycelium-labs.github.io/mycelium/">
   <meta property="og:title" content="Mycelium: runtime guards for AI agents">
-  <meta property="og:description" content="Build reliable AI agents. Prevent duplicate tool execution on retry, stale context, and bad tool calls before they reach the LLM. Plain Python.">
+  <meta property="og:description" content="Runtime guards and zero-touch YAML auto-instrumentation for reliable AI agent tools.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://mycelium-labs.github.io/mycelium/">
   <meta property="og:image" content="https://mycelium-labs.github.io/mycelium/og-image.png">
@@ -23,7 +23,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://mycelium-labs.github.io/mycelium/og-image.png">
   <meta name="twitter:title" content="Mycelium: runtime guards for AI agents">
-  <meta name="twitter:description" content="Reliable AI agents in production: idempotent tool calls, context validation, tool boundaries. Framework-agnostic Python.">
+  <meta name="twitter:description" content="Reliable AI agents: YAML auto-instrumentation, idempotent tool calls, context validation, and tool boundaries.">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -72,7 +72,7 @@
     "alternateName": "mycelium-runtime",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "OS Independent",
-    "description": "Runtime guards for AI agents. Prevents predictable failures before they reach the LLM: duplicate tool execution on retry, stale context, and invalid tool calls. Transition envelope with resolution gates, external_operation_ref reconcile, and framework-agnostic Python for LangGraph, CrewAI, and plain loops.",
+    "description": "Runtime guards and zero-touch YAML auto-instrumentation for AI agents. Prevent duplicate tool execution, stale context, and invalid tool calls in LangGraph, CrewAI, and plain Python.",
     "url": "https://mycelium-labs.github.io/mycelium/",
     "downloadUrl": "https://pypi.org/project/mycelium-runtime/",
     "codeRepository": "https://github.com/mycelium-labs/mycelium",
@@ -381,7 +381,7 @@
 
     <h1>Mycelium: runtime guards for AI agents</h1>
     <p class="badges">
-      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.11.0" alt="PyPI version"></a>
+      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.12.0" alt="PyPI version"></a>
       <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/pyversions/mycelium-runtime.svg" alt="Python versions"></a>
       <a href="https://pepy.tech/project/mycelium-runtime"><img src="https://static.pepy.tech/badge/mycelium-runtime" alt="PyPI downloads"></a>
       <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
@@ -389,10 +389,11 @@
     <p class="lede">
       Runtime guards for AI agents. Prevents predictable failures before they reach the
       LLM: duplicate tool execution on retry, stale context, invalid tool calls.
+      YAML callable paths and <code>mycelium run</code> add guards without editing each function.
       Classify tools, hash a durable transition key, resolve duplicates by terminal
       state and resolution gates (poll / soft-block reads, hard-block or reconcile
       writes via <code>external_operation_ref</code>). Framework-agnostic.
-      Early but API-stable (v1.11.0): breaking changes only at major versions.
+      Early but API-stable (v1.12.0): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
@@ -473,7 +474,11 @@ TerminalOutcome, Spendability, ToolTransitionBinding, execution_scope
 derive_transition_key_for_call
 
 # Config
-load_config, load_config_from_string, MyceliumConfig</pre>
+load_config, load_config_from_string, MyceliumConfig
+MyceliumConfig.apply_tool, apply_named_task             # explicit names (v1.12.0)
+
+# CLI
+mycelium run --config PATH -- python ...                 # auto-instrumentation (v1.12.0)</pre>
     </section>
 
     <section id="context">

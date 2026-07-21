@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.12.0 (2026-07-21)
+
+Minor: add zero-touch, command-based YAML auto-instrumentation while preserving explicit decorator and module instrumentation APIs.
 
 ### Command auto-instrumentation
 

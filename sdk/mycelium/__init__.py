@@ -85,7 +85,7 @@ from mycelium.transition import (
     resolve_lease_validity,
 )
 
-__version__ = "1.11.0"
+__version__ = "1.12.0"
 
 __all__ = [
     "ActionLedger",

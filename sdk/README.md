@@ -1,9 +1,9 @@
 # Mycelium runtime
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.11.0)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.12.0)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.11.0** (transition envelope).
+Current package: **mycelium-runtime v1.12.0** (command auto-instrumentation + transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -34,7 +34,7 @@ its `tool_call_id`, thread, run, and node into the transition key. No
 `tool_call_id` parameter is needed on your function. Explicit IDs still win;
 custom tool executors may continue passing them manually.
 
-`mycelium run` wraps all configured tool/task callable paths before application
+New in v1.12.0, `mycelium run` wraps all configured tool/task callable paths before application
 startup and then replaces itself with the child Python process. Existing
 `@config.apply`, `@config.apply_task`, and `config.instrument` flows remain
 supported for explicit code-level control.
