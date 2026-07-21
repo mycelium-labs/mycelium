@@ -381,7 +381,7 @@
 
     <h1>Mycelium: runtime guards for AI agents</h1>
     <p class="badges">
-      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60" alt="PyPI version"></a>
+      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.11.0" alt="PyPI version"></a>
       <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/pyversions/mycelium-runtime.svg" alt="Python versions"></a>
       <a href="https://pepy.tech/project/mycelium-runtime"><img src="https://static.pepy.tech/badge/mycelium-runtime" alt="PyPI downloads"></a>
       <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
@@ -392,7 +392,7 @@
       Classify tools, hash a durable transition key, resolve duplicates by terminal
       state and resolution gates (poll / soft-block reads, hard-block or reconcile
       writes via <code>external_operation_ref</code>). Framework-agnostic.
-      Early but API-stable (v1.10.1): breaking changes only at major versions.
+      Early but API-stable (v1.11.0): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
@@ -430,7 +430,7 @@ mycelium init --full       # reference: all guards (fill TODOs; not default)
 mycelium init --minimal    # smaller multi-guard scaffold
 mycelium demo              # langgraph#7417 bug and fix</pre>
       <p>
-        The default LangGraph on-ramp enables
+        <strong>LangGraph runtime IDs (v1.11.0):</strong> the default LangGraph on-ramp enables
         <code>integrations.langgraph</code>. With <code>@config.apply</code>,
         Mycelium adds LangGraph’s trusted, hidden <code>ToolRuntime</code>
         parameter and maps its tool-call, thread, run, and node identifiers into

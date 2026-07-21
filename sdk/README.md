@@ -1,9 +1,9 @@
 # Mycelium runtime
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.10.1)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.11.0)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.10.1** (transition envelope).
+Current package: **mycelium-runtime v1.11.0** (transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -27,7 +27,7 @@ def subagent_task(task: str) -> dict:
     return run_slow_subagent(task)
 ```
 
-The default `mycelium init` YAML enables `integrations.langgraph`. LangGraph's
+In v1.11.0, the default `mycelium init` YAML enables `integrations.langgraph`. LangGraph's
 `ToolNode` / `create_agent` injects a hidden `ToolRuntime`, and Mycelium maps
 its `tool_call_id`, thread, run, and node into the transition key. No
 `tool_call_id` parameter is needed on your function. Explicit IDs still win;

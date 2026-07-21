@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.11.0 (2026-07-21)
+
+Minor: automatically propagate trusted LangGraph runtime identity into Mycelium transition keys, without coupling the core transition model to LangGraph.
+
+### LangGraph integration
+
+- Add the optional `mycelium-runtime[langgraph]` extra and `integrations.langgraph.enabled` YAML setting.
+- `@config.apply` adds LangGraph's hidden, trusted `ToolRuntime` parameter to configured ledgered tools and maps `tool_call_id`, thread ID, run ID, and graph node into Mycelium's generic dispatch/execution scope.
+- Explicit `request_id`, `tool_call_id`, and scope kwargs continue to override captured framework metadata; direct calls and custom executors keep the existing manual-ID path.
+- The default `mycelium init` LangGraph scaffold enables the integration; the full reference template documents it as optional.
+- Add real compiled-`ToolNode` conformance tests proving identical redispatches execute the underlying side-effecting tool once, plus config, precedence, scope, and fallback coverage.
+
 ## 1.10.1 (2026-07-20)
 
 Docs/packaging patch: fix stale PyPI/README version badge and root README heading. No code changes.
