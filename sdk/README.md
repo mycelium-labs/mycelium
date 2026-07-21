@@ -17,14 +17,15 @@ mycelium demo                  # see the bug and the fix (no LangGraph required)
 ```
 
 
-```python
-from mycelium import load_config
+```yaml
+tools:
+  subagent_task:
+    callable: my_agent.tools:subagent_task
+    side_effect_class: non_idempotent_mutate
+```
 
-config = load_config("mycelium.yaml")  # includes transition: + side_effect_class
-
-@config.apply
-def subagent_task(task: str) -> dict:
-    return run_slow_subagent(task)
+```bash
+mycelium run --config mycelium.yaml -- python -m my_agent
 ```
 
 In v1.11.0, the default `mycelium init` YAML enables `integrations.langgraph`. LangGraph's
@@ -32,6 +33,11 @@ In v1.11.0, the default `mycelium init` YAML enables `integrations.langgraph`. L
 its `tool_call_id`, thread, run, and node into the transition key. No
 `tool_call_id` parameter is needed on your function. Explicit IDs still win;
 custom tool executors may continue passing them manually.
+
+`mycelium run` wraps all configured tool/task callable paths before application
+startup and then replaces itself with the child Python process. Existing
+`@config.apply`, `@config.apply_task`, and `config.instrument` flows remain
+supported for explicit code-level control.
 
 ## What else it does
 
@@ -244,20 +250,38 @@ action_ledger:
 
 tools:
   send_payment:
+    callable: my_agent.tools:send_payment
     side_effect_class: keyed_mutate
     # spendability defaults to single_use for keyed_mutate
     retry_permission: manual_reconciliation_required
   search_docs:
+    callable: my_agent.tools:search_docs
     side_effect_class: read
     # spendability defaults to multi_use for read
 ```
 
-When enabled, `@config.apply` adds a hidden keyword-only
+When enabled, command mode or `@config.apply` adds a hidden keyword-only
 `runtime: ToolRuntime` parameter. LangGraph treats it as a trusted injected
 argument (not an LLM-visible tool input), while the original function remains
 unchanged. Calls outside LangGraph still work. This requires
 `mycelium-runtime[langgraph]` and LangGraph's `ToolNode` or `create_agent`;
 custom executors must pass IDs themselves.
+
+For zero-touch instrumentation, launch with:
+
+```bash
+mycelium run --config mycelium.yaml -- python -m my_agent
+```
+
+Every non-noop tool/task must declare a unique `callable: module:function`.
+Targets are imported and validated before the application entrypoint runs;
+missing/non-callable targets and partial Mycelium wrappers stop startup. A
+fully configured `@config.apply` or `@config.apply_task` target is skipped.
+Only the current Python interpreter is accepted, and `-E`, `-I`, and `-S` are
+rejected because they disable the startup hook. Keep target modules import-safe.
+Code that registers a function inside its own module before that import
+completes cannot be retroactively updated; move registration to the entrypoint
+or use explicit instrumentation for that target.
 
 Async tools:
 
@@ -565,6 +589,7 @@ audit_receipt:
 # Per-tool: side_effect_class + schemas
 tools:
   fetch_customer:
+    callable: my_agent.tools:fetch_customer
     side_effect_class: read
     protect: {entity_param: customer_id, ttl: 60}
     bounded:
@@ -572,6 +597,7 @@ tools:
         customer_id: {type: string, required: true, pattern: "^c\\d+$"}
 
   send_payment:
+    callable: my_agent.tools:send_payment
     side_effect_class: keyed_mutate
     bounded:
       schema:
@@ -579,10 +605,12 @@ tools:
         recipient: {type: string, required: true}
 
   search_docs:
+    callable: my_agent.tools:search_docs
     side_effect_class: read
 
 tasks:
   process_invoice:
+    callable: my_agent.tasks:process_invoice
     ledger: true
     id_from: [invoice_id]
 
@@ -595,6 +623,13 @@ history_guard:
 message_validator:
   enabled: true
 ```
+
+```bash
+# Zero-touch mode: callable paths above select the functions.
+mycelium run --config mycelium.yaml -- python -m my_agent
+```
+
+Or instrument explicitly in Python:
 
 ```python
 from mycelium import load_config

@@ -42,7 +42,7 @@
         "name": "How do I prevent duplicate tool execution in LangGraph?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Classify each tool (read vs keyed_mutate vs non_idempotent_mutate, etc.), enable transition: in mycelium.yaml, and use @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state and resolution gates: read tools poll or soft-block UNKNOWN; mutating tools hard-block or reconcile against the provider when you record external_operation_ref. pip install mycelium-runtime && mycelium demo"
+          "text": "Classify each tool (read vs keyed_mutate vs non_idempotent_mutate, etc.), enable transition: in mycelium.yaml, and use callable paths with mycelium run or @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state and resolution gates: read tools poll or soft-block UNKNOWN; mutating tools hard-block or reconcile against the provider when you record external_operation_ref. pip install mycelium-runtime && mycelium demo"
         }
       },
       {
@@ -428,10 +428,19 @@ pip install 'mycelium-runtime[postgres]'
 mycelium init              # on-ramp (transition + one ledgered tool)
 mycelium init --full       # reference: all guards (fill TODOs; not default)
 mycelium init --minimal    # smaller multi-guard scaffold
-mycelium demo              # langgraph#7417 bug and fix</pre>
+mycelium demo              # langgraph#7417 bug and fix
+mycelium run --config mycelium.yaml -- python -m my_agent</pre>
+      <p>
+        <strong>Zero-touch command mode:</strong> add a unique
+        <code>callable: module:function</code> to every configured tool/task.
+        <code>mycelium run</code> validates and wraps those functions before
+        the application starts, then preserves native argv, signals, working
+        directory, and exit status. Existing <code>@config.apply</code> and
+        <code>config.instrument</code> flows remain supported.
+      </p>
       <p>
         <strong>LangGraph runtime IDs (v1.11.0):</strong> the default LangGraph on-ramp enables
-        <code>integrations.langgraph</code>. With <code>@config.apply</code>,
+        <code>integrations.langgraph</code>. With command mode or <code>@config.apply</code>,
         Mycelium adds LangGraph’s trusted, hidden <code>ToolRuntime</code>
         parameter and maps its tool-call, thread, run, and node identifiers into
         the generic transition key. Explicit IDs still override captured values;
@@ -704,6 +713,7 @@ audit_receipt:
 
 tools:
   fetch_customer:
+    callable: my_agent.tools:fetch_customer
     side_effect_class: read
     protect: {entity_param: customer_id, ttl: 60}
     bounded:
@@ -714,6 +724,7 @@ tools:
         name: {type: string, required: true}
 
   delete_file:
+    callable: my_agent.tools:delete_file
     side_effect_class: non_idempotent_mutate
     bounded:
       schema:
@@ -722,6 +733,7 @@ tools:
       path_param: path
 
   send_payment:
+    callable: my_agent.tools:send_payment
     side_effect_class: keyed_mutate
     retry_permission: manual_reconciliation_required
     bounded:
@@ -730,6 +742,7 @@ tools:
         recipient: {type: string, required: true}
 
   search_docs:
+    callable: my_agent.tools:search_docs
     side_effect_class: read
     bounded:
       schema:
@@ -737,6 +750,7 @@ tools:
 
 tasks:
   process_invoice:
+    callable: my_agent.tasks:process_invoice
     ledger: true
     id_from: [invoice_id]
 
@@ -753,15 +767,17 @@ history_guard:
 
 message_validator:
   enabled: true</pre>
+      <pre># option A: zero-touch command mode
+mycelium run --config mycelium.yaml -- python -m my_agent</pre>
       <pre>from mycelium import load_config
 import my_tools
 
 config = load_config("mycelium.yaml")
 
-# option A: instrument a module
+# option B: instrument a module
 tools = config.instrument(my_tools)
 
-# option B: decorate one function (name must match tools: key)
+# option C: decorate one function (name must match tools: key)
 @config.apply
 def send_payment(amount: float, recipient: str) -> dict:
     return gateway.charge(amount, recipient)
@@ -773,6 +789,13 @@ def process_invoice(invoice_id: str) -> dict:
 with config.run(thread_id):
     messages = config.prepare_messages(messages)
     runner = config.build_runner(registry=config.registry)</pre>
+      <p>
+        Command mode fails closed for missing targets and partial wrappers, and
+        skips fully configured explicit wrappers. Keep target modules
+        import-safe. Registration performed inside a target module before its
+        import completes cannot be retroactively replaced; move that
+        registration to the entrypoint or use explicit instrumentation.
+      </p>
     </section>
 
     <section id="common-searches">

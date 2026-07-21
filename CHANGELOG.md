@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Command auto-instrumentation
+
+- Add `mycelium run --config mycelium.yaml -- python ...` to apply YAML tool/task guards without editing application functions.
+- Add validated, unique `callable: module:function` targets and explicit-name tool/task application helpers.
+- Fail closed on missing/non-callable targets, unsupported Python startup flags, and partially wrapped callables; skip fully configured wrappers to prevent double instrumentation.
+- Preserve child argv, environment, working directory, signals, and exit status by replacing the launcher process with the target Python interpreter.
+- Preserve optional LangGraph `ToolRuntime` identity propagation for command-wrapped tools.
+
 ## 1.11.0 (2026-07-21)
 
 Minor: automatically propagate trusted LangGraph runtime identity into Mycelium transition keys, without coupling the core transition model to LangGraph.

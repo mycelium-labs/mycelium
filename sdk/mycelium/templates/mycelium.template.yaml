@@ -13,7 +13,9 @@
 #      Defining a tool under tools: alone does NOT ledger it —
 #      empty allowlist = no duplicate-side-effect protection.
 #   2. Fill transition.agent_id / policy_version
-#   3. load_config + @config.apply / @config.apply_task (or config.instrument)
+#   3. Add callable: module:function to each configured entry, then use:
+#        mycelium run --config mycelium.yaml -- python -m your_package.app
+#      Or keep explicit @config.apply / @config.apply_task / config.instrument.
 #
 # storage (ledgers): memory | file | redis | postgres
 #   memory — process-local  |  file — needs path:
@@ -40,7 +42,7 @@
 #   `record_external_operation(provider_id_or_idempotency_key)` so an ambiguous
 #   transition can later be reconciled against the provider.
 # LangGraph: install `mycelium-runtime[langgraph]`, then enable the optional
-#   integration below. `@config.apply` adds an injected ToolRuntime parameter
+#   integration below. command mode or `@config.apply` adds ToolRuntime metadata
 #   and maps tool_call_id / thread_id / run_id / node into transition identity.
 # To reconcile automatically instead of hard-blocking, pass a read-only
 #   Reconciler in code: `@ledger_sync(reconciler=...)` or
@@ -116,11 +118,11 @@ audit_receipt:
 # ---------------------------------------------------------------------------
 tools: {}
 # One stub per side_effect_class (uncomment + rename):
-#   your_read_tool:                 {side_effect_class: read}
-#   your_idempotent_mutate_tool:    {side_effect_class: idempotent_mutate}
-#   your_keyed_mutate_tool:         {side_effect_class: keyed_mutate}
-#   your_non_idempotent_mutate_tool:{side_effect_class: non_idempotent_mutate}
-#   your_irreversible_tool:         {side_effect_class: irreversible}
+#   your_read_tool:                 {callable: package.tools:read, side_effect_class: read}
+#   your_idempotent_mutate_tool:    {callable: package.tools:update, side_effect_class: idempotent_mutate}
+#   your_keyed_mutate_tool:         {callable: package.tools:charge, side_effect_class: keyed_mutate}
+#   your_non_idempotent_mutate_tool:{callable: package.tools:send, side_effect_class: non_idempotent_mutate}
+#   your_irreversible_tool:         {callable: package.tools:delete, side_effect_class: irreversible}
 # Optional per tool: spendability: multi_use|single_use|non_replayable
 #   (omit to use class default), protect: {entity_param, ttl}, bounded: {schema: {}}
 

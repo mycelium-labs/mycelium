@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from mycelium import load_config
@@ -29,6 +30,7 @@ def test_init_writes_quickstart_template_by_default(tmp_path: Path) -> None:
     assert "agent id" in config.transition.agent_id
 
     assert config.tools["subagent_task"].side_effect_class == SideEffectClass.NON_IDEMPOTENT_MUTATE
+    assert config.tools["subagent_task"].callable_path == "your_package.tools:subagent_task"
 
 
 def test_init_writes_full_template(tmp_path: Path) -> None:
@@ -94,3 +96,39 @@ def test_init_force_overwrite(tmp_path: Path) -> None:
     out.write_text("existing", encoding="utf-8")
     assert main(["init", "-o", str(out), "--force"]) == 0
     assert "action_ledger:" in out.read_text(encoding="utf-8")
+
+
+def test_run_rejects_missing_command_and_unsafe_python_flags(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    config = tmp_path / "mycelium.yaml"
+    config.write_text(
+        """
+action_ledger: {storage: memory, tools: [print_once]}
+tools:
+  print_once:
+    callable: builtins:print
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["run", "--config", str(config), "--"]) == 2
+    assert "missing command" in capsys.readouterr().err
+
+    assert (
+        main(
+            [
+                "run",
+                "--config",
+                str(config),
+                "--",
+                sys.executable,
+                "-S",
+                "-c",
+                "pass",
+            ]
+        )
+        == 2
+    )
+    assert "disable safe Mycelium startup instrumentation" in capsys.readouterr().err

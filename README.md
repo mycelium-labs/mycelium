@@ -60,8 +60,22 @@ action_ledger:
 
 tools:
   my_side_effect_tool:
+    callable: my_app.tools:my_side_effect_tool
     side_effect_class: non_idempotent_mutate
 ```
+
+Launch your existing Python application without adding decorators:
+
+```bash
+mycelium run --config mycelium.yaml -- python -m my_app
+```
+
+`mycelium run` validates and wraps every configured callable before the
+application starts. It preserves the child process's arguments, working
+directory, signals, and exit code. The command accepts the current Python
+interpreter only.
+
+Explicit instrumentation remains supported when you prefer code-level control:
 
 ```python
 from mycelium import load_config
@@ -72,6 +86,11 @@ config = load_config("mycelium.yaml")
 def my_side_effect_tool(...) -> dict:
     ...
 ```
+
+Do not combine standalone guard decorators with command mode on the same
+function. Fully configured `@config.apply` wrappers are detected and skipped.
+Keep callable modules import-safe: registrations performed inside a target
+module while that module is still importing cannot be retroactively replaced.
 
 With the optional LangGraph integration, `ToolNode` / `create_agent` injects
 `ToolRuntime`; Mycelium automatically maps its `tool_call_id`, thread, run, and
