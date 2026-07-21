@@ -34,6 +34,7 @@ audit_receipt:
 
 tools:
   fetch_customer:
+    callable: your_package.tools:fetch_customer
     protect:
       entity_param: customer_id
       ttl: 60
@@ -52,6 +53,7 @@ tools:
           required: true
 
   search_docs:
+    callable: your_package.tools:search_docs
     bounded:
       schema:
         query:
@@ -59,6 +61,7 @@ tools:
           required: true
 
   delete_file:
+    callable: your_package.tools:delete_file
     side_effect_class: non_idempotent_mutate
     bounded:
       schema:
@@ -71,6 +74,7 @@ tools:
 
 tasks:
   process_invoice:
+    callable: your_package.tasks:process_invoice
     ledger: true
     id_from:
       - invoice_id

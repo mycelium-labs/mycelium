@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import functools
 import inspect
+import re
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -70,6 +72,88 @@ class ConfigError(Exception):
     """Raised when a Mycelium config file is invalid or inconsistent."""
 
 
+_CALLABLE_PATH_RE = re.compile(
+    r"^(?:[A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*:"
+    r"[A-Za-z_][A-Za-z0-9_]*$"
+)
+_CONFIG_APPLIED_MARKER = "_mycelium_config_applied"
+_GUARD_MARKERS = (
+    "_mycelium_ledger",
+    "_mycelium_task_ledger",
+    "_mycelium_bounded",
+    "_mycelium_protected",
+    "_mycelium_langgraph_integration",
+)
+
+
+def _parse_callable_path(raw: Any, *, kind: str, name: str) -> str | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not _CALLABLE_PATH_RE.fullmatch(raw):
+        raise ConfigError(
+            f"{kind} {name!r}.callable must be 'package.module:function'"
+        )
+    return raw
+
+
+def _check_existing_config_wrapper(
+    func: Callable[..., Any],
+    *,
+    kind: str,
+    name: str,
+) -> bool:
+    applied = getattr(func, _CONFIG_APPLIED_MARKER, None)
+    if applied is not None:
+        if applied == (kind, name):
+            return True
+        raise ConfigError(
+            f"{kind} {name!r} is already configured as "
+            f"{applied[0]} {applied[1]!r}"
+        )
+    if any(getattr(func, marker, False) for marker in _GUARD_MARKERS):
+        raise ConfigError(
+            f"{kind} {name!r} is already partially Mycelium-wrapped; "
+            "use either @config.apply / @config.apply_task or 'mycelium run', "
+            "not standalone guard decorators plus auto-instrumentation"
+        )
+    return False
+
+
+def _mark_config_applied(
+    func: Callable[..., Any],
+    *,
+    kind: str,
+    name: str,
+) -> None:
+    setattr(func, _CONFIG_APPLIED_MARKER, (kind, name))
+
+
+def _callable_with_name(
+    func: Callable[..., Any],
+    name: str,
+) -> Callable[..., Any]:
+    """Return a metadata-preserving alias whose guard identity is ``name``."""
+    if func.__name__ == name:
+        return func
+    if inspect.iscoroutinefunction(func):
+
+        @functools.wraps(func)
+        async def async_alias(*args: Any, **kwargs: Any) -> Any:
+            return await func(*args, **kwargs)
+
+        alias: Callable[..., Any] = async_alias
+    else:
+
+        @functools.wraps(func)
+        def sync_alias(*args: Any, **kwargs: Any) -> Any:
+            return func(*args, **kwargs)
+
+        alias = sync_alias
+    alias.__name__ = name
+    alias.__qualname__ = name
+    return alias
+
+
 @dataclass(frozen=True)
 class ToolConfig:
     """Parsed configuration for a single tool."""
@@ -84,6 +168,7 @@ class ToolConfig:
     side_effect_boundary: SideEffectBoundary | None = None
     spendability: Spendability | None = None
     provider_idempotency_key_param: str | None = None
+    callable_path: str | None = None
 
     def is_noop(self) -> bool:
         return (
@@ -101,9 +186,19 @@ class TaskConfig:
     name: str
     ledger: dict[str, Any] | None = None
     audit_receipt: bool = False
+    callable_path: str | None = None
 
     def is_noop(self) -> bool:
         return self.ledger is None and not self.audit_receipt
+
+
+@dataclass(frozen=True)
+class AutoInstrumentationTarget:
+    """A YAML entry resolved by command-based auto-instrumentation."""
+
+    kind: str
+    name: str
+    callable_path: str
 
 
 @dataclass
@@ -136,11 +231,21 @@ class MyceliumConfig:
         Guard order (outermost first):
         ``@ledger`` -> ``@bounded`` -> ``@protect`` -> ``func``
         """
-        name = func.__name__
+        return self.apply_tool(func.__name__, func)
+
+    def apply_tool(
+        self,
+        name: str,
+        func: Callable[..., Any],
+    ) -> Callable[..., Any]:
+        """Apply the tool config selected by explicit logical ``name``."""
         tool_config = self.tools.get(name)
         if tool_config is None or tool_config.is_noop():
             return func
+        if _check_existing_config_wrapper(func, kind="tool", name=name):
+            return func
 
+        func = _callable_with_name(func, name)
         is_async = inspect.iscoroutinefunction(func)
 
         # Apply protect first so it sits inside bounded.
@@ -183,6 +288,7 @@ class MyceliumConfig:
                 except LangGraphIntegrationError as exc:
                     raise ConfigError(str(exc)) from exc
 
+        _mark_config_applied(func, kind="tool", name=name)
         return func
 
     @property
@@ -192,15 +298,58 @@ class MyceliumConfig:
             return False
         return bool(self.integrations.get("langgraph", {}).get("enabled", False))
 
+    def auto_instrumentation_targets(self) -> list[AutoInstrumentationTarget]:
+        """Return callable targets, requiring paths for every configured entry."""
+        targets: list[AutoInstrumentationTarget] = []
+        missing: list[str] = []
+        for name, tool in self.tools.items():
+            if tool.is_noop():
+                continue
+            if tool.callable_path is None:
+                missing.append(f"tool {name!r}")
+            else:
+                targets.append(
+                    AutoInstrumentationTarget("tool", name, tool.callable_path)
+                )
+        for name, task in (self.tasks or {}).items():
+            if task.is_noop():
+                continue
+            if task.callable_path is None:
+                missing.append(f"task {name!r}")
+            else:
+                targets.append(
+                    AutoInstrumentationTarget("task", name, task.callable_path)
+                )
+        if missing:
+            joined = ", ".join(missing)
+            raise ConfigError(
+                f"'mycelium run' requires callable paths for: {joined}"
+            )
+        if not targets:
+            raise ConfigError(
+                "'mycelium run' found no configured tool/task callable paths"
+            )
+        return targets
+
     def apply_task(self, func: Callable[..., Any]) -> Callable[..., Any]:
         """Decorator that applies configured task-level guards to a function."""
-        name = func.__name__
+        return self.apply_named_task(func.__name__, func)
+
+    def apply_named_task(
+        self,
+        name: str,
+        func: Callable[..., Any],
+    ) -> Callable[..., Any]:
+        """Apply the task config selected by explicit logical ``name``."""
         if self.tasks is None:
             return func
         task_config = self.tasks.get(name)
         if task_config is None or task_config.is_noop():
             return func
+        if _check_existing_config_wrapper(func, kind="task", name=name):
+            return func
 
+        func = _callable_with_name(func, name)
         is_async = inspect.iscoroutinefunction(func)
         storage = self._build_task_ledger_storage(task_config.ledger)
         id_from = list(task_config.ledger.get("id_from", [])) if task_config.ledger else []
@@ -215,8 +364,19 @@ class MyceliumConfig:
             return func
 
         if is_async:
-            return task_ledger(storage=storage, id_from=id_from, audit_emitter=audit_emitter)(func)
-        return task_ledger_sync(storage=storage, id_from=id_from, audit_emitter=audit_emitter)(func)
+            func = task_ledger(
+                storage=storage,
+                id_from=id_from,
+                audit_emitter=audit_emitter,
+            )(func)
+        else:
+            func = task_ledger_sync(
+                storage=storage,
+                id_from=id_from,
+                audit_emitter=audit_emitter,
+            )(func)
+        _mark_config_applied(func, kind="task", name=name)
+        return func
 
     @property
     def registry(self) -> ToolRegistry:
@@ -658,6 +818,12 @@ def _parse_tool_config(
             )
         provider_idempotency_key_param = value
 
+    callable_path = _parse_callable_path(
+        raw.get("callable"),
+        kind="tool",
+        name=name,
+    )
+
     return ToolConfig(
         name=name,
         protect=protect,
@@ -669,6 +835,7 @@ def _parse_tool_config(
         side_effect_boundary=side_effect_boundary,
         spendability=spendability,
         provider_idempotency_key_param=provider_idempotency_key_param,
+        callable_path=callable_path,
     )
 
 
@@ -698,7 +865,17 @@ def _parse_task_config(
     if audit_auto and ledger is not None and raw.get("audit_receipt") is not False:
         audit_receipt = True
 
-    return TaskConfig(name=name, ledger=ledger, audit_receipt=audit_receipt)
+    callable_path = _parse_callable_path(
+        raw.get("callable"),
+        kind="task",
+        name=name,
+    )
+    return TaskConfig(
+        name=name,
+        ledger=ledger,
+        audit_receipt=audit_receipt,
+        callable_path=callable_path,
+    )
 
 
 def _normalize_ledger_config(
@@ -756,6 +933,7 @@ def _apply_action_ledger_tools(
             side_effect_boundary=existing.side_effect_boundary,
             spendability=existing.spendability,
             provider_idempotency_key_param=existing.provider_idempotency_key_param,
+            callable_path=existing.callable_path,
         )
 
 
@@ -792,6 +970,7 @@ def _apply_task_ledger_tasks(
             name=existing.name,
             ledger=ledger,
             audit_receipt=audit_receipt,
+            callable_path=existing.callable_path,
         )
 
 
@@ -868,6 +1047,27 @@ def _validate_transition_tools(
                 f"tool '{name}' has ledger but no side_effect_class; "
                 "required when 'transition' is configured"
             )
+
+
+def _validate_callable_targets(
+    tools: dict[str, ToolConfig],
+    tasks: dict[str, TaskConfig],
+) -> None:
+    seen: dict[str, tuple[str, str]] = {}
+    entries = [
+        *((tool.callable_path, "tool", name) for name, tool in tools.items()),
+        *((task.callable_path, "task", name) for name, task in tasks.items()),
+    ]
+    for callable_path, kind, name in entries:
+        if callable_path is None:
+            continue
+        previous = seen.get(callable_path)
+        if previous is not None:
+            raise ConfigError(
+                f"callable {callable_path!r} is configured more than once: "
+                f"{previous[0]} {previous[1]!r} and {kind} {name!r}"
+            )
+        seen[callable_path] = (kind, name)
 
 
 def _parse_integrations(data: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
@@ -960,6 +1160,8 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
 
     if task_ledger_raw:
         _apply_task_ledger_tasks(tasks, task_ledger_raw, audit_auto=audit_auto)
+
+    _validate_callable_targets(tools, tasks)
 
     registry_raw = data.get("registry", {})
     if not isinstance(registry_raw, dict):

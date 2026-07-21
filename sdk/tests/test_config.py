@@ -10,6 +10,7 @@ import pytest
 from mycelium import (
     ConfigError,
     ToolBoundaryError,
+    ledger_sync,
     load_config,
     load_config_from_string,
 )
@@ -245,6 +246,113 @@ def test_empty_config_is_valid() -> None:
     assert config.runner_settings == {}
     assert config.build_history_guard() is None
     assert config.build_message_validator() is None
+
+
+def test_callable_paths_parse_for_tools_and_tasks() -> None:
+    config = load_config_from_string(
+        """
+action_ledger: {storage: memory, tools: [send_payment]}
+task_ledger: {storage: memory, tasks: [process_invoice]}
+tools:
+  send_payment:
+    callable: app.tools.payments:charge
+tasks:
+  process_invoice:
+    callable: app.tasks.invoices:run
+"""
+    )
+
+    assert (
+        config.tools["send_payment"].callable_path
+        == "app.tools.payments:charge"
+    )
+    assert (
+        config.tasks["process_invoice"].callable_path
+        == "app.tasks.invoices:run"
+    )
+    targets = config.auto_instrumentation_targets()
+    assert [(target.kind, target.name) for target in targets] == [
+        ("tool", "send_payment"),
+        ("task", "process_invoice"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "callable_path",
+    ["send_payment", "app.tools", "app-tools:send", "app.tools:send.call"],
+)
+def test_invalid_callable_path_is_rejected(callable_path: str) -> None:
+    with pytest.raises(ConfigError, match="package.module:function"):
+        load_config_from_string(
+            f"""
+tools:
+  send_payment:
+    callable: {callable_path}
+"""
+        )
+
+
+def test_duplicate_callable_target_is_rejected() -> None:
+    with pytest.raises(ConfigError, match="configured more than once"):
+        load_config_from_string(
+            """
+tools:
+  send_payment:
+    callable: app.tools:send
+    ledger: true
+tasks:
+  send_task:
+    callable: app.tools:send
+    ledger: true
+"""
+        )
+
+
+def test_auto_instrumentation_requires_paths_for_all_configured_entries() -> None:
+    config = load_config_from_string(
+        """
+tools:
+  send_payment:
+    ledger: true
+"""
+    )
+    with pytest.raises(ConfigError, match="requires callable paths"):
+        config.auto_instrumentation_targets()
+
+
+def test_apply_tool_uses_explicit_logical_name_and_is_idempotent() -> None:
+    config = load_config_from_string(
+        """
+action_ledger: {storage: memory, tools: [send_payment]}
+tools:
+  send_payment: {}
+"""
+    )
+
+    def charge(amount: float) -> float:
+        return amount
+
+    wrapped = config.apply_tool("send_payment", charge)
+    assert wrapped.__name__ == "send_payment"
+    assert config.apply_tool("send_payment", wrapped) is wrapped
+    assert wrapped(amount=2.0, request_id="call_1") == 2.0
+
+
+def test_apply_tool_rejects_partial_manual_wrapping() -> None:
+    config = load_config_from_string(
+        """
+action_ledger: {storage: memory, tools: [send_payment]}
+tools:
+  send_payment: {}
+"""
+    )
+
+    @ledger_sync()
+    def charge(amount: float) -> float:
+        return amount
+
+    with pytest.raises(ConfigError, match="partially Mycelium-wrapped"):
+        config.apply_tool("send_payment", charge)
 
 
 def test_load_config_from_file(tmp_path: Path) -> None:

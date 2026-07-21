@@ -8,16 +8,9 @@
 # Next:
 #   1. Fill every <TODO: …> below; rename subagent_task to match your tool.
 #   2. Install `mycelium-runtime[langgraph]`; ToolRuntime IDs are propagated.
-#   3. In code:
-#        from mycelium import load_config
-#        config = load_config("mycelium.yaml")
-#
-#        @config.apply
-#        def subagent_task(task: str, duration_seconds: int) -> dict:
-#            with side_effect():                 # marks the point of no return
-#                run = run_slow_subagent(task)
-#                record_external_operation(run.id)  # provider handle for reconcile
-#            return run
+#   3. Put subagent_task at the callable path below, then launch:
+#        mycelium run --config mycelium.yaml -- python -m your_package.app
+#      Or keep explicit code-level control with @config.apply.
 
 integrations:
   langgraph:
@@ -35,4 +28,5 @@ action_ledger:
 
 tools:
   subagent_task:
+    callable: your_package.tools:subagent_task
     side_effect_class: non_idempotent_mutate
