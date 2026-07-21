@@ -50,6 +50,10 @@ dev = [
     "pytest-asyncio",
     "ruff",
     "fakeredis",
+    "langgraph>=1.2.9",
+]
+langgraph = [
+    "langgraph>=1.2.9",
 ]
 
 [project.scripts]

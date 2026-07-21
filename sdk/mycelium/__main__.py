@@ -35,8 +35,8 @@ def cmd_init(output: Path, *, full: bool, minimal: bool, force: bool) -> int:
     print(f"Wrote {output} ({label} template)")
     if label == "quickstart":
         print(
-            "Next: rename agent_id/subagent_task, pass tool_call_id from LangGraph, "
-            "@config.apply in code."
+            "Next: install mycelium-runtime[langgraph], rename agent_id/subagent_task, "
+            "then use @config.apply in code."
         )
         print("Try: mycelium demo")
     else:

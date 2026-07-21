@@ -26,6 +26,10 @@ from mycelium.audit_receipt import (
     resolve_signing_key,
 )
 from mycelium.history_guard import HistoryGuard
+from mycelium.integrations.langgraph import (
+    LangGraphIntegrationError,
+    instrument_langgraph_tool,
+)
 from mycelium.message_validator import MessageValidator
 from mycelium.protect import protect, protect_sync
 from mycelium.session import Session
@@ -117,6 +121,7 @@ class MyceliumConfig:
     transition: TransitionConfig | None = None
     action_ledger: dict[str, Any] | None = None
     task_ledger_defaults: dict[str, Any] | None = None
+    integrations: dict[str, dict[str, Any]] | None = None
     _audit_emitter: AuditReceiptEmitter | None = None
     _state_flush: StateFlush | None = None
     _audit_auto: bool = False
@@ -172,7 +177,20 @@ class MyceliumConfig:
                     **ledger_kwargs,
                 )(func)
 
+            if self.langgraph_enabled:
+                try:
+                    func = instrument_langgraph_tool(func)
+                except LangGraphIntegrationError as exc:
+                    raise ConfigError(str(exc)) from exc
+
         return func
+
+    @property
+    def langgraph_enabled(self) -> bool:
+        """Whether automatic LangGraph ToolRuntime identity is enabled."""
+        if self.integrations is None:
+            return False
+        return bool(self.integrations.get("langgraph", {}).get("enabled", False))
 
     def apply_task(self, func: Callable[..., Any]) -> Callable[..., Any]:
         """Decorator that applies configured task-level guards to a function."""
@@ -852,6 +870,36 @@ def _validate_transition_tools(
             )
 
 
+def _parse_integrations(data: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
+    raw = data.get("integrations")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConfigError("'integrations' must be a mapping")
+
+    unknown = set(raw) - {"langgraph"}
+    if unknown:
+        names = ", ".join(sorted(str(name) for name in unknown))
+        raise ConfigError(f"unsupported integration(s): {names}")
+
+    langgraph_raw = raw.get("langgraph")
+    if langgraph_raw is None:
+        return {}
+    if isinstance(langgraph_raw, bool):
+        return {"langgraph": {"enabled": langgraph_raw}}
+    if not isinstance(langgraph_raw, dict):
+        raise ConfigError("'integrations.langgraph' must be a mapping or boolean")
+
+    unknown_langgraph = set(langgraph_raw) - {"enabled"}
+    if unknown_langgraph:
+        names = ", ".join(sorted(str(name) for name in unknown_langgraph))
+        raise ConfigError(f"unsupported 'integrations.langgraph' option(s): {names}")
+    enabled = langgraph_raw.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ConfigError("'integrations.langgraph.enabled' must be a boolean")
+    return {"langgraph": {"enabled": enabled}}
+
+
 def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
     if not isinstance(data, dict):
         raise ConfigError("config root must be a mapping")
@@ -940,6 +988,8 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
     if state_flush_raw is not None and not isinstance(state_flush_raw, dict):
         raise ConfigError("'state_flush' must be a mapping")
 
+    integrations = _parse_integrations(data)
+
     return MyceliumConfig(
         tools=tools,
         tasks=tasks,
@@ -952,6 +1002,7 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
         transition=transition,
         action_ledger=action_ledger_raw,
         task_ledger_defaults=task_ledger_raw,
+        integrations=integrations,
         _audit_auto=audit_auto,
     )
 

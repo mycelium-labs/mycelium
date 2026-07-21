@@ -34,6 +34,7 @@ Not Langfuse. Use both if you want traces and guards. Full resolution rules: [sd
 
 ```bash
 pip install mycelium-runtime
+pip install 'mycelium-runtime[langgraph]'  # automatic LangGraph runtime IDs
 mycelium demo              # see the bug and the fix
 mycelium init              # on-ramp: transition + one ledgered tool → mycelium.yaml
 mycelium init --full       # reference: all guards (fill TODOs; not the default)
@@ -44,6 +45,10 @@ mycelium init --minimal    # smaller multi-guard scaffold
 
 ```yaml
 # after: mycelium init
+integrations:
+  langgraph:
+    enabled: true
+
 transition:
   agent_id: my-agent
   policy_version: "2026.07.1"
@@ -66,11 +71,15 @@ config = load_config("mycelium.yaml")
 @config.apply
 def my_side_effect_tool(...) -> dict:
     ...
-
-my_side_effect_tool(..., tool_call_id=call["id"])
 ```
 
-Pass `tool_call_id` from your framework. Redispatch resolves the existing transition: read tools poll/soft-block; mutating tools hard-block or reconcile against the provider when you record `external_operation_ref`.
+With the optional LangGraph integration, `ToolNode` / `create_agent` injects
+`ToolRuntime`; Mycelium automatically maps its `tool_call_id`, thread, run, and
+node into transition identity. Explicit IDs still override captured values.
+Custom tool executors can continue passing `tool_call_id` manually. Redispatch
+resolves the existing transition: read tools poll/soft-block; mutating tools
+hard-block or reconcile against the provider when you record
+`external_operation_ref`.
 
 Multi-worker / cloud: `pip install 'mycelium-runtime[redis]'`. See the [handbook](https://mycelium-labs.github.io/mycelium/).
 

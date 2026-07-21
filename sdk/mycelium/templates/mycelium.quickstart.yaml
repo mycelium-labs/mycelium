@@ -7,7 +7,7 @@
 #
 # Next:
 #   1. Fill every <TODO: …> below; rename subagent_task to match your tool.
-#   2. Pass tool_call_id from LangGraph into the tool kwargs.
+#   2. Install `mycelium-runtime[langgraph]`; ToolRuntime IDs are propagated.
 #   3. In code:
 #        from mycelium import load_config
 #        config = load_config("mycelium.yaml")
@@ -18,6 +18,10 @@
 #                run = run_slow_subagent(task)
 #                record_external_operation(run.id)  # provider handle for reconcile
 #            return run
+
+integrations:
+  langgraph:
+    enabled: true
 
 transition:
   agent_id: "<TODO: fill with your agent id — used in transition keys and receipts>"

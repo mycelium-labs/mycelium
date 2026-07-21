@@ -387,15 +387,30 @@ _execution_scope_var: ContextVar[TransitionScope | None] = ContextVar(
     default=None,
 )
 
+_dispatch_id_var: ContextVar[str | None] = ContextVar(
+    "mycelium_dispatch_id",
+    default=None,
+)
+
 
 def get_active_execution_scope() -> TransitionScope | None:
     """Return the active execution scope, if any."""
     return _execution_scope_var.get()
 
 
+def get_active_dispatch_id() -> str | None:
+    """Return the framework dispatch identity active for this call, if any."""
+    return _dispatch_id_var.get()
+
+
 def execution_scope(scope: TransitionScope) -> AbstractContextManager[TransitionScope]:
     """Context manager that sets the active execution scope."""
     return _ExecutionScopeContext(scope)
+
+
+def dispatch_scope(dispatch_id: str) -> AbstractContextManager[str]:
+    """Set a framework-supplied dispatch identity for transition derivation."""
+    return _DispatchScopeContext(dispatch_id)
 
 
 class _ExecutionScopeContext(AbstractContextManager[TransitionScope]):
@@ -410,6 +425,22 @@ class _ExecutionScopeContext(AbstractContextManager[TransitionScope]):
     def __exit__(self, *_: Any) -> bool:
         if self._token is not None:
             _execution_scope_var.reset(self._token)
+            self._token = None
+        return False
+
+
+class _DispatchScopeContext(AbstractContextManager[str]):
+    def __init__(self, dispatch_id: str) -> None:
+        self._dispatch_id = dispatch_id
+        self._token: Token[str | None] | None = None
+
+    def __enter__(self) -> str:
+        self._token = _dispatch_id_var.set(self._dispatch_id)
+        return self._dispatch_id
+
+    def __exit__(self, *_: Any) -> bool:
+        if self._token is not None:
+            _dispatch_id_var.reset(self._token)
             self._token = None
         return False
 
@@ -450,12 +481,12 @@ def args_fingerprint(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
 
 
 def derive_dispatch_id(kwargs: dict[str, Any]) -> str | None:
-    """Return dispatch identity when the caller or framework supplies one."""
+    """Return explicit dispatch identity, then any active framework identity."""
     if "tool_call_id" in kwargs:
         return str(kwargs["tool_call_id"])
     if "request_id" in kwargs:
         return str(kwargs["request_id"])
-    return None
+    return get_active_dispatch_id()
 
 
 def resolve_scope(
@@ -591,8 +622,10 @@ __all__ = [
     "derive_dispatch_id",
     "derive_transition_key",
     "derive_transition_key_for_call",
+    "dispatch_scope",
     "extract_provider_idempotency_key",
     "execution_scope",
+    "get_active_dispatch_id",
     "get_active_execution_scope",
     "legacy_status_from_terminal",
     "parse_side_effect_class",

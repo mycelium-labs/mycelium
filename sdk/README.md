@@ -10,7 +10,7 @@ Current package: **mycelium-runtime v1.10.1** (transition envelope).
 **LangGraph Cloud redispatches a long tool call while the first is still running.** Both complete. You pay twice. Side effects run twice. [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417)
 
 ```bash
-pip install mycelium-runtime   # Python 3.10+
+pip install 'mycelium-runtime[langgraph]'  # Python 3.10+; automatic runtime IDs
 mycelium init                  # on-ramp scaffold (transition + one ledgered tool)
 mycelium init --full           # reference scaffold (all guards; fill TODOs)
 mycelium demo                  # see the bug and the fix (no LangGraph required)
@@ -25,10 +25,13 @@ config = load_config("mycelium.yaml")  # includes transition: + side_effect_clas
 @config.apply
 def subagent_task(task: str) -> dict:
     return run_slow_subagent(task)
-
-# Pass tool_call_id from LangGraph; redispatch resolves the existing transition
-subagent_task(task="analyze_market", tool_call_id=call["id"])
 ```
+
+The default `mycelium init` YAML enables `integrations.langgraph`. LangGraph's
+`ToolNode` / `create_agent` injects a hidden `ToolRuntime`, and Mycelium maps
+its `tool_call_id`, thread, run, and node into the transition key. No
+`tool_call_id` parameter is needed on your function. Explicit IDs still win;
+custom tool executors may continue passing them manually.
 
 ## What else it does
 
@@ -46,6 +49,7 @@ Framework-agnostic. Raw message lists and plain Python functions (LangGraph, Cre
 
 ```bash
 pip install mycelium-runtime
+pip install 'mycelium-runtime[langgraph]'  # optional automatic LangGraph IDs
 mycelium init              # on-ramp: duplicate-tool fix → ./mycelium.yaml
 mycelium init --full       # reference: every guard section (not the default)
 mycelium init --minimal    # smaller multi-guard scaffold
@@ -224,6 +228,10 @@ send_payment(amount=100.0, recipient="acct_123", tool_call_id="call_abc")
 Or wire from YAML (recommended):
 
 ```yaml
+integrations:
+  langgraph:
+    enabled: true
+
 transition:
   agent_id: payment-agent
   policy_version: "2026.07.1"
@@ -243,6 +251,13 @@ tools:
     side_effect_class: read
     # spendability defaults to multi_use for read
 ```
+
+When enabled, `@config.apply` adds a hidden keyword-only
+`runtime: ToolRuntime` parameter. LangGraph treats it as a trusted injected
+argument (not an LLM-visible tool input), while the original function remains
+unchanged. Calls outside LangGraph still work. This requires
+`mycelium-runtime[langgraph]` and LangGraph's `ToolNode` or `create_agent`;
+custom executors must pass IDs themselves.
 
 Async tools:
 

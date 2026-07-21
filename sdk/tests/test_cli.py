@@ -14,6 +14,9 @@ def test_init_writes_quickstart_template_by_default(tmp_path: Path) -> None:
     assert main(["init", "-o", str(out)]) == 0
     text = out.read_text(encoding="utf-8")
     assert "transition:" in text
+    assert "integrations:" in text
+    assert "langgraph:" in text
+    assert "enabled: true" in text
     assert "action_ledger:" in text
     assert "subagent_task" in text
     assert "side_effect_class: non_idempotent_mutate" in text
@@ -21,6 +24,7 @@ def test_init_writes_quickstart_template_by_default(tmp_path: Path) -> None:
 
     config = load_config(out)
     assert config.transition is not None
+    assert config.langgraph_enabled
     assert config.transition.agent_id.startswith("<TODO:")
     assert "agent id" in config.transition.agent_id
 
