@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.13.1 (2026-07-22)
+
+Docs/packaging patch: sync version banners and PyPI long description after the v1.13.0 `REPAIR` release. No code changes.
+
+### Docs
+
+- Bust shields.io badge cache keys to `release=1.13.1` (root README, SDK README, handbook).
+- Root / SDK / handbook version lines: v1.12.0 → v1.13.1; root “What it does” → v1.13.x.
+- SDK current-package line mentions `REPAIR` gate.
+- Republish so PyPI’s project description picks up the new banners.
+
 ## 1.13.0 (2026-07-22)
 
 Minor: first-class ``REPAIR`` resolution gate for incomplete durable transition records. Heal missing context before execute; do not spawn a second side effect.
