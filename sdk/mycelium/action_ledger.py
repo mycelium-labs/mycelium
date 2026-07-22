@@ -40,9 +40,11 @@ from mycelium.transition import (
 from mycelium.transition_resolution import (
     TransitionGate,
     hard_block_message,
+    repair_transition_fields,
     resolve_read_only_gate,
     resolve_side_effect_gate,
     soft_block_message,
+    transition_needs_repair,
 )
 
 if TYPE_CHECKING:
@@ -167,9 +169,11 @@ def renew_lease(*, lease_ttl: float | None = None) -> None:
     """Extend the active transition's execution lease.
 
     Call during long-running side-effecting work so a still-alive worker does
-    not look ``EXPIRED`` to a redispatched peer. Lease is resolution metadata
-    (not part of ``transition_key``); renewing keeps the same transition
-    ``IN_FLIGHT`` / ``POLL`` instead of opening a reclaim path.
+    not look ``EXPIRED`` to a redispatched peer. This is the owner-side renew
+    half of ``REPAIR`` taxonomy (peers still ``POLL`` on a held lease; incomplete
+    durable fields are healed via ``ActionLedger.repair_transition``). Lease is
+    resolution metadata (not part of ``transition_key``); renewing keeps the
+    same transition ``IN_FLIGHT`` / ``POLL`` instead of opening a reclaim path.
 
     Outside a ledgered tool this is a no-op with a warning.
     """
@@ -223,6 +227,11 @@ class LedgerEntry:
     side_effect_boundary: str = SideEffectBoundary.NOT_CROSSED.value
     external_operation_ref: str | None = None
     provider_idempotency_key: str | None = None
+
+    def __post_init__(self) -> None:
+        # Match from_dict / claim: durable key defaults to request_id.
+        if self.idempotency_key is None:
+            object.__setattr__(self, "idempotency_key", self.request_id)
 
     def resolved_terminal_outcome(self, *, now: float | None = None) -> TerminalOutcome:
         return resolve_terminal_outcome(
@@ -522,12 +531,15 @@ class ActionLedger:
 
         while True:
             existing = self.get(request_id)
-            if existing is not None and (
-                resolve_read_only_gate(existing) == TransitionGate.SOFT_BLOCK
-            ):
-                return self._resolve_read_only_soft_block(
-                    request_id, tool, args, kwargs, existing
-                )
+            if existing is not None:
+                gate = resolve_read_only_gate(existing)
+                if gate == TransitionGate.REPAIR:
+                    self.repair_transition(request_id)
+                    continue
+                if gate == TransitionGate.SOFT_BLOCK:
+                    return self._resolve_read_only_soft_block(
+                        request_id, tool, args, kwargs, existing
+                    )
 
             entry = self._new_inflight_entry(request_id, tool, args, kwargs)
             outcome, existing = self._storage.try_claim_inflight(entry, lease_ttl=ttl)
@@ -621,12 +633,15 @@ class ActionLedger:
 
         while True:
             existing = self.get(request_id)
-            if existing is not None and (
-                resolve_read_only_gate(existing) == TransitionGate.SOFT_BLOCK
-            ):
-                return self._resolve_read_only_soft_block(
-                    request_id, tool, args, kwargs, existing
-                )
+            if existing is not None:
+                gate = resolve_read_only_gate(existing)
+                if gate == TransitionGate.REPAIR:
+                    self.repair_transition(request_id)
+                    continue
+                if gate == TransitionGate.SOFT_BLOCK:
+                    return self._resolve_read_only_soft_block(
+                        request_id, tool, args, kwargs, existing
+                    )
 
             entry = self._new_inflight_entry(request_id, tool, args, kwargs)
             outcome, existing = self._storage.try_claim_inflight(entry, lease_ttl=ttl)
@@ -839,6 +854,9 @@ class ActionLedger:
                     binding,
                     incoming_provider_idempotency_key=incoming_key,
                 )
+                if gate == TransitionGate.REPAIR:
+                    self.repair_transition(request_id)
+                    continue
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
@@ -866,6 +884,9 @@ class ActionLedger:
                     binding,
                     incoming_provider_idempotency_key=incoming_key,
                 )
+                if gate == TransitionGate.REPAIR:
+                    self.repair_transition(request_id)
+                    continue
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
@@ -964,6 +985,9 @@ class ActionLedger:
                     binding,
                     incoming_provider_idempotency_key=incoming_key,
                 )
+                if gate == TransitionGate.REPAIR:
+                    self.repair_transition(request_id)
+                    continue
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
@@ -991,6 +1015,9 @@ class ActionLedger:
                     binding,
                     incoming_provider_idempotency_key=incoming_key,
                 )
+                if gate == TransitionGate.REPAIR:
+                    self.repair_transition(request_id)
+                    continue
                 if gate == TransitionGate.RETURN:
                     return existing
                 if gate == TransitionGate.HARD_BLOCK:
@@ -1139,10 +1166,13 @@ class ActionLedger:
     ) -> LedgerEntry:
         """Extend ``lease_until`` for an in-flight transition.
 
-        Only applies while the stored terminal outcome is still ``IN_FLIGHT``
-        (before lease expiry is applied). Renewing after the lease has already
-        expired raises :class:`LedgerError` — reclaim/reconcile must run instead
-        of silently re-asserting ownership.
+        Owner-side heartbeat for long work: keeps peers on ``POLL`` instead of
+        opening reclaim. This is the renew half of the ``REPAIR`` taxonomy
+        (heal incomplete durable fields via :meth:`repair_transition`; extend a
+        still-held lease here). Only applies while the stored terminal outcome
+        is still ``IN_FLIGHT`` (before lease expiry is applied). Renewing after
+        the lease has already expired raises :class:`LedgerError` — reclaim /
+        reconcile must run instead of silently re-asserting ownership.
 
         Backs :func:`renew_lease`.
         """
@@ -1170,6 +1200,33 @@ class ActionLedger:
         if ttl <= 0:
             raise LedgerError("lease_ttl must be positive to renew")
         entry = replace(existing, lease_until=now + ttl)
+        self._storage.set(entry)
+        return entry
+
+    def repair_transition(self, request_id: str) -> LedgerEntry:
+        """Heal incomplete durable transition fields before re-resolving.
+
+        Fills missing ``idempotency_key`` / ``side_effect_boundary`` / terminal
+        alignment. Does not renew a peer lease and does not execute the tool.
+        Claim loops call this when the gate is ``REPAIR``, then re-resolve.
+        """
+        existing = self._storage.get(request_id)
+        if existing is None:
+            raise LedgerError(f"Cannot repair unknown request {request_id!r}")
+        updates = repair_transition_fields(existing)
+        if not updates:
+            if transition_needs_repair(existing):
+                raise LedgerError(
+                    f"Cannot repair request {request_id!r}: incomplete context "
+                    "with no safe field updates"
+                )
+            return existing
+        entry = replace(existing, **updates)
+        if transition_needs_repair(entry):
+            raise LedgerError(
+                f"Cannot repair request {request_id!r}: still incomplete after "
+                "safe field updates"
+            )
         self._storage.set(entry)
         return entry
 

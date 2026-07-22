@@ -45,7 +45,7 @@ supported for explicit code-level control.
 |---------|-------------------|
 | **Stale or broken context** | TTL cache, message repair, history limits; agent sees fresh, valid data |
 | **Bad or unauthorized tool calls** | Validate inputs/outputs, allowlists, scoped paths; block before execution |
-| **Duplicate side effects on retry** | Transition envelope (v1.3+): `side_effect_class`, terminal outcomes, resolution **gates** (`POLL` / `SOFT_BLOCK` / `HARD_BLOCK`), `external_operation_ref` + `Reconciler`, ledgers, signed receipts |
+| **Duplicate side effects on retry** | Transition envelope (v1.3+): `side_effect_class`, terminal outcomes, resolution **gates** (`POLL` / `REPAIR` / `SOFT_BLOCK` / `HARD_BLOCK`), `external_operation_ref` + `Reconciler`, ledgers, signed receipts |
 
 Framework-agnostic. Raw message lists and plain Python functions (LangGraph, CrewAI, OpenAI tool loops, etc.).
 
@@ -312,16 +312,17 @@ Each duplicate dispatch is classified to a gate. Read-only and side-effecting to
 | `RETURN` | `COMPLETED` | return stored result — no re-execution |
 | `POLL` | `IN_FLIGHT` with valid lease (`LeaseValidity.HELD`) | wait for the other worker |
 | `RECLAIM` | read-only `EXPIRED` / `FAILED_*` | take over stale lease and run |
+| `REPAIR` | incomplete durable key / boundary / terminal (healable) | fix record, re-resolve — **no** second side effect |
 | `SOFT_BLOCK` | read-only `UNKNOWN` / `BLOCKED` only | **retry by default** (safe — reads don't spend); opt into deferral with `defer_read_only_unknown=True` → `LedgerSoftBlockError` |
 | `HARD_BLOCK` | ambiguous mutating transition | stop; run `Reconciler` when `external_operation_ref` is present, else fail-closed |
 
 **Lease validity (v1.10.0):** `lease_until` is resolution metadata — **not** part of `transition_key` (so renewals do not fork identity). Before reclaim/retry, resolution classifies the window via `LeaseValidity` (`HELD` → poll, `EXPIRED` → reclaim or hard-block by class, `UNBOUNDED` → no TTL). During long work call `renew_lease()` inside the ledgered tool to keep peers on `POLL`.
 
+**`REPAIR` (v1.13.0):** when the durable record is incomplete but healable (missing `idempotency_key`, invalid/missing `side_effect_boundary` or `terminal_outcome`, or status/terminal drift), claim loops call `repair_transition()` then re-resolve. A held in-flight lease is still `POLL` for peers; the owner extends via `renew_lease()` (not a second execute).
+
 **Read-only** (`side_effect_class: read`): poll, reclaim, retry failed-before-effect, soft-block on ambiguous `UNKNOWN`/`BLOCKED`.
 
 **Mutating** (payment, email, subagent, irreversible, …): return completed, poll in-flight, hard-block ambiguity. For **`EXPIRED + not_crossed`**, the gate is `HARD_BLOCK` until a reconciler proves the effect never ran — see [Stale lease + reconcile](#stale-lease--reconcile-exired--not_crossed).
-
-`REPAIR` (fix missing durable context before execute) is planned; not shipped yet.
 
 ### Transition envelope fields
 

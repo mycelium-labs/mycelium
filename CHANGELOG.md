@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.13.0 (2026-07-22)
+
+Minor: first-class ``REPAIR`` resolution gate for incomplete durable transition records. Heal missing context before execute; do not spawn a second side effect.
+
+### REPAIR gate
+
+- Add ``TransitionGate.REPAIR`` — returned when a durable record is missing ``idempotency_key``, has an invalid/missing ``side_effect_boundary``, has an invalid/missing ``terminal_outcome``, or healable status/terminal drift.
+- Add ``transition_needs_repair()`` / ``repair_transition_fields()`` and ``ActionLedger.repair_transition()`` — fill safe defaults, then re-resolve (claim loops continue; peers with a held lease still ``POLL``).
+- Owner-side ``renew_lease()`` remains the renew half of the taxonomy (extend a live lease so peers keep polling); it does not invent missing terminal state.
+- Export ``TransitionGate``, ``transition_needs_repair``, and ``repair_transition_fields`` from the package root.
+
+### Docs
+
+- Document ``REPAIR`` in the resolution-gates table (SDK README + handbook).
+
 ## 1.12.0 (2026-07-21)
 
 Minor: add zero-touch, command-based YAML auto-instrumentation while preserving explicit decorator and module instrumentation APIs.
