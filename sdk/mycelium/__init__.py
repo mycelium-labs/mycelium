@@ -84,8 +84,13 @@ from mycelium.transition import (
     execution_scope,
     resolve_lease_validity,
 )
+from mycelium.transition_resolution import (
+    TransitionGate,
+    repair_transition_fields,
+    transition_needs_repair,
+)
 
-__version__ = "1.12.0"
+__version__ = "1.13.0"
 
 __all__ = [
     "ActionLedger",
@@ -138,12 +143,15 @@ __all__ = [
     "RetryPermission",
     "TerminalOutcome",
     "LeaseValidity",
+    "TransitionGate",
     "ToolTransitionBinding",
     "TransitionScope",
     "derive_transition_key",
     "derive_transition_key_for_call",
     "execution_scope",
     "resolve_lease_validity",
+    "repair_transition_fields",
+    "transition_needs_repair",
     "load_config",
     "load_config_from_string",
     "protect",

@@ -598,6 +598,7 @@ ALLOW         fresh claim / policy allows retry    tool runs
 RETURN        COMPLETED                          return stored result
 POLL          IN_FLIGHT (valid lease)            wait for other worker
 RECLAIM       read EXPIRED / FAILED_*            take over stale lease
+REPAIR        incomplete durable key/boundary/terminal  heal, re-resolve (v1.13.0)
 SOFT_BLOCK    read UNKNOWN / BLOCKED only        retry by default (v1.9.0)
 HARD_BLOCK    ambiguous mutating transition      stop; reconcile if ref present</pre>
       <p>
@@ -607,6 +608,11 @@ HARD_BLOCK    ambiguous mutating transition      stop; reconcile if ref present<
         reclaim / hard-block by class) before allowing another attempt. Call
         <code>renew_lease()</code> inside long-running ledgered tools so peers keep
         polling instead of reclaiming.
+      </p>
+      <p>
+        <strong>REPAIR (v1.13.0):</strong> when the durable record is incomplete but
+        healable, claim loops call <code>repair_transition()</code> then re-resolve —
+        never a second side effect. A held lease is still <code>POLL</code> for peers.
       </p>
       <p>
         <strong>Read</strong> (<code>side_effect_class: read</code>): poll, reclaim,

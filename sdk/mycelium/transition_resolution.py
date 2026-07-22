@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from mycelium._compat import StrEnum
 from mycelium.transition import (
@@ -13,6 +13,9 @@ from mycelium.transition import (
     TerminalOutcome,
     ToolTransitionBinding,
     blocks_on_ambiguous_replay,
+    legacy_status_from_terminal,
+    parse_terminal_outcome,
+    terminal_from_legacy_status,
 )
 
 
@@ -30,8 +33,105 @@ class TransitionGate(StrEnum):
     RETURN = "RETURN"
     POLL = "POLL"
     RECLAIM = "RECLAIM"
+    REPAIR = "REPAIR"
     SOFT_BLOCK = "SOFT_BLOCK"
     HARD_BLOCK = "HARD_BLOCK"
+
+
+def _raw_terminal_outcome(existing: _ExistingTransition) -> Any:
+    return getattr(existing, "terminal_outcome", None)
+
+
+def _raw_status(existing: _ExistingTransition) -> str | None:
+    status = getattr(existing, "status", None)
+    return str(status) if status is not None else None
+
+
+def _parse_stored_terminal(existing: _ExistingTransition) -> TerminalOutcome | None:
+    raw = _raw_terminal_outcome(existing)
+    if raw is None or raw == "":
+        return None
+    try:
+        return parse_terminal_outcome(raw)
+    except ValueError:
+        return None
+
+
+def _boundary_is_valid(existing: _ExistingTransition) -> bool:
+    raw = getattr(existing, "side_effect_boundary", None)
+    if raw is None or raw == "":
+        return False
+    try:
+        SideEffectBoundary(str(raw))
+    except ValueError:
+        return False
+    return True
+
+
+def transition_needs_repair(existing: _ExistingTransition) -> bool:
+    """True when the durable record is incomplete but safely healable.
+
+    Detects missing ``idempotency_key``, missing/invalid ``side_effect_boundary``,
+    missing/invalid ``terminal_outcome``, or healable status/terminal drift.
+    Does **not** treat a held in-flight lease as repair — peers ``POLL``; the
+    owner extends via ``renew_lease()``.
+    """
+    key = getattr(existing, "idempotency_key", None)
+    if key is None or key == "":
+        return True
+    if not _boundary_is_valid(existing):
+        return True
+
+    stored = _parse_stored_terminal(existing)
+    if stored is None:
+        return True
+
+    status = _raw_status(existing)
+    if status == "completed" and stored != TerminalOutcome.COMPLETED:
+        return True
+    if status == "failed" and stored == TerminalOutcome.IN_FLIGHT:
+        return True
+    return False
+
+
+def repair_transition_fields(
+    existing: _ExistingTransition,
+    *,
+    now: float | None = None,
+) -> dict[str, Any]:
+    """Return field updates that heal an incomplete durable transition record.
+
+    Safe defaults only — never invents a completed result, never renews a peer
+    lease, and never weakens a stronger recorded side-effect boundary.
+    """
+    updates: dict[str, Any] = {}
+
+    key = getattr(existing, "idempotency_key", None)
+    request_id = getattr(existing, "request_id", None)
+    if (key is None or key == "") and request_id is not None:
+        updates["idempotency_key"] = str(request_id)
+
+    if not _boundary_is_valid(existing):
+        updates["side_effect_boundary"] = SideEffectBoundary.NOT_CROSSED.value
+
+    stored = _parse_stored_terminal(existing)
+    status = _raw_status(existing) or "in-flight"
+    lease_until = getattr(existing, "lease_until", None)
+
+    if stored is None:
+        healed = terminal_from_legacy_status(status, lease_until=lease_until, now=now)
+        updates["terminal_outcome"] = healed.value
+        updates["status"] = legacy_status_from_terminal(healed)
+    elif status == "completed" and stored != TerminalOutcome.COMPLETED:
+        updates["terminal_outcome"] = TerminalOutcome.COMPLETED.value
+        updates["status"] = legacy_status_from_terminal(TerminalOutcome.COMPLETED)
+    elif status == "failed" and stored == TerminalOutcome.IN_FLIGHT:
+        updates["terminal_outcome"] = TerminalOutcome.FAILED_BEFORE_EFFECT.value
+        updates["status"] = legacy_status_from_terminal(
+            TerminalOutcome.FAILED_BEFORE_EFFECT
+        )
+
+    return updates
 
 
 def resolve_read_only_gate(existing: _ExistingTransition) -> TransitionGate:
@@ -40,6 +140,7 @@ def resolve_read_only_gate(existing: _ExistingTransition) -> TransitionGate:
     Read-only tools produce no external effect, so re-running is always safe.
     The gate is therefore lighter than the side-effecting resolver:
 
+    - Incomplete durable record → ``REPAIR`` (heal, then re-resolve)
     - ``COMPLETED`` → ``RETURN`` the stored result
     - ``IN_FLIGHT`` → ``POLL`` while another worker holds a valid lease
     - ``EXPIRED`` / ``FAILED_BEFORE_EFFECT`` / ``FAILED_AFTER_EFFECT`` →
@@ -48,6 +149,8 @@ def resolve_read_only_gate(existing: _ExistingTransition) -> TransitionGate:
       must not hard-block a reversible read, so the caller defers or retries
       (cost-dependent) instead of parking it for a human.
     """
+    if transition_needs_repair(existing):
+        return TransitionGate.REPAIR
     outcome = existing.resolved_terminal_outcome()
     if outcome == TerminalOutcome.COMPLETED:
         return TransitionGate.RETURN
@@ -60,14 +163,10 @@ def resolve_read_only_gate(existing: _ExistingTransition) -> TransitionGate:
 
 def _entry_boundary(existing: _ExistingTransition) -> SideEffectBoundary:
     raw = getattr(existing, "side_effect_boundary", SideEffectBoundary.NOT_CROSSED.value)
-    return SideEffectBoundary(str(raw))
-
-
-def _retry_allows_failed_before(retry: RetryPermission) -> bool:
-    return retry in (
-        RetryPermission.SAFE_RETRY,
-        RetryPermission.RETRY_ONLY_WITH_SAME_PROVIDER_IDEMPOTENCY_KEY,
-    )
+    try:
+        return SideEffectBoundary(str(raw))
+    except ValueError:
+        return SideEffectBoundary.NOT_CROSSED
 
 
 def _same_provider_idempotency_key(
@@ -89,7 +188,11 @@ def resolve_side_effect_gate(
 ) -> TransitionGate:
     """Decide how to handle an existing transition for a side-effecting tool.
 
-    Lease validity is consulted first via ``resolved_terminal_outcome()``:
+    Incomplete durable context returns ``REPAIR`` first — heal missing key /
+    boundary / terminal fields, then re-resolve. Do not execute a second side
+    effect while the record is incomplete.
+
+    Lease validity is consulted via ``resolved_terminal_outcome()``:
     a still-``HELD`` lease stays ``IN_FLIGHT`` → ``POLL``; an ``EXPIRED`` lease
     becomes ``EXPIRED`` and then reclaim / hard-block by class and boundary.
     ``lease_until`` is not part of the transition key — renew it while work
@@ -101,6 +204,9 @@ def resolve_side_effect_gate(
     ``retry_only_with_same_provider_idempotency_key`` permission stays
     cooperative (backward compatible).
     """
+    if transition_needs_repair(existing):
+        return TransitionGate.REPAIR
+
     outcome = existing.resolved_terminal_outcome()
     boundary = _entry_boundary(existing)
     retry = binding.retry_permission
@@ -204,10 +310,25 @@ def soft_block_message(
     )
 
 
+def repair_message(
+    existing: _ExistingTransition,
+    *,
+    tool: str,
+    request_id: str,
+) -> str:
+    return (
+        f"Tool {tool!r} request {request_id!r} has incomplete durable transition "
+        "context; repair before execute"
+    )
+
+
 __all__ = [
     "TransitionGate",
     "hard_block_message",
+    "repair_message",
+    "repair_transition_fields",
     "resolve_read_only_gate",
     "resolve_side_effect_gate",
     "soft_block_message",
+    "transition_needs_repair",
 ]
