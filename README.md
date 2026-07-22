@@ -1,6 +1,6 @@
 # Mycelium
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.1)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.2)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 [![Downloads](https://static.pepy.tech/badge/mycelium-runtime)](https://pepy.tech/project/mycelium-runtime)
 
@@ -8,7 +8,7 @@
 
 Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
 
-*Early but API-stable (**v1.13.1**): breaking changes only at major versions. More guards planned.*
+*Early but API-stable (**v1.13.2**): breaking changes only at major versions. More guards planned.*
 
 ## Who it's for
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.13.2 (2026-07-22)
+
+Docs patch: map public transition-sufficiency gate language to Mycelium’s internal gates. No code changes.
+
+### Docs
+
+- Handbook + SDK README: public `ALLOW` / `REPAIR` / `SOFT_BLOCK` / `HARD_BLOCK` (`BLOCK`) ↔ Mycelium `TransitionGate` table (incl. `RETURN` / `POLL` / `RECLAIM`).
+- Bust version banners to v1.13.2 so PyPI’s long description picks up the mapping.
+
 ## 1.13.1 (2026-07-22)
 
 Docs/packaging patch: sync version banners and PyPI long description after the v1.13.0 `REPAIR` release. No code changes.

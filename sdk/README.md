@@ -1,9 +1,9 @@
 # Mycelium runtime
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.1)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.2)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.13.1** (`REPAIR` gate + command auto-instrumentation + transition envelope).
+Current package: **mycelium-runtime v1.13.2** (`REPAIR` gate + command auto-instrumentation + transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -315,6 +315,19 @@ Each duplicate dispatch is classified to a gate. Read-only and side-effecting to
 | `REPAIR` | incomplete durable key / boundary / terminal (healable) | fix record, re-resolve — **no** second side effect |
 | `SOFT_BLOCK` | read-only `UNKNOWN` / `BLOCKED` only | **retry by default** (safe — reads don't spend); opt into deferral with `defer_read_only_unknown=True` → `LedgerSoftBlockError` |
 | `HARD_BLOCK` | ambiguous mutating transition | stop; run `Reconciler` when `external_operation_ref` is present, else fail-closed |
+
+**Public transition-sufficiency language:** #7417-style discussions often use four words — `ALLOW` / `REPAIR` / `SOFT_BLOCK` / `HARD_BLOCK` (sometimes `BLOCK`). Mycelium implements that set and adds finer internals:
+
+| Public | Mycelium | Notes |
+|--------|----------|-------|
+| `ALLOW` | `ALLOW` | run / safe retry |
+| `REPAIR` | `REPAIR` | heal durable context; owner `renew_lease()` for a live lease |
+| `SOFT_BLOCK` | `SOFT_BLOCK` | read-only defer / safe retry |
+| `HARD_BLOCK` / `BLOCK` | `HARD_BLOCK` | stop; reconcile if ref present |
+| *(must not run again)* | `RETURN` / `POLL` | already done, or wait on a held lease |
+| *(read reclaim)* | `RECLAIM` | take over an expired read lease and run |
+
+Public `BLOCK` ≈ Mycelium `HARD_BLOCK`. `RETURN` and `POLL` are also “do not execute again” under the richer internal taxonomy — use the four public words with platforms; use the full table when implementing or debugging.
 
 **Lease validity (v1.10.0):** `lease_until` is resolution metadata — **not** part of `transition_key` (so renewals do not fork identity). Before reclaim/retry, resolution classifies the window via `LeaseValidity` (`HELD` → poll, `EXPIRED` → reclaim or hard-block by class, `UNBOUNDED` → no TTL). During long work call `renew_lease()` inside the ledgered tool to keep peers on `POLL`.
 

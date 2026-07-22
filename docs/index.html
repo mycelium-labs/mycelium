@@ -381,7 +381,7 @@
 
     <h1>Mycelium: runtime guards for AI agents</h1>
     <p class="badges">
-      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.13.1" alt="PyPI version"></a>
+      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.13.2" alt="PyPI version"></a>
       <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/pyversions/mycelium-runtime.svg" alt="Python versions"></a>
       <a href="https://pepy.tech/project/mycelium-runtime"><img src="https://static.pepy.tech/badge/mycelium-runtime" alt="PyPI downloads"></a>
       <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
@@ -393,7 +393,7 @@
       Classify tools, hash a durable transition key, resolve duplicates by terminal
       state and resolution gates (poll / repair / soft-block reads, hard-block or reconcile
       writes via <code>external_operation_ref</code>). Framework-agnostic.
-      Early but API-stable (v1.13.1): breaking changes only at major versions.
+      Early but API-stable (v1.13.2): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
@@ -601,6 +601,28 @@ RECLAIM       read EXPIRED / FAILED_*            take over stale lease
 REPAIR        incomplete durable key/boundary/terminal  heal, re-resolve (v1.13.0)
 SOFT_BLOCK    read UNKNOWN / BLOCKED only        retry by default (v1.9.0)
 HARD_BLOCK    ambiguous mutating transition      stop; reconcile if ref present</pre>
+      <p id="sufficiency-gates">
+        <strong>Public transition-sufficiency language:</strong> discussions of
+        redispatch (e.g. langgraph#7417) often use a four-gate vocabulary —
+        <code>ALLOW</code> / <code>REPAIR</code> / <code>SOFT_BLOCK</code> /
+        <code>HARD_BLOCK</code> (sometimes just <code>BLOCK</code>). Mycelium
+        implements that public set and adds finer internal gates for the same
+        decisions:
+      </p>
+      <pre>Public          Mycelium internal                         Notes
+ALLOW           ALLOW                                     run / safe retry
+REPAIR          REPAIR                                    heal durable context; owner renew_lease for live lease
+SOFT_BLOCK      SOFT_BLOCK                                read-only defer / safe retry
+HARD_BLOCK      HARD_BLOCK                                stop; reconcile if ref present
+(must not run)  RETURN / POLL                             already done, or wait on held lease
+(read reclaim)  RECLAIM                                   take over expired read lease and run</pre>
+      <p>
+        So: public <code>BLOCK</code> ≈ Mycelium <code>HARD_BLOCK</code>, while
+        <code>RETURN</code> and <code>POLL</code> are also “do not execute again”
+        outcomes under a richer internal taxonomy. Use the public four words when
+        talking to platforms; use the full Mycelium table when implementing or
+        debugging a ledgered tool.
+      </p>
       <p>
         <strong>Lease validity (v1.10.0):</strong> <code>lease_until</code> is resolution
         metadata — not part of <code>transition_key</code>. Resolution checks
