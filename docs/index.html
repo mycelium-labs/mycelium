@@ -381,7 +381,7 @@
 
     <h1>Mycelium: runtime guards for AI agents</h1>
     <p class="badges">
-      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.12.0" alt="PyPI version"></a>
+      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.13.1" alt="PyPI version"></a>
       <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/pyversions/mycelium-runtime.svg" alt="Python versions"></a>
       <a href="https://pepy.tech/project/mycelium-runtime"><img src="https://static.pepy.tech/badge/mycelium-runtime" alt="PyPI downloads"></a>
       <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
@@ -391,9 +391,9 @@
       LLM: duplicate tool execution on retry, stale context, invalid tool calls.
       YAML callable paths and <code>mycelium run</code> add guards without editing each function.
       Classify tools, hash a durable transition key, resolve duplicates by terminal
-      state and resolution gates (poll / soft-block reads, hard-block or reconcile
+      state and resolution gates (poll / repair / soft-block reads, hard-block or reconcile
       writes via <code>external_operation_ref</code>). Framework-agnostic.
-      Early but API-stable (v1.12.0): breaking changes only at major versions.
+      Early but API-stable (v1.13.1): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
