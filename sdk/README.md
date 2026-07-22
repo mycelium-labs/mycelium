@@ -1,13 +1,17 @@
 # Mycelium runtime
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.2)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.3)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.13.2** (`REPAIR` gate + command auto-instrumentation + transition envelope).
+Current package: **mycelium-runtime v1.13.3** (`REPAIR` gate + command auto-instrumentation + transition envelope).
 
 ## One painful bug → a few lines of config
 
 **LangGraph Cloud redispatches a long tool call while the first is still running.** Both complete. You pay twice. Side effects run twice. [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417)
+
+Mycelium’s answer is a **transition envelope**, not “idempotency key + cached result” alone: classify the tool (**side-effect class**), hold an execution **lease** while work is in flight, record **terminal state** (`IN_FLIGHT` / `COMPLETED` / `UNKNOWN` / …), and **hard-block** (or reconcile) when a mutating redispatch would be unsafe. Same key while in-flight → poll; completed → return stored; ambiguous payment-class → stop.
+
+On LangGraph Cloud, long tool calls can be redispatched on the order of **~180s**, aligned with the platform’s **`BG_JOB_HEARTBEAT`** sweep. Mycelium’s lease / poll / hard-block path is the operator-side guard for that window — see [Resolution gates](#resolution-gates).
 
 ```bash
 pip install 'mycelium-runtime[langgraph]'  # Python 3.10+; automatic runtime IDs

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.13.3 (2026-07-22)
+
+Docs patch: reframe the public #7417 pitch as a **transition envelope**, and document LangGraph Cloud’s ~180s / `BG_JOB_HEARTBEAT` redispatch window. No code changes.
+
+### Docs
+
+- SDK README hero, root README, handbook FAQ / Resolution, and `mycelium demo` copy: pitch class + lease + terminal state + hard-block (not only idempotency key + cached result).
+- Note LangGraph Cloud ~180s redispatch aligned with `BG_JOB_HEARTBEAT`; Mycelium lease/poll/hard-block is the operator-side guard.
+- Bust version banners to v1.13.3 for PyPI long-description republish.
+
 ## 1.13.2 (2026-07-22)
 
 Docs patch: map public transition-sufficiency gate language to Mycelium’s internal gates. No code changes.

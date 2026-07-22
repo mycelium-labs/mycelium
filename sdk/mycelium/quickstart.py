@@ -36,6 +36,12 @@ def run_demo() -> int:
     scenario = fixture["scenario"]
 
     print("Mycelium proof demo (real test)")
+    print("Pitch: transition envelope (class + lease + terminal + hard-block),")
+    print("       not only idempotency key + cached result.")
+    print(
+        "LangGraph Cloud may redispatch long tools ~180s "
+        "(BG_JOB_HEARTBEAT sweep)."
+    )
     print(f"Fixture: {fixture['id']}")
     print(f"Source:  {fixture['source_url']}")
     print(f"Pattern: {fixture['pattern']}")

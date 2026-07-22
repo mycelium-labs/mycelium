@@ -42,7 +42,7 @@
         "name": "How do I prevent duplicate tool execution in LangGraph?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Classify each tool (read vs keyed_mutate vs non_idempotent_mutate, etc.), enable transition: in mycelium.yaml, and use callable paths with mycelium run or @config.apply. Mycelium hashes a durable transition key and resolves duplicates by terminal state and resolution gates: read tools poll or soft-block UNKNOWN; mutating tools hard-block or reconcile against the provider when you record external_operation_ref. pip install mycelium-runtime && mycelium demo"
+          "text": "Use a transition envelope, not only an idempotency key plus a cached result. Classify each tool (read vs keyed_mutate vs non_idempotent_mutate, etc.), enable transition: in mycelium.yaml, and use callable paths with mycelium run or @config.apply. Mycelium hashes a durable transition key, holds an execution lease, records terminal state, and resolves duplicates by gates: read tools poll or soft-block UNKNOWN; mutating tools hard-block or reconcile against the provider when you record external_operation_ref. LangGraph Cloud may redispatch long tools around ~180s (BG_JOB_HEARTBEAT sweep). pip install mycelium-runtime && mycelium demo"
         }
       },
       {
@@ -381,7 +381,7 @@
 
     <h1>Mycelium: runtime guards for AI agents</h1>
     <p class="badges">
-      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.13.2" alt="PyPI version"></a>
+      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.13.3" alt="PyPI version"></a>
       <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/pyversions/mycelium-runtime.svg" alt="Python versions"></a>
       <a href="https://pepy.tech/project/mycelium-runtime"><img src="https://static.pepy.tech/badge/mycelium-runtime" alt="PyPI downloads"></a>
       <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
@@ -393,7 +393,7 @@
       Classify tools, hash a durable transition key, resolve duplicates by terminal
       state and resolution gates (poll / repair / soft-block reads, hard-block or reconcile
       writes via <code>external_operation_ref</code>). Framework-agnostic.
-      Early but API-stable (v1.13.2): breaking changes only at major versions.
+      Early but API-stable (v1.13.3): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
@@ -637,6 +637,15 @@ HARD_BLOCK      HARD_BLOCK                                stop; reconcile if ref
         never a second side effect. A held lease is still <code>POLL</code> for peers.
       </p>
       <p>
+        <strong>LangGraph Cloud (~180s):</strong> long tool calls may be redispatched
+        on the order of ~180 seconds, aligned with the platform’s
+        <code>BG_JOB_HEARTBEAT</code> sweep
+        (<a href="https://github.com/langchain-ai/langgraph/issues/7417">#7417</a>).
+        Pitch Mycelium as a <strong>transition envelope</strong> (class + lease +
+        terminal state + hard-block / reconcile), not only “idempotency key + cached
+        result.” Lease / poll / hard-block is the operator-side guard for that window.
+      </p>
+      <p>
         <strong>Read</strong> (<code>side_effect_class: read</code>): poll, reclaim,
         retry failed-before-effect. Ambiguous <code>UNKNOWN</code> →
         <code>SOFT_BLOCK</code> (safe retry). Opt into deferral with
@@ -851,14 +860,20 @@ with config.run(thread_id):
       <div class="faq-item">
         <h3>How do I prevent duplicate tool execution in LangGraph?</h3>
         <p>
-          Add <code>transition:</code> and <code>side_effect_class</code> per tool in
-          <code>mycelium.yaml</code>. Mycelium hashes a durable transition key (scope, tool,
-          args, class, policy) and resolves duplicates through gates: return completed,
-          poll in-flight, soft-block ambiguous reads, hard-block or reconcile mutating
-          tools when <code>external_operation_ref</code> is recorded. LangGraph Cloud
-          can redispatch long tool calls while the first is still in flight
-          (<a href="https://github.com/langchain-ai/langgraph/issues/7417">langgraph#7417</a>).
-          <code>pip install mycelium-runtime &amp;&amp; mycelium demo</code>
+          Use a <strong>transition envelope</strong>, not only an idempotency key plus a
+          cached result. Add <code>transition:</code> and <code>side_effect_class</code>
+          per tool in <code>mycelium.yaml</code>. Mycelium hashes a durable transition
+          key (scope, tool, args, class, policy), holds an execution
+          <strong>lease</strong> while work is in flight, records
+          <strong>terminal state</strong>, and resolves duplicates through gates: return
+          completed, poll in-flight, soft-block ambiguous reads, hard-block or reconcile
+          mutating tools when <code>external_operation_ref</code> is recorded.
+          LangGraph Cloud can redispatch long tool calls on the order of
+          <strong>~180s</strong> (aligned with <code>BG_JOB_HEARTBEAT</code> sweep) while
+          the first is still in flight
+          (<a href="https://github.com/langchain-ai/langgraph/issues/7417">langgraph#7417</a>);
+          Mycelium’s lease / poll / hard-block path is the operator-side guard for that
+          window. <code>pip install mycelium-runtime &amp;&amp; mycelium demo</code>
         </p>
       </div>
 

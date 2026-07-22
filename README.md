@@ -1,6 +1,6 @@
 # Mycelium
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.2)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.3)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 [![Downloads](https://static.pepy.tech/badge/mycelium-runtime)](https://pepy.tech/project/mycelium-runtime)
 
@@ -8,7 +8,7 @@
 
 Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
 
-*Early but API-stable (**v1.13.2**): breaking changes only at major versions. More guards planned.*
+*Early but API-stable (**v1.13.3**): breaking changes only at major versions. More guards planned.*
 
 ## Who it's for
 
@@ -20,10 +20,11 @@ Python 3.10+. Framework-agnostic.
 
 These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools:
 
-- **Duplicate side effects on retry:** classify tools (`read` vs `keyed_mutate` vs `non_idempotent_mutate`, etc.), hash a durable **transition key**, resolve duplicates by **terminal state** — not blind re-execute. **Do not redispatch unless the previous transition is proven terminal or safely recoverable.**
+- **Duplicate side effects on retry:** classify tools (`read` vs `keyed_mutate` vs `non_idempotent_mutate`, etc.), hash a durable **transition key**, resolve duplicates by **terminal state** — not blind re-execute. **Do not redispatch unless the previous transition is proven terminal or safely recoverable.** This is a **transition envelope** (class + lease + terminal + hard-block / reconcile), not only an idempotency key plus a cached result.
   - **Read tools:** poll in-flight, reclaim expired leases, **soft-block** ambiguous `UNKNOWN` (safe retry by default)
   - **Mutating tools:** hard-block ambiguity; **reconcile** via `external_operation_ref` when a provider lookup can prove run-or-not (`COMPLETED` / `NOT_EXECUTED` / still blocked)
   - **Stale lease (`EXPIRED`):** strict classes reclaim only when reconcile proves `NOT_EXECUTED` (fail-closed without a ref)
+  - **LangGraph Cloud:** long tools may be redispatched around **~180s** (`BG_JOB_HEARTBEAT` sweep); Mycelium’s lease/poll/hard-block guards that window ([langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417))
 - **Transition envelope fields** (priority order): `side_effect_class` → `spendability` → `side_effect_boundary` → `terminal_outcome` → `external_operation_ref` → `retry_permission` — payment/write needs the heavier set; without it, redispatch is an unsupported second transition, not a retry
 - **Stale or broken context:** fresh tool data, valid message transcripts
 - **Bad tool calls:** block invalid inputs and out-of-scope tools before they run
