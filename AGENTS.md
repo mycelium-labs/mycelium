@@ -19,7 +19,8 @@ Runtime guards for AI agents (PyPI: `mycelium-runtime`, import: `mycelium`). Pyt
 ## Testing quirks
 
 - `asyncio_mode = "auto"` — async tests need no marker/decorator.
-- Redis backend tests monkeypatch in `fakeredis` (dev dep); no real Redis needed.
+- Redis backend unit tests monkeypatch in `fakeredis` (dev dep).
+- Real Redis two-worker #7417 proof: `tests/test_proof_two_worker_redis.py` (and `mycelium demo --redis`). Uses `MYCELIUM_TEST_REDIS_URL` or `redis://127.0.0.1:6379/15`; skips if Redis is unreachable.
 - Postgres integration tests skip unless `psycopg` is installed AND `MYCELIUM_TEST_POSTGRES_DSN` is set.
 
 ## Architecture

@@ -30,8 +30,12 @@ def _fail(msg: str) -> None:
     print(f"FAIL: {msg}", file=sys.stderr)
 
 
-def run_demo() -> int:
-    """Run baseline + guarded proof from the bundled fixture. Returns exit code."""
+def run_demo(*, redis: bool = False) -> int:
+    """Run baseline + guarded proof from the bundled fixture. Returns exit code.
+
+    When ``redis=True``, also runs the two-worker real-Redis Cloud-style proof
+    (requires a reachable Redis; see ``MYCELIUM_TEST_REDIS_URL``).
+    """
     fixture = load_fixture()
     scenario = fixture["scenario"]
 
@@ -75,9 +79,35 @@ def run_demo() -> int:
     print(f"side_effect_class: {result['side_effect_class']}")
     _pass("redispatch resolved existing transition, side effect ran once")
 
+    if redis:
+        from mycelium.proofs.langgraph_7417_redis import (
+            ENV_REDIS_URL,
+            prove_two_worker_redis_redispatch,
+            redis_reachable,
+            resolve_redis_url,
+        )
+
+        _section("[3/3] Cloud-style: 2 workers + real Redis")
+        url = resolve_redis_url()
+        print(f"Redis URL: {url} (override with {ENV_REDIS_URL})")
+        if not redis_reachable(url):
+            _fail(f"Redis not reachable at {url!r}")
+            return 1
+        try:
+            multi = prove_two_worker_redis_redispatch(url=url)
+        except (AssertionError, RuntimeError) as exc:
+            _fail(str(exc))
+            return 1
+        print(f"Workers:     {multi['workers']}")
+        print(f"Executions:  {multi['executions']}")
+        print(f"request_id:  {multi['request_id']}")
+        _pass("second worker polled; side effect ran once on shared Redis ledger")
+
     _section("Use in your agent")
     print("pip install mycelium-runtime")
+    print("pip install 'mycelium-runtime[redis]'  # multi-worker / Cloud-style")
     print("mycelium init")
+    print("mycelium demo --redis               # optional 2-worker Redis proof")
     print()
     print("from mycelium import load_config")
     print()
@@ -88,5 +118,4 @@ def run_demo() -> int:
     print("    return run_slow_subagent(task)")
     print()
     print("# Pass tool_call_id from LangGraph on each invocation")
-
     return 0

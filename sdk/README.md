@@ -1,9 +1,9 @@
 # Mycelium runtime
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.3)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.13.4)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.13.3** (`REPAIR` gate + command auto-instrumentation + transition envelope).
+Current package: **mycelium-runtime v1.13.4** (`REPAIR` gate + command auto-instrumentation + transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -334,6 +334,8 @@ Each duplicate dispatch is classified to a gate. Read-only and side-effecting to
 Public `BLOCK` ≈ Mycelium `HARD_BLOCK`. `RETURN` and `POLL` are also “do not execute again” under the richer internal taxonomy — use the four public words with platforms; use the full table when implementing or debugging.
 
 **Lease validity (v1.10.0):** `lease_until` is resolution metadata — **not** part of `transition_key` (so renewals do not fork identity). Before reclaim/retry, resolution classifies the window via `LeaseValidity` (`HELD` → poll, `EXPIRED` → reclaim or hard-block by class, `UNBOUNDED` → no TTL). During long work call `renew_lease()` inside the ledgered tool to keep peers on `POLL`.
+
+**Cloud-style proof (v1.13.4):** `mycelium demo --redis` (or `prove_two_worker_redis_redispatch()`) runs **two OS processes** against a **real Redis** ledger. Worker A claims and runs; worker B redispatches the same `request_id` while A is `IN_FLIGHT`. B polls and returns A's result — the side effect runs once. Set `MYCELIUM_TEST_REDIS_URL` or use `redis://127.0.0.1:6379/15`. This is the partner-facing #7417 proof beyond an in-process double call.
 
 **`REPAIR` (v1.13.0):** when the durable record is incomplete but healable (missing `idempotency_key`, invalid/missing `side_effect_boundary` or `terminal_outcome`, or status/terminal drift), claim loops call `repair_transition()` then re-resolve. A held in-flight lease is still `POLL` for peers; the owner extends via `renew_lease()` (not a second execute).
 

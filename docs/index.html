@@ -381,7 +381,7 @@
 
     <h1>Mycelium: runtime guards for AI agents</h1>
     <p class="badges">
-      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.13.3" alt="PyPI version"></a>
+      <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&amp;release=1.13.4" alt="PyPI version"></a>
       <a href="https://pypi.org/project/mycelium-runtime/"><img src="https://img.shields.io/pypi/pyversions/mycelium-runtime.svg" alt="Python versions"></a>
       <a href="https://pepy.tech/project/mycelium-runtime"><img src="https://static.pepy.tech/badge/mycelium-runtime" alt="PyPI downloads"></a>
       <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
@@ -393,7 +393,7 @@
       Classify tools, hash a durable transition key, resolve duplicates by terminal
       state and resolution gates (poll / repair / soft-block reads, hard-block or reconcile
       writes via <code>external_operation_ref</code>). Framework-agnostic.
-      Early but API-stable (v1.13.3): breaking changes only at major versions.
+      Early but API-stable (v1.13.4): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
@@ -644,6 +644,8 @@ HARD_BLOCK      HARD_BLOCK                                stop; reconcile if ref
         Pitch Mycelium as a <strong>transition envelope</strong> (class + lease +
         terminal state + hard-block / reconcile), not only “idempotency key + cached
         result.” Lease / poll / hard-block is the operator-side guard for that window.
+        Prove multi-worker behavior with <code>mycelium demo --redis</code> (two OS
+        processes + real Redis shared ledger).
       </p>
       <p>
         <strong>Read</strong> (<code>side_effect_class: read</code>): poll, reclaim,

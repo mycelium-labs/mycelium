@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.13.4 (2026-07-22)
+
+Docs/proof patch: real two-worker Redis Cloud-style #7417 redispatch proof. No new resolution policy.
+
+### Proof
+
+- Add `prove_two_worker_redis_redispatch()` — two OS processes share a real Redis ledger; worker B redispatches while A is `IN_FLIGHT` and must poll (side effect once).
+- `mycelium demo --redis` runs that proof after the in-process baseline/guarded steps.
+- Pytest: `tests/test_proof_two_worker_redis.py` (skips when Redis unreachable; default `redis://127.0.0.1:6379/15` or `MYCELIUM_TEST_REDIS_URL`).
+
+### Docs
+
+- SDK README + handbook note the Cloud-style Redis proof; AGENTS.md documents the real-Redis test path.
+- Bust version banners to v1.13.4.
+
 ## 1.13.3 (2026-07-22)
 
 Docs patch: reframe the public #7417 pitch as a **transition envelope**, and document LangGraph Cloud’s ~180s / `BG_JOB_HEARTBEAT` redispatch window. No code changes.
