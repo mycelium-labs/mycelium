@@ -389,10 +389,11 @@
     </p>
     <p class="lede">
       Runtime guards for AI agents. Sits between your agent loop and your tools
-      (after the LLM returns <code>tool_calls</code>).
-      <strong>Core:</strong> stop duplicate side effects on retry via a transition
-      envelope (class + lease + terminal + gates / reconcile).
-      <strong>Opt-in:</strong> stale-context helpers and bad-tool-call boundaries.
+      (after the LLM returns <code>tool_calls</code>): stops duplicate side effects
+      on retry/redispatch, blocks bad tool args and out-of-scope calls, and keeps
+      tool data fresh.
+      <strong>Core:</strong> transition envelope (class + lease + terminal + gates / reconcile).
+      <strong>Opt-in:</strong> stale-context helpers and tool-boundary checks.
       YAML callable paths and <code>mycelium run</code> add the core path without
       editing each function. Framework-agnostic.
       Early but API-stable (v1.13.4): breaking changes only at major versions.

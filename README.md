@@ -6,7 +6,7 @@
 
 **Runtime guards and zero-touch YAML auto-instrumentation for AI agents.**
 
-Wraps side-effect tools so retries and redispatches cannot double-run. Not recovery after. Not tracing or dashboards.
+Stops duplicate side effects on retry/redispatch, blocks bad tool args and out-of-scope calls, and keeps tool data fresh. Not recovery after. Not tracing or dashboards.
 
 *Early but API-stable (**v1.13.4**): breaking changes only at major versions. More guards planned.*
 
