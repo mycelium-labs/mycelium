@@ -34,7 +34,7 @@
         "name": "How do I build reliable AI agents in production?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Most agent failures in production are not reasoning failures; they are runtime failures: a tool runs twice on retry, context goes stale, or the model emits an invalid tool call. Make agents reliable by guarding the runtime, not just the prompt. Mycelium classifies each tool by side effect, hashes a durable transition key, and resolves duplicate dispatches through resolution gates (poll reads, soft-block ambiguous reads, hard-block ambiguous writes, reconcile via external_operation_ref when a provider lookup can prove run-or-not). Framework-agnostic. pip install mycelium-runtime"
+          "text": "Most agent failures in production are not reasoning failures; they are runtime failures: a tool runs twice on retry, context goes stale, or the model emits an invalid tool call. Mycelium's core path wraps tool execution with a transition envelope (classify side effects, durable key, lease, gates). Opt-in helpers cover stale context and bad tool-call boundaries. Framework-agnostic. pip install mycelium-runtime"
         }
       },
       {
@@ -50,7 +50,7 @@
         "name": "Is Mycelium a replacement for Langfuse or LangSmith?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. Langfuse and LangSmith are observability and tracing tools. They show what happened after an agent runs. Mycelium is runtime prevention: idempotency ledgers, tool boundary checks, and context guards that run before or during execution. Use both if you want traces and guards."
+          "text": "No. Langfuse and LangSmith are observability and tracing tools. They show what happened after an agent runs. Mycelium is runtime prevention: a transition ledger around tool execution (core), plus optional tool-boundary and message/history guards. Use both if you want traces and guards."
         }
       },
       {
@@ -365,13 +365,14 @@
     <p>Contents</p>
     <ol>
       <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#scope">What it does</a></li>
       <li><a href="#install">Install</a></li>
       <li><a href="#api">API</a></li>
-      <li><a href="#context">Context</a></li>
-      <li><a href="#tools">Tools</a></li>
-      <li><a href="#actions">Actions</a></li>
+      <li><a href="#context">Context (opt-in)</a></li>
+      <li><a href="#tools">Tool boundaries (opt-in)</a></li>
+      <li><a href="#actions">Actions (core)</a></li>
       <li><a href="#resolution">Resolution</a></li>
-      <li><a href="#envelope">Envelope</a></li>
+      <li><a href="#envelope">Envelope (core)</a></li>
       <li><a href="#yaml">YAML</a></li>
       <li><a href="#common-searches">FAQ</a></li>
     </ol>
@@ -387,22 +388,24 @@
       <a href="https://github.com/mycelium-labs/mycelium"><img src="https://img.shields.io/github/license/mycelium-labs/mycelium.svg" alt="MIT license"></a>
     </p>
     <p class="lede">
-      Runtime guards for AI agents. Prevents predictable failures before they reach the
-      LLM: duplicate tool execution on retry, stale context, invalid tool calls.
-      YAML callable paths and <code>mycelium run</code> add guards without editing each function.
-      Classify tools, hash a durable transition key, resolve duplicates by terminal
-      state and resolution gates (poll / repair / soft-block reads, hard-block or reconcile
-      writes via <code>external_operation_ref</code>). Framework-agnostic.
+      Runtime guards for AI agents. Sits between your agent loop and your tools
+      (after the LLM returns <code>tool_calls</code>).
+      <strong>Core:</strong> stop duplicate side effects on retry via a transition
+      envelope (class + lease + terminal + gates / reconcile).
+      <strong>Opt-in:</strong> stale-context helpers and bad-tool-call boundaries.
+      YAML callable paths and <code>mycelium run</code> add the core path without
+      editing each function. Framework-agnostic.
       Early but API-stable (v1.13.4): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
       <h2>How it fits</h2>
       <p class="arch-caption">
-        Mycelium wraps your agent loop. Guards run on messages and tools before side effects
-        and before the next LLM call. The transition envelope classifies each tool, hashes
-        a durable key per dispatch, and resolves duplicates through gates and terminal
-        outcomes — not by re-running blindly.
+        Mycelium sits between the agent loop and your tools — after the LLM returns
+        <code>tool_calls</code>, around execution. The transition envelope classifies each
+        tool, hashes a durable key per dispatch, and resolves duplicates through gates
+        and terminal outcomes — not by re-running blindly. Optional message/history
+        guards run only when you call them before the next LLM turn.
         <strong>Do not redispatch unless the previous transition is proven terminal or
         safely recoverable.</strong>
         Not a framework. Not observability.
@@ -410,12 +413,44 @@
       <div class="arch-flow">
         <div class="arch-box">Your agent loop<br><span style="font-weight:400;color:var(--ink-muted)">LangGraph · CrewAI · Python</span></div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-box guard">Mycelium guards</div>
+        <div class="arch-box">LLM returns tool_calls</div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-box muted">Context · Tools · Transition envelope</div>
+        <div class="arch-box guard">Mycelium guards<br><span style="font-weight:400;font-size:0.72rem">claim · gate · lease · settle</span></div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-box">LLM + side-effect tools</div>
+        <div class="arch-box">Side-effect tools<br><span style="font-weight:400;color:var(--ink-muted)">payments · email · APIs</span></div>
       </div>
+    </section>
+
+    <section id="scope">
+      <h2>What it does</h2>
+      <p>
+        Four problem areas. <code>mycelium init</code> / <code>mycelium run</code> center on the core path.
+      </p>
+      <ul>
+        <li>
+          <strong>Duplicate side effects on retry</strong> (core) — classify tools
+          (<code>read</code>, <code>keyed_mutate</code>, <code>non_idempotent_mutate</code>, …),
+          hash a durable transition key, resolve by terminal state and gates
+          (poll / repair / soft-block reads; hard-block or reconcile writes).
+        </li>
+        <li>
+          <strong>Transition envelope fields</strong> (core) —
+          <code>side_effect_class</code> → <code>spendability</code> →
+          <code>side_effect_boundary</code> → <code>terminal_outcome</code> →
+          <code>external_operation_ref</code> → <code>retry_permission</code>.
+          Same system as above; payment/write needs the heavier set.
+        </li>
+        <li>
+          <strong>Stale or broken context</strong> (opt-in) — TTL cache
+          (<code>@protect</code> / <code>Session</code>); optional
+          <code>MessageValidator</code> / <code>HistoryGuard</code> before the next LLM turn.
+        </li>
+        <li>
+          <strong>Bad tool calls</strong> (opt-in) —
+          <code>@bounded</code> input/output/scope checks; optional
+          <code>ToolRegistry</code> allowlist — block before the tool runs.
+        </li>
+      </ul>
     </section>
 
     <section id="install">
@@ -451,14 +486,14 @@ mycelium run --config mycelium.yaml -- python -m my_agent</pre>
 
     <section id="api">
       <h2>API</h2>
-      <pre># Context
+      <pre># Context (opt-in)
 protect, protect_sync, Session
 MessageValidator, HistoryGuard
 
-# Tools
+# Tool boundaries (opt-in)
 bounded, bounded_sync, ToolRegistry, ToolRunner
 
-# Actions
+# Actions (core) — duplicate side effects / transition envelope
 ledger, ledger_sync, task_ledger, task_ledger_sync
 ActionLedger, TaskLedger, StateFlush, AuditReceiptEmitter, verify_receipt
 LedgerHardBlockError, LedgerPollTimeoutError
@@ -468,7 +503,7 @@ record_external_operation                            # provider handle (v1.6.0)
 renew_lease, LeaseValidity, resolve_lease_validity   # lease window (v1.10.0)
 Reconciler, ReconcileResult, ReconcileStatus         # provider reconcile (v1.7.0)
 
-# Transition envelope
+# Transition envelope (core)
 TransitionConfig, SideEffectClass, SideEffectBoundary, RetryPermission
 TerminalOutcome, Spendability, ToolTransitionBinding, execution_scope
 derive_transition_key_for_call
@@ -482,7 +517,11 @@ mycelium run --config PATH -- python ...                 # auto-instrumentation 
     </section>
 
     <section id="context">
-      <h2>Context</h2>
+      <h2>Context (opt-in)</h2>
+      <p>
+        TTL cache and message/history helpers. Not part of the default
+        <code>mycelium init</code> on-ramp — enable in YAML or call from code.
+      </p>
       <pre>from mycelium import protect, protect_sync, Session
 from mycelium import MessageValidator, HistoryGuard
 
@@ -510,7 +549,11 @@ with Session():
     </section>
 
     <section id="tools">
-      <h2>Tools</h2>
+      <h2>Tool boundaries (opt-in)</h2>
+      <p>
+        Input/output/scope validation and allowlists. Opt-in via YAML
+        <code>bounded</code> / <code>registry</code> or decorators — not the default on-ramp.
+      </p>
       <pre>from mycelium import bounded, bounded_sync, ToolRegistry, ToolRunner
 
 registry = ToolRegistry(allowed=["fetch_customer", "delete_file"])
@@ -545,7 +588,11 @@ def fetch_customer(customer_id: str) -> dict:
     </section>
 
     <section id="actions">
-      <h2>Actions</h2>
+      <h2>Actions (core)</h2>
+      <p>
+        Transition ledger for duplicate side-effect prevention — the default
+        <code>mycelium init</code> / <code>mycelium run</code> path.
+      </p>
       <p>
         Each ledgered tool gets a <code>side_effect_class</code> and a
         <code>transition_key</code> (scope, tool, args, class, policy version).
@@ -697,7 +744,7 @@ EXPIRED + maybe_crossed / crossed            → hard-block</pre>
     </section>
 
     <section id="envelope">
-      <h2>Envelope fields</h2>
+      <h2>Envelope fields (core)</h2>
       <p>
         Six fields decide whether an unresolved prior execution is merely
         <strong>wasteful</strong> (safe to retry or poll) or <strong>unsafe</strong>
@@ -850,12 +897,12 @@ with config.run(thread_id):
         <p>
           Most agent failures in production aren't reasoning failures; they're
           <strong>runtime failures</strong>: a tool runs twice on retry, context goes stale,
-          or the model emits an invalid tool call. To make AI agents reliable, guard the
-          runtime, not just the prompt. Mycelium classifies each tool by side effect, hashes a
-          durable transition key, and resolves duplicate dispatches through resolution
-          gates (poll reads, soft-block ambiguous reads, hard-block or reconcile writes),
-          while validating message history and tool inputs before anything executes. Framework-agnostic:
-          LangGraph, CrewAI, or plain Python. <code>pip install mycelium-runtime</code>
+          or the model emits an invalid tool call. Mycelium's <strong>core</strong> path wraps
+          tool execution with a transition envelope (classify side effects, durable key,
+          lease, gates / reconcile). <strong>Opt-in</strong> helpers cover stale context
+          (<code>@protect</code>, message/history guards) and bad tool-call boundaries
+          (<code>@bounded</code>, registry). Framework-agnostic: LangGraph, CrewAI, or plain
+          Python. <code>pip install mycelium-runtime</code>
         </p>
       </div>
 
@@ -884,8 +931,8 @@ with config.run(thread_id):
         <p>
           No. Langfuse and LangSmith are <strong>observability and tracing</strong>. They show
           what happened after an agent runs. Mycelium is <strong>runtime prevention</strong>:
-          idempotency ledgers, tool boundary checks, and context guards during execution.
-          Use both if you want traces and guards.
+          a transition ledger around tool execution (core), plus optional tool-boundary and
+          message/history guards. Use both if you want traces and guards.
         </p>
       </div>
 

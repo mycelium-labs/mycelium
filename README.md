@@ -6,7 +6,7 @@
 
 **Runtime guards and zero-touch YAML auto-instrumentation for AI agents.**
 
-Prevents predictable failures *before* they reach the LLM. Not recovery after. Not tracing or dashboards.
+Wraps side-effect tools so retries and redispatches cannot double-run. Not recovery after. Not tracing or dashboards.
 
 *Early but API-stable (**v1.13.4**): breaking changes only at major versions. More guards planned.*
 
@@ -18,7 +18,9 @@ Python 3.10+. Framework-agnostic.
 
 ## What it does (v1.13.x)
 
-These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools:
+These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools (after the LLM returns `tool_calls`):
+
+**Core** (`mycelium init` / `mycelium run`):
 
 - **Duplicate side effects on retry:** classify tools (`read` vs `keyed_mutate` vs `non_idempotent_mutate`, etc.), hash a durable **transition key**, resolve duplicates by **terminal state** — not blind re-execute. **Do not redispatch unless the previous transition is proven terminal or safely recoverable.** This is a **transition envelope** (class + lease + terminal + hard-block / reconcile), not only an idempotency key plus a cached result.
   - **Read tools:** poll in-flight, reclaim expired leases, **soft-block** ambiguous `UNKNOWN` (safe retry by default)
@@ -26,8 +28,11 @@ These aren't reasoning failures. They're runtime failures. Mycelium sits between
   - **Stale lease (`EXPIRED`):** strict classes reclaim only when reconcile proves `NOT_EXECUTED` (fail-closed without a ref)
   - **LangGraph Cloud:** long tools may be redispatched around **~180s** (`BG_JOB_HEARTBEAT` sweep); Mycelium’s lease/poll/hard-block guards that window ([langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417))
 - **Transition envelope fields** (priority order): `side_effect_class` → `spendability` → `side_effect_boundary` → `terminal_outcome` → `external_operation_ref` → `retry_permission` — payment/write needs the heavier set; without it, redispatch is an unsupported second transition, not a retry
-- **Stale or broken context:** fresh tool data, valid message transcripts
-- **Bad tool calls:** block invalid inputs and out-of-scope tools before they run
+
+**Opt-in** (configure or call explicitly):
+
+- **Stale or broken context:** TTL-fresh tool data (`@protect`); optional message/history validation before the next LLM turn
+- **Bad tool calls:** block invalid inputs and out-of-scope tools before they run (`@bounded` / registry)
 
 Not Langfuse. Use both if you want traces and guards. Full resolution rules: [sdk/README.md](sdk/README.md#resolution-gates). Envelope field stack: [sdk/README.md](sdk/README.md#transition-envelope-fields).
 

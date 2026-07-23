@@ -1,12 +1,18 @@
 # Mycelium
 
-> Mycelium helps you build reliable AI agents in production by adding runtime guards. It prevents predictable runtime failures before they reach the LLM: duplicate tool execution on retry, stale context, and invalid tool calls. It is a framework-agnostic Python library (3.10+) that works with LangGraph, CrewAI, or a plain Python loop. It is not a framework, and not observability/tracing. Keywords: reliable AI agents, AI agent reliability, production AI agents, agent guardrails, idempotent tool calls.
+> Mycelium helps you build reliable AI agents in production by adding runtime guards around tool execution. After the LLM returns tool calls, Mycelium claims, gates, and settles each dispatch so retries and redispatches cannot double-run side effects. It is a framework-agnostic Python library (3.10+) that works with LangGraph, CrewAI, or a plain Python loop. It is not a framework, and not observability/tracing. Keywords: reliable AI agents, AI agent reliability, production AI agents, agent guardrails, idempotent tool calls.
 
 ## What it does
 
-- **Duplicate side effects on retry:** classify each tool (`read`, `keyed_mutate`, `non_idempotent_mutate`, etc.), hash a durable transition key, and resolve duplicates by terminal state — poll reads, hard-block ambiguous writes.
-- **Stale or broken context:** validate message transcripts and keep tool data fresh.
-- **Bad tool calls:** block invalid inputs and out-of-scope tools before they run.
+Core (default on-ramp via `mycelium init` / `mycelium run`):
+
+- **Duplicate side effects on retry:** classify each tool (`read`, `keyed_mutate`, `non_idempotent_mutate`, etc.), hash a durable transition key, hold a lease, and resolve duplicates by terminal state — poll reads, hard-block or reconcile ambiguous writes.
+- **Transition envelope fields:** `side_effect_class` → `spendability` → `side_effect_boundary` → `terminal_outcome` → `external_operation_ref` → `retry_permission` — the identity/policy stack for that ledger (not a separate product).
+
+Opt-in (configure or call explicitly):
+
+- **Stale or broken context:** TTL-fresh tool data (`@protect` / `Session`); optional `MessageValidator` / `HistoryGuard` before the next LLM turn.
+- **Bad tool calls:** `@bounded` input/output/scope checks; optional `ToolRegistry` allowlist — block before the tool runs.
 
 ## Install
 
@@ -20,7 +26,7 @@ Optional backends: `pip install 'mycelium-runtime[redis]'` or `'mycelium-runtime
 
 ## How it differs from Langfuse / LangSmith
 
-Langfuse and LangSmith are observability and tracing — they show what happened after an agent runs. Mycelium is runtime prevention: idempotency ledgers, tool boundary checks, and context guards that run before or during execution. Use both if you want traces and guards.
+Langfuse and LangSmith are observability and tracing — they show what happened after an agent runs. Mycelium is runtime prevention: a transition ledger around tool execution (core), plus optional tool-boundary and message/history guards. Use both if you want traces and guards.
 
 ## Links
 

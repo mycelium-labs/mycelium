@@ -43,13 +43,18 @@ startup and then replaces itself with the child Python process. Existing
 `@config.apply`, `@config.apply_task`, and `config.instrument` flows remain
 supported for explicit code-level control.
 
-## What else it does
+## What it does
 
-| Problem | What Mycelium does |
-|---------|-------------------|
-| **Stale or broken context** | TTL cache, message repair, history limits; agent sees fresh, valid data |
-| **Bad or unauthorized tool calls** | Validate inputs/outputs, allowlists, scoped paths; block before execution |
-| **Duplicate side effects on retry** | Transition envelope (v1.3+): `side_effect_class`, terminal outcomes, resolution **gates** (`POLL` / `REPAIR` / `SOFT_BLOCK` / `HARD_BLOCK`), `external_operation_ref` + `Reconciler`, ledgers, signed receipts |
+Mycelium sits between your agent loop and your tools (after the LLM returns `tool_calls`):
+
+| | Problem | What Mycelium does |
+|---|---------|-------------------|
+| **Core** | **Duplicate side effects on retry** | Transition envelope: classify tools, durable transition key, lease, terminal state, resolution **gates** (`POLL` / `REPAIR` / `SOFT_BLOCK` / `HARD_BLOCK`), `external_operation_ref` + `Reconciler`, ledgers, signed receipts |
+| **Core** | **Transition envelope fields** | `side_effect_class` → `spendability` → `side_effect_boundary` → `terminal_outcome` → `external_operation_ref` → `retry_permission` — same system as above; payment/write needs the heavier set |
+| **Opt-in** | **Stale or broken context** | TTL cache (`@protect` / `Session`); optional `MessageValidator` / `HistoryGuard` you call before the next LLM turn |
+| **Opt-in** | **Bad tool calls** | `@bounded` input/output/scope checks; optional `ToolRegistry` allowlist — block before the tool runs |
+
+`mycelium init` / `mycelium run` center on the core path. Context and tool-boundary guards are available when you configure them.
 
 Framework-agnostic. Raw message lists and plain Python functions (LangGraph, CrewAI, OpenAI tool loops, etc.).
 
@@ -66,7 +71,7 @@ mycelium init --minimal    # smaller multi-guard scaffold
 mycelium demo              # terminal demo of langgraph#7417
 ```
 
-## Quickstart: stale context & broken transcripts
+## Quickstart: stale context & broken transcripts (opt-in)
 
 ```python
 from mycelium import protect, Session
@@ -126,7 +131,7 @@ guard.check_for_drops(processed_messages)  # after framework trimming
 
 Raises on token overflow, message count limits, duplicate turns, and silent message drops.
 
-## Quickstart: tool boundaries
+## Quickstart: tool boundaries (opt-in)
 
 ```python
 from mycelium import bounded, ToolRegistry, ToolRunner
@@ -210,7 +215,7 @@ result, messages = await runner.run_with_llm_retry(
 - Output failures → retry the tool up to `max_tool_retries` → then LLM retry
 - Raises `ToolBoundaryExhaustedError` when retries are used up
 
-## Quickstart: idempotency & audit receipts (v1.3 transition envelope)
+## Quickstart: idempotency & audit receipts (core — transition envelope)
 
 Stop duplicate payments, emails, and API calls when the framework retries. Five **effect-semantic** `side_effect_class` values plus optional `spendability` (`multi_use` / `single_use` / `non_replayable`): reads poll in-flight duplicates; mutating tools hard-block ambiguous states instead of blind re-execute.
 
