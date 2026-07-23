@@ -41,6 +41,8 @@ Not Langfuse. Use both if you want traces and guards. Full resolution rules: [sd
 ```bash
 pip install mycelium-runtime
 pip install 'mycelium-runtime[langgraph]'  # automatic LangGraph runtime IDs
+pip install 'mycelium-runtime[redis]'      # multi-worker / cloud ledger
+pip install 'mycelium-runtime[postgres]'   # Postgres ledger backend
 mycelium demo              # see the bug and the fix
 mycelium init              # on-ramp: transition + one ledgered tool → mycelium.yaml
 mycelium init --full       # reference: all guards (fill TODOs; not the default)
@@ -93,6 +95,11 @@ def my_side_effect_tool(...) -> dict:
     ...
 ```
 
+Without YAML, use the ledger decorators directly (`@ledger` / `@ledger_sync` for tools;
+`@task_ledger` / `@task_ledger_sync` for coarser task-level idempotency). Same transition
+envelope and gates — see [sdk/README.md](sdk/README.md#what-ledger--ledger_sync-do)
+and [task-level idempotency](sdk/README.md#quickstart-task-level-idempotency).
+
 Do not combine standalone guard decorators with command mode on the same
 function. Fully configured `@config.apply` wrappers are detected and skipped.
 Keep callable modules import-safe: registrations performed inside a target
@@ -106,7 +113,8 @@ resolves the existing transition: read tools poll/soft-block; mutating tools
 hard-block or reconcile against the provider when you record
 `external_operation_ref`.
 
-Multi-worker / cloud: `pip install 'mycelium-runtime[redis]'`. See the [handbook](https://mycelium-labs.github.io/mycelium/).
+Multi-worker / cloud ledgers: `pip install 'mycelium-runtime[redis]'` or
+`'mycelium-runtime[postgres]'`. See the [handbook](https://mycelium-labs.github.io/mycelium/).
 
 ## Docs
 

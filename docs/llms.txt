@@ -18,12 +18,13 @@ Opt-in (configure or call explicitly):
 
 ```
 pip install mycelium-runtime
+pip install 'mycelium-runtime[langgraph]'   # optional automatic LangGraph IDs
+pip install 'mycelium-runtime[redis]'       # multi-worker / cloud ledger
+pip install 'mycelium-runtime[postgres]'    # Postgres ledger backend
 mycelium demo              # see the bug and the fix (langgraph#7417)
 mycelium init              # transition + one ledgered tool -> mycelium.yaml
+mycelium run --config mycelium.yaml -- python -m my_app
 ```
-
-Optional backends: `pip install 'mycelium-runtime[redis]'` or `'mycelium-runtime[postgres]'`.
-
 ## How it differs from Langfuse / LangSmith
 
 Langfuse and LangSmith are observability and tracing — they show what happened after an agent runs. Mycelium is runtime prevention: a transition ledger around tool execution (core), plus optional tool-boundary and message/history guards. Use both if you want traces and guards.
