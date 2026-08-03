@@ -153,7 +153,69 @@ def instrument_langgraph_tool(
     return wrapper
 
 
+def completion_gate_end(
+    contract: Any,
+    *,
+    config: dict[str, Any] | None = None,
+    run_id: str | None = None,
+    thread_id: str | None = None,
+) -> Any:
+    """AF-007 adapter: call before a LangGraph END / last node returns.
+
+    Resolves ``run_id`` from an explicit argument, else LangGraph
+    ``config["configurable"]`` / ``config["run_id"]``, else active
+    ``execution_scope``. Raises ``CompletionRefusedError`` when required
+    subtasks are still pending.
+
+    Example (last node)::
+
+        from mycelium import load_config
+        from mycelium.integrations.langgraph import completion_gate_end
+
+        contract = load_config("mycelium.yaml").build_completion_contract()
+
+        def finalize(state, config):
+            completion_gate_end(contract, config=config)
+            return state
+    """
+    from mycelium.completion_contract import gate_graph_end
+    from mycelium.transition import TransitionScope, execution_scope
+
+    cfg = config if isinstance(config, dict) else {}
+    configurable = (
+        cfg.get("configurable", {})
+        if isinstance(cfg.get("configurable"), dict)
+        else {}
+    )
+    resolved_run = (
+        run_id
+        or cfg.get("run_id")
+        or configurable.get("run_id")
+        or ""
+    )
+    resolved_thread = (
+        thread_id
+        or configurable.get("thread_id")
+        or ""
+    )
+    scope_key = str(resolved_run) if resolved_run else None
+    if scope_key is None and resolved_thread:
+        scope_key = str(resolved_thread)
+
+    if resolved_run or resolved_thread:
+        with execution_scope(
+            TransitionScope(
+                thread_id=str(resolved_thread),
+                run_id=str(resolved_run),
+                node="end",
+            )
+        ):
+            return gate_graph_end(contract, scope_key=scope_key)
+    return gate_graph_end(contract, scope_key=scope_key)
+
+
 __all__ = [
     "LangGraphIntegrationError",
     "instrument_langgraph_tool",
+    "completion_gate_end",
 ]

@@ -541,6 +541,145 @@ def _loop_guard_from_args(args: argparse.Namespace) -> Any:
     return guard
 
 
+def _completion_from_args(args: argparse.Namespace) -> Any:
+    """Build a CompletionContract from --config / --file operator flags."""
+    from mycelium.completion_contract import (
+        CompletionContract,
+        FileCompletionStorage,
+    )
+    from mycelium.config import ConfigError, load_config
+
+    if getattr(args, "file", None):
+        required = [
+            s.strip()
+            for s in (getattr(args, "required", None) or "").split(",")
+            if s.strip()
+        ]
+        optional = [
+            s.strip()
+            for s in (getattr(args, "optional", None) or "").split(",")
+            if s.strip()
+        ]
+        if not required and not optional:
+            raise ConfigError(
+                "when using --file without a config, pass --required "
+                "and/or --optional (comma-separated ids)"
+            )
+        return CompletionContract(
+            FileCompletionStorage(args.file),
+            required=required,
+            optional=optional,
+        )
+
+    config_path = Path(args.config) if args.config else Path("mycelium.yaml")
+    if not config_path.is_file():
+        raise ConfigError(
+            f"no completion storage specified and config not found: {config_path} "
+            "(pass --config or --file)"
+        )
+    config = load_config(config_path)
+    if config.completion is None:
+        raise ConfigError(f"{config_path} declares no completion section")
+    contract = config.build_completion_contract()
+    if contract is None:
+        raise ConfigError(f"{config_path} declares no completion section")
+    storage_type = config.completion.get("storage", "memory")
+    if storage_type == "memory":
+        raise ConfigError(
+            "completion storage is 'memory', which lives inside the agent "
+            "process — the CLI cannot reach it. Use --file or configure "
+            "completion.storage: file"
+        )
+    return contract
+
+
+def cmd_completion_status(args: argparse.Namespace) -> int:
+    from mycelium.config import ConfigError
+
+    try:
+        contract = _completion_from_args(args)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    if args.run_id:
+        state = contract.get_state(args.run_id)
+        states = [state] if state is not None else []
+        if not states:
+            # Bind template so status shows pending checklist for a new run id.
+            state = contract.bind_run(args.run_id)
+            states = [state]
+    else:
+        states = contract.storage.list_all()
+
+    if args.json:
+        print(json.dumps([s.to_dict() for s in states], indent=2, default=str))
+        return 0
+
+    if not states:
+        print("(no completion-contract runs)")
+        return 0
+
+    for state in states:
+        pending_r = state.pending_required()
+        pending_o = state.pending_optional()
+        flags = []
+        if pending_r:
+            flags.append("REFUSE_IF_TERMINAL")
+        elif pending_o:
+            flags.append("WARN_OPTIONAL")
+        else:
+            flags.append("ALLOW")
+        flag_s = f" [{' '.join(flags)}]" if flags else ""
+        print(
+            f"{state.scope_key}  required={state.required}  "
+            f"optional={state.optional}{flag_s}"
+        )
+        for sid in state.required + [
+            x for x in state.optional if x not in state.required
+        ]:
+            mark = state.marks.get(sid)
+            if mark is None:
+                kind = "required" if sid in state.required else "optional"
+                print(f"  {sid}: pending ({kind})")
+            else:
+                reason = f" reason={mark.reason!r}" if mark.reason else ""
+                print(f"  {sid}: {mark.status}{reason}")
+        if pending_r:
+            print(
+                f"  → mark required ids then retry complete_run / END "
+                f"(pending: {pending_r})"
+            )
+    return 0
+
+
+def cmd_completion_mark(args: argparse.Namespace) -> int:
+    from mycelium.completion_contract import CompletionMarkError
+    from mycelium.config import ConfigError
+
+    try:
+        contract = _completion_from_args(args)
+        state = contract.mark(
+            args.subtask_id,
+            args.status,
+            reason=args.reason,
+            scope_key=args.run_id,
+        )
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except CompletionMarkError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    mark = state.marks[args.subtask_id]
+    print(
+        f"marked {args.subtask_id}={mark.status} on run {state.scope_key}"
+        + (f" reason={mark.reason!r}" if mark.reason else "")
+    )
+    return 0
+
+
 def cmd_loops_status(args: argparse.Namespace) -> int:
     from mycelium.config import ConfigError
 
@@ -838,6 +977,91 @@ def main(argv: list[str] | None = None) -> int:
         "--reason", required=True, help="Why the release is justified"
     )
 
+    completion_parser = sub.add_parser(
+        "completion",
+        help="AF-007 completion contract: status and mark subtasks before terminal",
+    )
+    completion_sub = completion_parser.add_subparsers(
+        dest="completion_command", required=True
+    )
+
+    completion_status = completion_sub.add_parser(
+        "status", help="Show completion-contract checklist for runs"
+    )
+    completion_status.add_argument(
+        "run_id",
+        nargs="?",
+        default=None,
+        help="Optional run_id / scope key (default: list all)",
+    )
+    completion_status.add_argument(
+        "-c",
+        "--config",
+        type=Path,
+        default=Path("mycelium.yaml"),
+        help="Config path with completion: (default: ./mycelium.yaml)",
+    )
+    completion_status.add_argument(
+        "--file",
+        type=Path,
+        default=None,
+        help="Direct path to completion JSON file storage",
+    )
+    completion_status.add_argument(
+        "--required",
+        default="",
+        help="Comma-separated required ids (with --file, no config)",
+    )
+    completion_status.add_argument(
+        "--optional",
+        default="",
+        help="Comma-separated optional ids (with --file, no config)",
+    )
+    completion_status.add_argument(
+        "--json", action="store_true", help="Machine-readable JSON output"
+    )
+
+    completion_mark = completion_sub.add_parser(
+        "mark",
+        help="Mark a subtask success|failed|abandoned for a run",
+    )
+    completion_mark.add_argument("run_id", help="run_id / scope key")
+    completion_mark.add_argument("subtask_id", help="Checklist id to mark")
+    completion_mark.add_argument(
+        "--status",
+        required=True,
+        choices=["success", "failed", "abandoned"],
+        help="Resolution status (abandoned requires --reason)",
+    )
+    completion_mark.add_argument(
+        "--reason",
+        default=None,
+        help="Required when --status abandoned",
+    )
+    completion_mark.add_argument(
+        "-c",
+        "--config",
+        type=Path,
+        default=Path("mycelium.yaml"),
+        help="Config path with completion: (default: ./mycelium.yaml)",
+    )
+    completion_mark.add_argument(
+        "--file",
+        type=Path,
+        default=None,
+        help="Direct path to completion JSON file storage",
+    )
+    completion_mark.add_argument(
+        "--required",
+        default="",
+        help="Comma-separated required ids (with --file, no config)",
+    )
+    completion_mark.add_argument(
+        "--optional",
+        default="",
+        help="Comma-separated optional ids (with --file, no config)",
+    )
+
     outcomes_parser = sub.add_parser(
         "outcomes",
         help="Outcome telemetry: compute DTTR over emitted resolution rows",
@@ -899,6 +1123,11 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_loops_status(args)
         if args.loops_command == "release":
             return cmd_loops_release(args)
+    if args.command == "completion":
+        if args.completion_command == "status":
+            return cmd_completion_status(args)
+        if args.completion_command == "mark":
+            return cmd_completion_mark(args)
     if args.command == "outcomes":
         if args.outcomes_command == "dttr":
             return cmd_outcomes_dttr(args)
