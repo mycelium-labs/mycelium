@@ -1,9 +1,9 @@
 # Mycelium runtime
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.22.0)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.23.0)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.22.0** (state-authority execution gate + AF-003 loop guard + outcome telemetry / DTTR + fail-closed Gmail sent-log reconciler + webhook event-dedupe recipe + atomicity contract + CAS backends + owner fencing + worker-death signal + operator release + `REPAIR` gate + lease auto-renew + transition envelope).
+Current package: **mycelium-runtime v1.23.0** (AF-007 completion contract + state-authority execution gate + AF-003 loop guard + outcome telemetry / DTTR + fail-closed Gmail sent-log reconciler + webhook event-dedupe recipe + atomicity contract + CAS backends + owner fencing + worker-death signal + operator release + `REPAIR` gate + lease auto-renew + transition envelope).
 
 ## One painful bug → a few lines of config
 

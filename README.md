@@ -1,6 +1,6 @@
 # Mycelium
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.22.0)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.23.0)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 [![Downloads](https://static.pepy.tech/badge/mycelium-runtime)](https://pepy.tech/project/mycelium-runtime)
 
@@ -8,7 +8,7 @@
 
 Stops duplicate side effects on retry/redispatch, blocks bad tool args and out-of-scope calls, and keeps tool data fresh. Not recovery after. Not tracing or dashboards.
 
-*Early but API-stable (**v1.22.0**): breaking changes only at major versions. More guards planned.*
+*Early but API-stable (**v1.23.0**): breaking changes only at major versions. More guards planned.*
 
 ## Who it's for
 
@@ -16,7 +16,7 @@ Developers running **agents with side-effect tools** in production (payments, em
 
 Python 3.10+. Framework-agnostic.
 
-## What it does (v1.22.x)
+## What it does (v1.23.x)
 
 These aren't reasoning failures. They're runtime failures. Mycelium sits between your agent loop and your tools (after the LLM returns `tool_calls`):
 
