@@ -27,9 +27,10 @@ Runtime guards for AI agents (PyPI: `mycelium-runtime`, import: `mycelium`). Pyt
 
 - Core idea: a durable "transition" envelope around side-effecting tool calls so framework retries/redispatches can't double-execute. Flow: `transition.py` (binding: `side_effect_class`, `spendability`, `retry_permission`) → `action_ledger.py` (claim/complete; memory + file storage; lease auto-renew while `@ledger` tool bodies run) → `transition_resolution.py` (poll / allow / hard-block) → `reconcile.py` (opt-in provider reconcile loop). Redis/Postgres storage in `storage/` behind the `redis` / `postgres` extras.
 - AF-003 `loop_guard.py`: consecutive action-hash detector across new `tool_call_id`s; wraps outside `@ledger` via `config.apply_tool`; CLI `mycelium loops status|release`.
+- AF-007 `completion_contract.py`: host checklist before terminal; refuse unmarked required / warn optional; `complete_run` + LangGraph END / final-message adapters; CLI `mycelium completion status|mark`; YAML `completion:` (opt-in).
 - `state_authority.py`: pre-claim superseded-state gate (`state_ref` vs host canonical callback); wraps outside `@loop_guard` / `@ledger`; YAML `state_authority:`; claim stores optional `decision_id` / `state_ref` for audit only.
 - Public API is flat: new public symbols must be exported from `sdk/mycelium/__init__.py` (changelog treats "export from package root" as a required release step).
-- CLI (`mycelium init|demo|run|transitions|loops|outcomes`) entry is `mycelium/__main__.py`; YAML scaffolds in `mycelium/templates/`; `mycelium/proofs/` + `fixtures/` reproduce langgraph#7417 end-to-end.
+- CLI (`mycelium init|demo|run|transitions|loops|completion|outcomes`) entry is `mycelium/__main__.py`; YAML scaffolds in `mycelium/templates/`; `mycelium/proofs/` + `fixtures/` reproduce langgraph#7417 end-to-end.
 
 ## Versioning & release
 

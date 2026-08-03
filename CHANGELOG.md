@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.23.0 (2026-08-03)
+
+Minor: AF-007 completion contract — refuse terminal output while host-declared
+required subtasks are still pending. Backward compatible (opt-in YAML / API).
+
+### Added
+
+- **Completion contract (AF-007):** host-declared `required` / `optional`
+  checklist keyed by `run_id` (fallback `thread_id`). Mark each id
+  `success` | `failed` | `abandoned` (reason required for abandoned).
+  Unmarked required → **refuse** (`CompletionRefusedError`); unmarked optional →
+  **warn and allow**. Public vocabulary: allow / allow_with_warnings / refuse
+  (not soft/hard).
+- APIs: `CompletionContract.mark` / `complete_run`, `wrap_final_message`,
+  `gate_graph_end`, LangGraph `completion_gate_end`, YAML `completion:`,
+  `config.mark_completion` / `config.complete_run`.
+- CLI: `mycelium completion status|mark`.
+- Example: `sdk/examples/completion_contract_checklist.py`; tests in
+  `tests/test_completion_contract.py`.
+
 ## 1.22.0 (2026-08-02)
 
 Minor: state-authority execution gate — refuse tool calls derived from a

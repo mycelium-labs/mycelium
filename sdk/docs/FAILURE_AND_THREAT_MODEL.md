@@ -12,10 +12,10 @@ README is the source of truth for how the pieces are used; this file is the
 honest accounting of what can go wrong and which guarantee is pinned to which
 test.
 
-> Version note: this document tracks package **v1.22.0**. The ledger-core
-> guarantees below are unchanged; optional `loop_guard:` (AF-003) and
-> `state_authority:` are documented in the SDK README and are outside this
-> core guarantee set.
+> Version note: this document tracks package **v1.23.0**. The ledger-core
+> guarantees below are unchanged; optional `loop_guard:` (AF-003),
+> `completion:` (AF-007), and `state_authority:` are documented in the SDK
+> README and are outside this core guarantee set.
 
 ---
 
@@ -42,14 +42,20 @@ This document is **explicitly out of scope** for:
   configured — that guard halts consecutive identical action hashes across
   distinct `tool_call_id`s. Without it, a tool that legitimately runs 1,000
   times under 1,000 distinct transition keys is *not* treated as a duplicate.
+- **Premature “done” / incomplete checklists** *unless* optional
+  `completion:` (AF-007) is configured — the ledger does not gate run-exit.
+  With `completion:`, unmarked **required** subtasks refuse terminal;
+  unmarked **optional** only warn. Does **not** judge open-ended user goals
+  (AF-005).
 - **State authority / superseded checkpoints** *unless* optional
   `state_authority:` is configured — the ledger does not refuse a *new*
   `tool_call_id` derived from a stale checkpoint. The pre-claim
   `StateAuthority` gate (freeze `state_ref` at decide, compare at execute)
   is documented in the SDK README; not part of the ledger core set below.
 - The optional `@protect` / `HistoryGuard` / `MessageValidator` / `@bounded`
-  / `Session` / `loop_guard` / `state_authority` features (documented in the
-  catalog and SDK README; not part of the ledger core guarantee set below).
+  / `Session` / `loop_guard` / `completion` / `state_authority` features
+  (documented in the catalog and SDK README; not part of the ledger core
+  guarantee set below).
 
 ---
 
@@ -202,6 +208,11 @@ than the code makes.
   distinct transition keys, the ledger does not stop the calls. Optional
   AF-003 `loop_guard:` halts consecutive identical *action* hashes (tool + args)
   across new dispatch ids; it is not a general spend budget.
+- **Premature terminal (without `completion:`).** The ledger does not stop an
+  agent from emitting “done” with unfinished work. Optional AF-007
+  `completion:` refuses terminal when **required** checklist ids are still
+  pending; it does not judge open-ended goals (AF-005) and never fires unless
+  an entry point (`complete_run` / END / final-message wrap) is wired.
 - **Superseded state (without `state_authority:`).** A redispatch from a stale
   checkpoint that mints a new `tool_call_id` / changed args has no prior claim
   and PROCEEDs. Optional `state_authority:` compares a frozen `state_ref` to the

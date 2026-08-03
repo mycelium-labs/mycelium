@@ -371,6 +371,7 @@
       <li><a href="#context">Context (opt-in)</a></li>
       <li><a href="#tools">Tool boundaries (opt-in)</a></li>
       <li><a href="#loops">Loop guard (opt-in)</a></li>
+      <li><a href="#completion">Completion contract (opt-in)</a></li>
       <li><a href="#actions">Actions (core)</a></li>
       <li><a href="#resolution">Resolution</a></li>
       <li><a href="#telemetry">Telemetry &amp; DTTR</a></li>
@@ -395,18 +396,19 @@
       on retry/redispatch, blocks bad tool args and out-of-scope calls, and keeps
       tool data fresh.
       <strong>Core:</strong> transition envelope (class + lease + terminal + gates / reconcile).
-      <strong>Opt-in:</strong> state authority, loop guard (AF-003), stale-context helpers, and tool-boundary checks.
+      <strong>Opt-in:</strong> state authority, loop guard (AF-003), completion
+      contract (AF-007), stale-context helpers, and tool-boundary checks.
       YAML callable paths and <code>mycelium run</code> add the core path without
       editing each function. Framework-agnostic. Not an approvals inbox, not hosted
       observability, not on-chain trails, not a recovery tool — a tool-boundary
       guard that composes under an approval layer and beside a tracer.
-      Latest: <strong>v1.22.0</strong> state-authority gate (freeze <code>state_ref</code> at
-      decide time, compare to host canonical before claim) + AF-003 loop guard
+      Latest: <strong>v1.23.0</strong> AF-007 completion contract (refuse terminal
+      while required checklist items are pending) + state-authority gate + AF-003 loop guard
       (identical actions across new <code>tool_call_id</code>s → soft then hard →
       <code>mycelium loops release</code>), fail-closed Gmail sent-log reconciler (v1.19.0),
       opt-in resolution telemetry with DTTR (v1.20.0), and a webhook event-dedupe
       recipe (v1.20.3).
-      Early but API-stable (v1.22.0): breaking changes only at major versions.
+      Early but API-stable (v1.23.0): breaking changes only at major versions.
     </p>
 
     <section id="architecture">
@@ -460,6 +462,13 @@
           dispatch). Soft <code>ToolBoundaryError</code>, then hard
           <code>LedgerHardBlockError</code> for the whole run; operator
           <code>mycelium loops release</code>.
+        </li>
+        <li>
+          <strong>Premature termination (AF-007)</strong> (opt-in) —
+          <code>completion:</code> host checklist; unmarked <strong>required</strong>
+          subtasks refuse terminal (<code>CompletionRefusedError</code>); unmarked
+          <strong>optional</strong> warn and allow. Gate via
+          <code>complete_run()</code>, LangGraph END, or final-message wrap.
         </li>
         <li>
           <strong>Stale or broken context</strong> (opt-in) — TTL cache
@@ -519,6 +528,10 @@ bounded, bounded_sync, ToolRegistry, ToolRunner
 LoopGuard, loop_guard, loop_guard_sync, apply_loop_guard
 InMemoryLoopGuardStorage, FileLoopGuardStorage
 
+# Completion contract AF-007 (opt-in)
+CompletionContract, CompletionRefusedError, wrap_final_message, gate_graph_end
+InMemoryCompletionStorage, FileCompletionStorage
+
 # Actions (core) — duplicate side effects / transition envelope
 ledger, ledger_sync, task_ledger, task_ledger_sync
 ActionLedger, TaskLedger, StateFlush, AuditReceiptEmitter, verify_receipt
@@ -544,7 +557,8 @@ MyceliumConfig.apply_tool, apply_named_task             # explicit names (v1.12.
 # CLI
 mycelium run --config PATH -- python ...                 # auto-instrumentation (v1.12.0)
 mycelium transitions list|show|release|mark-dead   # operator triage + release (v1.15.0+)
-mycelium loops status|release                      # AF-003 loop-guard triage + release</pre>
+mycelium loops status|release                      # AF-003 loop-guard triage + release
+mycelium completion status|mark                    # AF-007 checklist triage</pre>
     </section>
 
     <section id="context">
@@ -868,6 +882,50 @@ mycelium loops release &lt;run_id&gt; --verified clear|allow-once|abort-run \
       </p>
     </section>
 
+    <section id="completion">
+      <h2>Completion contract (AF-007, opt-in)</h2>
+      <p>
+        Premature termination: the agent presents work as done while a
+        <strong>host-declared</strong> checklist is still open. Mycelium does
+        not judge open-ended goals (AF-005) — only an explicit contract.
+      </p>
+      <ul>
+        <li>
+          <strong>required</strong> still pending →
+          <strong>refuse</strong> terminal (<code>CompletionRefusedError</code>)
+        </li>
+        <li>
+          <strong>optional</strong> still pending →
+          <strong>warn and allow</strong>
+        </li>
+      </ul>
+      <p>
+        Marks: <code>success</code> | <code>failed</code> |
+        <code>abandoned</code> (reason required). Scope: <code>run_id</code>
+        (fallback <code>thread_id</code>). Entry points:
+        <code>complete_run()</code>, LangGraph
+        <code>completion_gate_end</code> before END, or
+        <code>wrap_final_message</code>. Wire at least one. Demo:
+        <code>python examples/completion_contract_checklist.py</code> from
+        <code>sdk/</code>.
+      </p>
+      <pre>completion:
+  storage: file
+  path: ./mycelium-completion.json
+  required:
+    - id: send_email
+    - id: write_pr
+  optional:
+    - id: post_slack
+
+mycelium completion status &lt;run_id&gt; --config mycelium.yaml
+mycelium completion mark &lt;run_id&gt; send_email --status success</pre>
+      <p>
+        See the
+        <a href="https://github.com/mycelium-labs/mycelium/blob/main/sdk/README.md#completion-contract-af-007-refuse-terminal-while-required-subtasks-pending">SDK README</a>.
+      </p>
+    </section>
+
     <section id="telemetry">
       <h2>Outcome telemetry &amp; DTTR (v1.20+)</h2>
       <p>
@@ -1003,6 +1061,11 @@ runner:
 loop_guard:
   storage: file
   path: ./mycelium-loop.json
+
+# completion:                 # AF-007 opt-in
+#   storage: file
+#   path: ./mycelium-completion.json
+#   required: [{id: send_email}]
 
 history_guard:
   max_tokens: 100000
