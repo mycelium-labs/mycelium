@@ -35,6 +35,12 @@ from mycelium.integrations.langgraph import (
     LangGraphIntegrationError,
     instrument_langgraph_tool,
 )
+from mycelium.completion_contract import (
+    CompletionContract,
+    CompletionStorage,
+    FileCompletionStorage,
+    InMemoryCompletionStorage,
+)
 from mycelium.loop_guard import (
     DEFAULT_CONSECUTIVE_SOFT,
     FileLoopGuardStorage,
@@ -277,10 +283,12 @@ class MyceliumConfig:
     integrations: dict[str, dict[str, Any]] | None = None
     loop_guard: dict[str, Any] | None = None
     state_authority: dict[str, Any] | None = None
+    completion: dict[str, Any] | None = None
     _audit_emitter: AuditReceiptEmitter | None = None
     _outcome_emitter: OutcomeEmitter | None = None
     _loop_guard: LoopGuard | None = None
     _state_authority: StateAuthority | None = None
+    _completion: CompletionContract | None = None
     _state_flush: StateFlush | None = None
     _audit_auto: bool = False
 
@@ -597,6 +605,70 @@ class MyceliumConfig:
                 "use 'memory' or 'file'"
             )
         raise ConfigError(f"unknown loop_guard storage type: {storage_type!r}")
+
+    def build_completion_contract(self) -> CompletionContract | None:
+        """Build a CompletionContract if the config declares ``completion:``."""
+        if self.completion is None:
+            return None
+        if self._completion is not None:
+            return self._completion
+        raw = self.completion
+        storage = self._build_completion_storage(raw)
+        required, optional = _parse_completion_id_lists(raw)
+        self._completion = CompletionContract(
+            storage,
+            required=required,
+            optional=optional,
+        )
+        return self._completion
+
+    @staticmethod
+    def _build_completion_storage(raw: dict[str, Any]) -> CompletionStorage:
+        storage_type = raw.get("storage", "memory")
+        if storage_type == "memory":
+            return InMemoryCompletionStorage()
+        if storage_type == "file":
+            path = raw.get("path")
+            if not path:
+                raise ConfigError("completion storage 'file' requires a 'path'")
+            return FileCompletionStorage(path)
+        if storage_type in ("redis", "postgres"):
+            raise ConfigError(
+                f"completion storage {storage_type!r} is not implemented yet; "
+                "use 'memory' or 'file'"
+            )
+        raise ConfigError(f"unknown completion storage type: {storage_type!r}")
+
+    def mark_completion(
+        self,
+        subtask_id: str,
+        status: str,
+        *,
+        reason: str | None = None,
+        scope_key: str | None = None,
+    ) -> Any:
+        """Mark a completion-contract subtask (requires ``completion:`` in YAML)."""
+        contract = self.build_completion_contract()
+        if contract is None:
+            raise ConfigError(
+                "no completion: section in config; cannot mark_completion"
+            )
+        return contract.mark(
+            subtask_id, status, reason=reason, scope_key=scope_key
+        )
+
+    def complete_run(
+        self,
+        *,
+        scope_key: str | None = None,
+    ) -> Any:
+        """Gate terminal output via AF-007 completion contract."""
+        contract = self.build_completion_contract()
+        if contract is None:
+            raise ConfigError(
+                "no completion: section in config; cannot complete_run"
+            )
+        return contract.complete_run(scope_key=scope_key)
 
     def build_state_authority(self) -> StateAuthority | None:
         """Build a shared StateAuthority if the config declares ``state_authority:``."""
@@ -1407,6 +1479,44 @@ def _parse_transition_config(raw: Any) -> TransitionConfig | None:
     )
 
 
+def _parse_completion_id_lists(raw: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Parse ``completion.required`` / ``completion.optional`` id lists."""
+
+    def _ids(key: str) -> list[str]:
+        items = raw.get(key) or []
+        if not isinstance(items, list):
+            raise ConfigError(f"'completion.{key}' must be a list")
+        out: list[str] = []
+        for i, item in enumerate(items):
+            if isinstance(item, str):
+                sid = item.strip()
+            elif isinstance(item, dict):
+                sid = str(item.get("id", "")).strip()
+            else:
+                raise ConfigError(
+                    f"'completion.{key}[{i}]' must be a string id or "
+                    "{id: ...} mapping"
+                )
+            if not sid:
+                raise ConfigError(f"'completion.{key}[{i}]' missing id")
+            out.append(sid)
+        return out
+
+    required = _ids("required")
+    optional = _ids("optional")
+    overlap = set(required) & set(optional)
+    if overlap:
+        raise ConfigError(
+            "completion ids cannot be both required and optional: "
+            f"{sorted(overlap)}"
+        )
+    if not required and not optional:
+        raise ConfigError(
+            "'completion' needs at least one id under required: or optional:"
+        )
+    return required, optional
+
+
 def _validate_transition_tools(
     tools: dict[str, ToolConfig],
     transition: TransitionConfig | None,
@@ -1613,6 +1723,19 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
         if tools_sel != "all" and not isinstance(tools_sel, list):
             raise ConfigError("'loop_guard.tools' must be 'all' or a list of tool names")
 
+    completion_raw = data.get("completion")
+    if completion_raw is not None and not isinstance(completion_raw, dict):
+        raise ConfigError("'completion' must be a mapping")
+    if completion_raw is not None:
+        storage_type = completion_raw.get("storage", "memory")
+        if storage_type == "file" and not completion_raw.get("path"):
+            raise ConfigError("completion storage 'file' requires a 'path'")
+        if storage_type not in ("memory", "file", "redis", "postgres"):
+            raise ConfigError(
+                f"unknown completion storage type: {storage_type!r}"
+            )
+        _parse_completion_id_lists(completion_raw)
+
     state_authority_raw = data.get("state_authority")
     if state_authority_raw is not None and not isinstance(state_authority_raw, dict):
         raise ConfigError("'state_authority' must be a mapping")
@@ -1679,6 +1802,7 @@ def _parse_config(data: dict[str, Any]) -> MyceliumConfig:
         integrations=integrations,
         loop_guard=loop_guard_raw,
         state_authority=state_authority_raw,
+        completion=completion_raw,
         _audit_auto=audit_auto,
     )
 

@@ -5,7 +5,8 @@
 # Required vs optional
 #   Required for transition guards:  transition, action_ledger (+ tools entries you ledger)
 #   Optional:  integrations, task_ledger, state_flush, audit_receipt, outcome_emit,
-#              registry, runner, history_guard, message_validator — delete unused sections
+#              loop_guard, completion, state_authority, registry, runner,
+#              history_guard, message_validator — delete unused sections
 #
 # Next steps
 #   1. Allowlist first: rename tools: / tasks: stubs, then copy those exact
@@ -176,6 +177,22 @@ loop_guard:
   # tools: all                  # default: all keys under tools:
   # exclude: [poll_status]      # known pollers
   # Per-tool: tools.my_tool.loop_guard: { consecutive_soft: 20 }  or  false
+
+# ---------------------------------------------------------------------------
+# completion  (AF-007 — refuse terminal while required subtasks are pending)
+# Opt-in. Host-declared checklist; mark success|failed|abandoned before
+# complete_run() / graph END / final-message adapter. Unmarked required →
+# refuse; unmarked optional → warn and allow. Vocabulary: allow /
+# allow_with_warnings / refuse (not soft/hard).
+# ---------------------------------------------------------------------------
+# completion:
+#   storage: file
+#   path: ./mycelium-completion.json
+#   required:
+#     - id: send_email
+#     - id: write_pr
+#   optional:
+#     - id: post_slack
 
 # ---------------------------------------------------------------------------
 # state_authority  (refuse tools derived from a superseded state_ref)

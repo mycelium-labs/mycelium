@@ -90,6 +90,14 @@ loop_guard:
     non_idempotent_mutate: 2
     irreversible: 2
 
+# completion:                         # AF-007 opt-in checklist before terminal
+#   storage: file
+#   path: ./mycelium-completion.json
+#   required:
+#     - id: send_email
+#   optional:
+#     - id: post_slack
+
 # state_authority:                    # opt-in superseded-state gate
 #   canonical_callable: your_package.state:get_canonical_state_ref
 #   require_state_ref: true
