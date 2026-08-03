@@ -1,9 +1,9 @@
 # Mycelium runtime
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.23.0)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.23.1)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.23.0** (AF-007 completion contract + state-authority execution gate + AF-003 loop guard + outcome telemetry / DTTR + fail-closed Gmail sent-log reconciler + webhook event-dedupe recipe + atomicity contract + CAS backends + owner fencing + worker-death signal + operator release + `REPAIR` gate + lease auto-renew + transition envelope).
+Current package: **mycelium-runtime v1.23.1** (AF-002 failure-case pack + AF-007 completion contract + state-authority execution gate + AF-003 loop guard + outcome telemetry / DTTR + fail-closed Gmail sent-log reconciler + webhook event-dedupe recipe + atomicity contract + CAS backends + owner fencing + worker-death signal + operator release + `REPAIR` gate + lease auto-renew + transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -455,6 +455,11 @@ Runnable examples (fakes only, no provider credentials):
 [GitHub](examples/webhooks/github.md) (`X-GitHub-Delivery`) ·
 [Twilio](examples/webhooks/twilio.md) (message/event SID).
 
+**Failure-case pack (AF-002 gates):** five in-process repros for
+`RETURN` / `POLL` / `HARD_BLOCK` (+ `REPAIR` / reconcile) — no Redis required.
+See [examples/failure_cases/](examples/failure_cases/)
+(`python examples/failure_cases/run_all.py` from `sdk/`).
+
 ## What `@ledger` / `ledger_sync` do
 
 - Record every tool invocation in a durable `ActionLedger`
@@ -522,6 +527,9 @@ Each duplicate dispatch is classified to a gate. Read-only and side-effecting to
 | `REPAIR` | incomplete durable key / boundary / terminal (healable) | fix record, re-resolve — **no** second side effect |
 | `SOFT_BLOCK` | read-only `UNKNOWN` / `BLOCKED` only | **retry by default** (safe — reads don't spend); opt into deferral with `defer_read_only_unknown=True` → `LedgerSoftBlockError` |
 | `HARD_BLOCK` | ambiguous mutating transition | stop; run `Reconciler` when `external_operation_ref` is present, else fail-closed |
+
+Teachable in-process repros for the partner-facing gates:
+[examples/failure_cases/](examples/failure_cases/) (`run_all.py`).
 
 **Public transition-sufficiency language:** #7417-style discussions often use four words — `ALLOW` / `REPAIR` / `SOFT_BLOCK` / `HARD_BLOCK` (sometimes `BLOCK`). Mycelium implements that set and adds finer internals:
 

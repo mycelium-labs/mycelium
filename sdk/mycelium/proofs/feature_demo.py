@@ -61,6 +61,33 @@ class _StubReconciler:
         return self._result
 
 
+def prove_return_completed() -> dict[str, Any]:
+    """COMPLETED redispatch returns stored result — gate RETURN, body once."""
+    storage = InMemoryLedgerStorage()
+    binding = _mutate_binding(agent_id="return-demo")
+    calls: list[float] = []
+
+    @ledger_sync(storage=storage, transition_binding=binding)
+    def charge(amount: float) -> dict[str, float]:
+        calls.append(amount)
+        return {"charged": amount}
+
+    with execution_scope(_scope()):
+        first = charge(10.0, tool_call_id="return_call")
+        second = charge(10.0, tool_call_id="return_call")
+        entry = storage.list_all()[0]
+        gate = resolve_side_effect_gate(entry, binding)
+
+    assert first == second == {"charged": 10.0}
+    assert calls == [10.0], f"expected one body run, got {calls!r}"
+    assert gate == TransitionGate.RETURN, gate
+    return {
+        "executions": len(calls),
+        "gate": gate.value,
+        "result": second,
+    }
+
+
 def prove_lease_auto_renew() -> dict[str, Any]:
     """Long tool keeps lease HELD via auto-renew; peer gate stays POLL."""
     storage = InMemoryLedgerStorage()

@@ -12,7 +12,7 @@ README is the source of truth for how the pieces are used; this file is the
 honest accounting of what can go wrong and which guarantee is pinned to which
 test.
 
-> Version note: this document tracks package **v1.23.0**. The ledger-core
+> Version note: this document tracks package **v1.23.1**. The ledger-core
 > guarantees below are unchanged; optional `loop_guard:` (AF-003),
 > `completion:` (AF-007), and `state_authority:` are documented in the SDK
 > README and are outside this core guarantee set.

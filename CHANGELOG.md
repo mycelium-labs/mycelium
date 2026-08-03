@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.23.1 (2026-08-03)
+
+Patch: AF-002 failure-case pack — teachable in-process gate repros. Docs/examples
+only; no runtime API changes.
+
+### Added
+
+- **Failure-case pack (AF-002):** five runnable in-process repros for
+  `RETURN` / `POLL` / `HARD_BLOCK` (+ `REPAIR` / reconcile) under
+  `sdk/examples/failure_cases/` — no Redis/Postgres required. New
+  `prove_return_completed()` in `mycelium.proofs.feature_demo`; tests in
+  `tests/test_failure_cases.py`.
+
 ## 1.23.0 (2026-08-03)
 
 Minor: AF-007 completion contract — refuse terminal output while host-declared

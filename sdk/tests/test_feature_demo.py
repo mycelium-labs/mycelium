@@ -9,8 +9,16 @@ from mycelium.proofs.feature_demo import (
     prove_read_unknown_safe_retry,
     prove_reconcile_completed,
     prove_repair_gate,
+    prove_return_completed,
 )
 from mycelium.quickstart import run_demo
+
+
+def test_prove_return_completed() -> None:
+    result = prove_return_completed()
+    assert result["gate"] == "RETURN"
+    assert result["executions"] == 1
+    assert result["result"] == {"charged": 10.0}
 
 
 def test_prove_lease_auto_renew() -> None:
