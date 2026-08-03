@@ -83,12 +83,23 @@ jobs:
             exit 1
           fi
           VERSION="${{ steps.check.outputs.version }}"
+          REMOTE="https://x-access-token:${RELEASE_PAT}@github.com/${{ github.repository }}.git"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${VERSION}" -m "v${VERSION}" "${{ github.sha }}"
-          git push "https://x-access-token:${RELEASE_PAT}@github.com/${{ github.repository }}.git" "v${VERSION}"
 
-          if [ -s /tmp/release-notes.md ]; then
+          # Re-check remote: a human may have tagged between the earlier check
+          # and this step (race). Idempotent — succeed if tag/release already exist.
+          git fetch --tags "$REMOTE"
+          if git ls-remote --tags "$REMOTE" "refs/tags/v${VERSION}" | grep -q .; then
+            echo "Tag v${VERSION} already on remote — skipping tag push."
+          else
+            git tag -a "v${VERSION}" -m "v${VERSION}" "${{ github.sha }}"
+            git push "$REMOTE" "v${VERSION}"
+          fi
+
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "GitHub Release v${VERSION} already exists — skipping create."
+          elif [ -s /tmp/release-notes.md ]; then
             gh release create "v${VERSION}" \
               --target "${{ github.sha }}" \
               --title "v${VERSION}" \
