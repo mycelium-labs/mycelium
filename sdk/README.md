@@ -1,9 +1,9 @@
 # Mycelium runtime
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.23.1)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.24.0)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 
-Current package: **mycelium-runtime v1.23.1** (AF-002 failure-case pack + AF-007 completion contract + state-authority execution gate + AF-003 loop guard + outcome telemetry / DTTR + fail-closed Gmail sent-log reconciler + webhook event-dedupe recipe + atomicity contract + CAS backends + owner fencing + worker-death signal + operator release + `REPAIR` gate + lease auto-renew + transition envelope).
+Current package: **mycelium-runtime v1.24.0** (SQLite ledger backend + AF-002 failure-case pack + AF-007 completion contract + state-authority execution gate + AF-003 loop guard + outcome telemetry / DTTR + fail-closed Gmail sent-log reconciler + webhook event-dedupe recipe + atomicity contract + CAS backends + owner fencing + worker-death signal + operator release + `REPAIR` gate + lease auto-renew + transition envelope).
 
 ## One painful bug → a few lines of config
 
@@ -801,6 +801,7 @@ When a side-effecting transition ends ambiguous (`BLOCKED` / `UNKNOWN` / `FAILED
 ```bash
 mycelium transitions list --stuck --config mycelium.yaml
 # or without the app's config, straight at the backend:
+mycelium transitions list --stuck --sqlite ./mycelium-ledger.db
 mycelium transitions list --stuck --redis-url redis://localhost:6379/0
 ```
 
@@ -834,7 +835,7 @@ mycelium transitions release <request_id> --verified not-executed \
 
 Release is **one-shot** (a recorded verification is never overwritten — a second release fails) and **fail-closed**: unknown request ids, already-`COMPLETED` transitions, and `IN_FLIGHT` transitions with a still-held lease (a worker may be alive) are all refused. Entries are never deleted — the resolution (`operator_resolution`, `resolved_by`, `resolution_reason`, `resolved_at`, `released_from_outcome`) is stamped onto the durable record, so `provider_idempotency_key` enforcement and audit history survive. When an `AuditReceiptEmitter` is configured on the ledger, releases also emit signed receipts.
 
-Storage resolution: `--config` reads each tool's `ledger:` section (deduplicated); `--file PATH` / `--redis-url` / `--postgres-dsn` (env: `MYCELIUM_LEDGER_FILE` / `MYCELIUM_REDIS_URL` / `MYCELIUM_POSTGRES_DSN`) point the CLI at a backend directly for operator machines without the app's config. `storage: memory` can't be reached from the CLI — it lives inside the agent process; use the Python API there.
+Storage resolution: `--config` reads each tool's `ledger:` section (deduplicated); `--file PATH` / `--sqlite PATH` / `--redis-url` / `--postgres-dsn` (env: `MYCELIUM_LEDGER_FILE` / `MYCELIUM_SQLITE_PATH` / `MYCELIUM_REDIS_URL` / `MYCELIUM_POSTGRES_DSN`) point the CLI at a backend directly for operator machines without the app's config. `storage: memory` can't be reached from the CLI — it lives inside the agent process; use the Python API there.
 
 The same workflow exists in Python (e.g. from a runbook script or an admin console):
 
@@ -1029,18 +1030,31 @@ Storage backends:
 |---------|----------|----------------|
 | `memory` | Single process, tests | `memory` (default) |
 | `file` | Local dev, single host (`fcntl` lock) | `file` + `path` |
+| `sqlite` | Zero-ops single-node durable (stdlib) | `sqlite` + `path` (+ optional `table`) |
 | `redis` | Multi-worker, in-flight TTL | `redis` + `url` or `url_env` |
 | `postgres` | Audit/compliance, durable SQL | `postgres` + `dsn` or `dsn_env` |
 
 ```python
 from mycelium import ActionLedger, FileLedgerStorage, InMemoryLedgerStorage
-from mycelium import RedisLedgerStorage, PostgresLedgerStorage
+from mycelium import RedisLedgerStorage, PostgresLedgerStorage, SqliteLedgerStorage
 
 ledger = ActionLedger(storage=InMemoryLedgerStorage())
 ledger = ActionLedger(storage=FileLedgerStorage("./mycelium-ledger.json"))
+ledger = ActionLedger(storage=SqliteLedgerStorage("./mycelium-ledger.db"))
 ledger = ActionLedger(storage=RedisLedgerStorage("redis://localhost:6379/0"))
 ledger = ActionLedger(storage=PostgresLedgerStorage("postgresql://localhost/mycelium"))
 ```
+
+```yaml
+action_ledger:
+  storage: sqlite
+  path: ./mycelium-ledger.db
+  # table: mycelium_action_ledger   # optional
+```
+
+CLI triage: `mycelium transitions list --stuck --sqlite ./mycelium-ledger.db`
+(or `MYCELIUM_SQLITE_PATH`). Prefer Redis/Postgres for multi-worker / cross-node
+retry; SQLite is the simple durable on-ramp (no extra deps).
 
 Optional extras: `pip install 'mycelium-runtime[redis]'` or `pip install 'mycelium-runtime[postgres]'`.
 

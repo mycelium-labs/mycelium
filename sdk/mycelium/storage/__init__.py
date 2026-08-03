@@ -10,6 +10,10 @@ from mycelium.storage.redis_ledger import (
     RedisLedgerStorage,
     RedisTaskLedgerStorage,
 )
+from mycelium.storage.sqlite_ledger import (
+    SqliteLedgerStorage,
+    SqliteTaskLedgerStorage,
+)
 
 __all__ = [
     "LockedJsonDictFile",
@@ -18,4 +22,6 @@ __all__ = [
     "PostgresTaskLedgerStorage",
     "RedisLedgerStorage",
     "RedisTaskLedgerStorage",
+    "SqliteLedgerStorage",
+    "SqliteTaskLedgerStorage",
 ]

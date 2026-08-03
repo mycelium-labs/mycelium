@@ -1019,7 +1019,7 @@ class ActionLedger:
             f"Tool {tool!r} is side-effecting ({binding.side_effect_class.value}) "
             "but its ActionLedger uses InMemoryLedgerStorage: claims are not "
             "durable across processes or restarts, so the duplicate-side-effect "
-            "guard only holds within this process. Use file/redis/postgres "
+            "guard only holds within this process. Use file/sqlite/redis/postgres "
             "storage beyond local dev/demo.",
             stacklevel=3,
         )

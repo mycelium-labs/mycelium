@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.24.0 (2026-08-03)
+
+Minor: SQLite ledger backend — zero-ops single-node durable storage (stdlib
+`sqlite3`). Opt-in alternative to Redis/Postgres for local/dev and
+single-process agents. Backward compatible.
+
+### Added
+
+- **`SqliteLedgerStorage` / `SqliteTaskLedgerStorage`:** `request_id` + JSON
+  payload table (Postgres-shaped), WAL, transactional claim + CAS
+  `try_transition`. No Redis-style TTL (leases stay in payload).
+- YAML: `storage: sqlite` + `path:` (+ optional `table`) for action and task
+  ledgers.
+- CLI: `mycelium transitions … --sqlite PATH` (env `MYCELIUM_SQLITE_PATH`).
+- Tests: storage unit/CAS/concurrent claim; atomicity + operator-release
+  fixtures include `sqlite`.
+
 ## 1.23.1 (2026-08-03)
 
 Patch: AF-002 failure-case pack — teachable in-process gate repros. Docs/examples

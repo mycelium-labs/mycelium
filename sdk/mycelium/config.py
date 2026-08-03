@@ -937,6 +937,16 @@ class MyceliumConfig:
                 dsn,
                 table=str(raw.get("table", "mycelium_action_ledger")),
             )
+        if storage_type == "sqlite":
+            from mycelium.storage.sqlite_ledger import SqliteLedgerStorage
+
+            path = raw.get("path")
+            if not path:
+                raise ConfigError("ledger storage 'sqlite' requires a 'path'")
+            return SqliteLedgerStorage(
+                path,
+                table=str(raw.get("table", "mycelium_action_ledger")),
+            )
         raise ConfigError(f"unknown ledger storage type: {storage_type!r}")
 
     @staticmethod
@@ -976,6 +986,16 @@ class MyceliumConfig:
                 raise ConfigError(str(exc)) from exc
             return PostgresTaskLedgerStorage(
                 dsn,
+                table=str(raw.get("table", "mycelium_task_ledger")),
+            )
+        if storage_type == "sqlite":
+            from mycelium.storage.sqlite_ledger import SqliteTaskLedgerStorage
+
+            path = raw.get("path")
+            if not path:
+                raise ConfigError("task ledger storage 'sqlite' requires a 'path'")
+            return SqliteTaskLedgerStorage(
+                path,
                 table=str(raw.get("table", "mycelium_task_ledger")),
             )
         raise ConfigError(f"unknown task ledger storage type: {storage_type!r}")
@@ -1539,7 +1559,7 @@ def _warn_memory_storage_for_side_effecting(
 
     Memory is fine for dev/demo, but the duplicate-side-effect guard only holds
     within the process. Emit a one-time warning at YAML load time so the
-    operator knows to switch to file/redis/postgres for production.
+    operator knows to switch to file/sqlite/redis/postgres for production.
     """
     if transition is None:
         return
@@ -1560,7 +1580,7 @@ def _warn_memory_storage_for_side_effecting(
         warnings.warn(
             f"tool {name!r} is side-effecting ({tool.side_effect_class.value}) "
             "but its ledger uses memory storage; the duplicate-side-effect "
-            "guard only holds within this process. Use file/redis/postgres "
+            "guard only holds within this process. Use file/sqlite/redis/postgres "
             "for production deployments.",
             stacklevel=1,
         )

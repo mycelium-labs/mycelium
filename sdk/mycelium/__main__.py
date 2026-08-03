@@ -21,6 +21,7 @@ _TEMPLATE_MINIMAL = "mycelium.minimal.yaml"
 _ENV_LEDGER_FILE = "MYCELIUM_LEDGER_FILE"
 _ENV_REDIS_URL = "MYCELIUM_REDIS_URL"
 _ENV_POSTGRES_DSN = "MYCELIUM_POSTGRES_DSN"
+_ENV_SQLITE_PATH = "MYCELIUM_SQLITE_PATH"
 _ENV_OUTCOME_FILE = "MYCELIUM_OUTCOME_FILE"
 
 
@@ -152,13 +153,20 @@ def _add_operator_storage_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=f"Postgres ledger DSN (or ${_ENV_POSTGRES_DSN}); overrides --config",
     )
+    parser.add_argument(
+        "--sqlite",
+        dest="sqlite_path",
+        type=Path,
+        default=None,
+        help=f"SQLite ledger DB path (or ${_ENV_SQLITE_PATH}); overrides --config",
+    )
 
 
 def _operator_storage_configs(args: argparse.Namespace) -> list[dict[str, Any]]:
     """Resolve normalized ledger-storage config dicts from flags/env or config.
 
-    Direct flags (--file/--redis-url/--postgres-dsn, with env fallback) win
-    over --config. Config mode reuses each tool's normalized ``ledger:``
+    Direct flags (--file/--redis-url/--postgres-dsn/--sqlite, with env fallback)
+    win over --config. Config mode reuses each tool's normalized ``ledger:``
     section, deduplicating tools that share one backend.
     """
     from mycelium.config import ConfigError, load_config
@@ -166,6 +174,7 @@ def _operator_storage_configs(args: argparse.Namespace) -> list[dict[str, Any]]:
     file_path = args.file_path or os.environ.get(_ENV_LEDGER_FILE)
     redis_url = args.redis_url or os.environ.get(_ENV_REDIS_URL)
     postgres_dsn = args.postgres_dsn or os.environ.get(_ENV_POSTGRES_DSN)
+    sqlite_path = args.sqlite_path or os.environ.get(_ENV_SQLITE_PATH)
     direct: list[dict[str, Any]] = []
     if file_path:
         direct.append({"storage": "file", "path": str(file_path)})
@@ -173,6 +182,8 @@ def _operator_storage_configs(args: argparse.Namespace) -> list[dict[str, Any]]:
         direct.append({"storage": "redis", "url": redis_url})
     if postgres_dsn:
         direct.append({"storage": "postgres", "dsn": postgres_dsn})
+    if sqlite_path:
+        direct.append({"storage": "sqlite", "path": str(sqlite_path)})
     if direct:
         return direct
 
@@ -180,7 +191,7 @@ def _operator_storage_configs(args: argparse.Namespace) -> list[dict[str, Any]]:
     if not config_path.is_file():
         raise ConfigError(
             f"no ledger storage specified and config not found: {config_path} "
-            "(pass --config, or --file/--redis-url/--postgres-dsn)"
+            "(pass --config, or --file/--redis-url/--postgres-dsn/--sqlite)"
         )
     config = load_config(config_path)
     raws: list[dict[str, Any]] = []
@@ -212,7 +223,7 @@ def _operator_ledgers(args: argparse.Namespace) -> list[Any]:
                 "process — the CLI cannot reach it. Use the Python API "
                 "(ActionLedger.list_transitions() / ActionLedger.release(...)) "
                 "from a process sharing that storage, or point the CLI at a "
-                "durable backend with --file/--redis-url/--postgres-dsn"
+                "durable backend with --file/--redis-url/--postgres-dsn/--sqlite"
             )
         ledgers.append(ActionLedger(storage=MyceliumConfig._build_ledger_storage(raw)))
     return ledgers

@@ -1,6 +1,6 @@
 # Mycelium
 
-[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.23.1)](https://pypi.org/project/mycelium-runtime/)
+[![PyPI version](https://img.shields.io/pypi/v/mycelium-runtime.svg?cacheSeconds=60&release=1.24.0)](https://pypi.org/project/mycelium-runtime/)
 [![Python](https://img.shields.io/pypi/pyversions/mycelium-runtime.svg)](https://pypi.org/project/mycelium-runtime/)
 [![Downloads](https://static.pepy.tech/badge/mycelium-runtime)](https://pepy.tech/project/mycelium-runtime)
 
@@ -8,7 +8,7 @@
 
 Stops duplicate side effects on retry/redispatch, blocks bad tool args and out-of-scope calls, and keeps tool data fresh. Not recovery after. Not tracing or dashboards.
 
-*Early but API-stable (**v1.23.1**): breaking changes only at major versions. More guards planned.*
+*Early but API-stable (**v1.24.0**): breaking changes only at major versions. More guards planned.*
 
 ## Who it's for
 
@@ -137,8 +137,10 @@ resolves the existing transition: read tools poll/soft-block; mutating tools
 hard-block or reconcile against the provider when you record
 `external_operation_ref`.
 
-Multi-worker / cloud ledgers: `pip install 'mycelium-runtime[redis]'` or
-`'mycelium-runtime[postgres]'`. See the [handbook](https://mycelium-labs.github.io/mycelium/).
+Zero-ops single-node durable ledger: YAML `storage: sqlite` + `path:` (stdlib;
+no extra install). Multi-worker / cloud: `pip install 'mycelium-runtime[redis]'`
+or `'mycelium-runtime[postgres]'`. See the
+[handbook](https://mycelium-labs.github.io/mycelium/).
 
 ## Docs
 

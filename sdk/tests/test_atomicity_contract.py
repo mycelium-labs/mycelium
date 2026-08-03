@@ -32,6 +32,7 @@ from mycelium import (
     RedisLedgerStorage,
     SideEffectBoundary,
     SideEffectClass,
+    SqliteLedgerStorage,
     TerminalOutcome,
     ToolTransitionBinding,
     TransitionScope,
@@ -106,6 +107,7 @@ def _fake_redis(monkeypatch: pytest.MonkeyPatch) -> None:
     params=[
         pytest.param("memory", id="memory"),
         pytest.param("file", id="file"),
+        pytest.param("sqlite", id="sqlite"),
         pytest.param("redis", id="redis"),
     ]
 )
@@ -114,6 +116,8 @@ def ledger(request, tmp_path, monkeypatch):
         storage = InMemoryLedgerStorage()
     elif request.param == "file":
         storage = FileLedgerStorage(tmp_path / "ledger.json")
+    elif request.param == "sqlite":
+        storage = SqliteLedgerStorage(tmp_path / "ledger.db")
     elif request.param == "redis":
         _fake_redis(monkeypatch)
         storage = RedisLedgerStorage("redis://test")
@@ -571,7 +575,7 @@ def test_concurrent_reclaim_race_redis(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("backend", ["memory", "file", "redis"])
+@pytest.mark.parametrize("backend", ["memory", "file", "sqlite", "redis"])
 def test_concurrent_reconcile_not_executed_race(
     backend: str,
     tmp_path: Path,
@@ -584,6 +588,8 @@ def test_concurrent_reconcile_not_executed_race(
         storage = InMemoryLedgerStorage()
     elif backend == "file":
         storage = FileLedgerStorage(tmp_path / "reconcile_race.json")
+    elif backend == "sqlite":
+        storage = SqliteLedgerStorage(tmp_path / "reconcile_race.db")
     elif backend == "redis":
         fakeredis = pytest.importorskip("fakeredis")
         fake = fakeredis.FakeRedis(decode_responses=True)
@@ -659,7 +665,7 @@ def test_concurrent_reconcile_not_executed_race(
     )
 
 
-@pytest.mark.parametrize("backend", ["memory", "file", "redis"])
+@pytest.mark.parametrize("backend", ["memory", "file", "sqlite", "redis"])
 def test_concurrent_reconcile_not_executed_race_expired_seed(
     backend: str,
     tmp_path: Path,
@@ -673,6 +679,8 @@ def test_concurrent_reconcile_not_executed_race_expired_seed(
         storage = InMemoryLedgerStorage()
     elif backend == "file":
         storage = FileLedgerStorage(tmp_path / "reconcile_race_expired.json")
+    elif backend == "sqlite":
+        storage = SqliteLedgerStorage(tmp_path / "reconcile_race_expired.db")
     elif backend == "redis":
         fakeredis = pytest.importorskip("fakeredis")
         fake = fakeredis.FakeRedis(decode_responses=True)

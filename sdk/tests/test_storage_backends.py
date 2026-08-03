@@ -17,6 +17,7 @@ from mycelium import (
     LedgerPendingError,
     RedisLedgerStorage,
     SideEffectClass,
+    SqliteLedgerStorage,
     TerminalOutcome,
     ToolTransitionBinding,
 )
@@ -328,3 +329,137 @@ def test_config_builds_postgres_storage() -> None:
         }
     )
     assert isinstance(storage, PostgresLedgerStorage)
+
+
+def test_sqlite_storage_atomic_claim(tmp_path: Path) -> None:
+    storage = SqliteLedgerStorage(tmp_path / "ledger.db")
+    ledger = ActionLedger(storage=storage)
+
+    first = ledger.claim("req-sqlite", "send_payment", (), {"amount": 1})
+    assert first.status == "in-flight"
+
+    with pytest.raises(LedgerPendingError):
+        ledger.claim("req-sqlite", "send_payment", (), {"amount": 1})
+
+    completed = ledger.complete("req-sqlite", {"ok": True})
+    assert completed.status == "completed"
+
+    replay = ledger.claim("req-sqlite", "send_payment", (), {"amount": 1})
+    assert replay.status == "completed"
+    assert replay.result == {"ok": True}
+
+
+def test_sqlite_storage_serializes_concurrent_claims(tmp_path: Path) -> None:
+    storage = SqliteLedgerStorage(tmp_path / "ledger.db")
+    ledger = ActionLedger(storage=storage)
+    barrier = threading.Barrier(2)
+    results: list[str] = []
+
+    def claim() -> None:
+        barrier.wait()
+        try:
+            ledger.claim("req-1", "send_payment", (), {"amount": 10})
+            results.append("claimed")
+        except LedgerPendingError:
+            results.append("pending")
+
+    threads = [threading.Thread(target=claim) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sorted(results) == ["claimed", "pending"]
+    assert ledger.get("req-1") is not None
+    assert ledger.get("req-1").status == "in-flight"
+
+
+def test_sqlite_storage_payment_hard_blocks_expired_lease(tmp_path: Path) -> None:
+    storage = SqliteLedgerStorage(tmp_path / "ledger.db")
+    ledger = ActionLedger(storage=storage)
+    request_id = "sqlite-expired-payment"
+
+    storage.set(
+        LedgerEntry(
+            request_id=request_id,
+            tool="send_payment",
+            args=[],
+            kwargs={"amount": 10.0},
+            status="in-flight",
+            terminal_outcome=TerminalOutcome.IN_FLIGHT.value,
+            lease_until=time.time() - 1,
+            idempotency_key=request_id,
+        )
+    )
+
+    with pytest.raises(LedgerHardBlockError, match="manual reconciliation"):
+        ledger.claim_side_effecting(
+            request_id,
+            "send_payment",
+            (),
+            {"amount": 10.0},
+            _payment_binding(),
+        )
+
+    entry = storage.get(request_id)
+    assert entry is not None
+    assert entry.terminal_outcome == TerminalOutcome.BLOCKED.value
+
+
+def test_sqlite_cas_transition_owner_fence(tmp_path: Path) -> None:
+    storage = SqliteLedgerStorage(tmp_path / "ledger.db")
+    entry = LedgerEntry(
+        request_id="cas-1",
+        tool="send_payment",
+        args=[],
+        kwargs={},
+        status="in-flight",
+        terminal_outcome=TerminalOutcome.IN_FLIGHT.value,
+        owner="owner-a",
+        idempotency_key="cas-1",
+    )
+    storage.set(entry)
+    completed = LedgerEntry(
+        request_id="cas-1",
+        tool="send_payment",
+        args=[],
+        kwargs={},
+        status="completed",
+        terminal_outcome=TerminalOutcome.COMPLETED.value,
+        result={"ok": True},
+        owner="owner-a",
+        idempotency_key="cas-1",
+    )
+    assert storage.try_transition(
+        completed,
+        expected_terminal_outcomes=frozenset({TerminalOutcome.IN_FLIGHT.value}),
+        expected_owner="owner-a",
+    )
+    assert not storage.try_transition(
+        completed,
+        expected_terminal_outcomes=frozenset({TerminalOutcome.IN_FLIGHT.value}),
+        expected_owner="owner-b",
+    )
+    stored = storage.get("cas-1")
+    assert stored is not None
+    assert stored.status == "completed"
+
+
+def test_config_builds_sqlite_storage(tmp_path: Path) -> None:
+    from mycelium.config import MyceliumConfig
+
+    storage = MyceliumConfig._build_ledger_storage(
+        {
+            "storage": "sqlite",
+            "path": str(tmp_path / "ledger.db"),
+            "table": "mycelium_action_ledger",
+        }
+    )
+    assert isinstance(storage, SqliteLedgerStorage)
+
+
+def test_config_sqlite_requires_path() -> None:
+    from mycelium.config import ConfigError, MyceliumConfig
+
+    with pytest.raises(ConfigError, match="requires a 'path'"):
+        MyceliumConfig._build_ledger_storage({"storage": "sqlite"})

@@ -32,6 +32,7 @@ from mycelium import (
     RedisLedgerStorage,
     SideEffectBoundary,
     SideEffectClass,
+    SqliteLedgerStorage,
     TerminalOutcome,
     ToolTransitionBinding,
     TransitionScope,
@@ -78,12 +79,14 @@ def _fake_redis(monkeypatch: pytest.MonkeyPatch):
     return fake
 
 
-@pytest.fixture(params=["memory", "file", "redis"])
+@pytest.fixture(params=["memory", "file", "sqlite", "redis"])
 def storage(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     if request.param == "memory":
         return InMemoryLedgerStorage()
     if request.param == "file":
         return FileLedgerStorage(tmp_path / "ledger.json")
+    if request.param == "sqlite":
+        return SqliteLedgerStorage(tmp_path / "ledger.db")
     _fake_redis(monkeypatch)
     return RedisLedgerStorage("redis://test")
 
@@ -601,6 +604,31 @@ def _seed_file_ledger(path: Path) -> str:
     ledger_inst.attach_external_operation_ref("req-cli", "pi_cli_1")
     ledger_inst.mark_blocked("req-cli", error="stale lease; maybe crossed")
     return "req-cli"
+
+
+def _seed_sqlite_ledger(path: Path) -> str:
+    storage = SqliteLedgerStorage(path)
+    ledger_inst = ActionLedger(storage=storage)
+    ledger_inst.claim("req-cli-sqlite", "send_payment", (), {"amount": 10})
+    ledger_inst.attach_external_operation_ref("req-cli-sqlite", "pi_cli_sqlite")
+    ledger_inst.mark_blocked("req-cli-sqlite", error="stale lease; maybe crossed")
+    return "req-cli-sqlite"
+
+
+def test_cli_transitions_sqlite_backend_list_show(tmp_path: Path, capsys) -> None:
+    from mycelium.__main__ import main
+
+    db = tmp_path / "ledger.db"
+    request_id = _seed_sqlite_ledger(db)
+
+    assert main(["transitions", "list", "--sqlite", str(db), "--stuck"]) == 0
+    out = capsys.readouterr().out
+    assert request_id in out
+    assert "BLOCKED" in out
+
+    assert main(["transitions", "show", request_id, "--sqlite", str(db)]) == 0
+    out = capsys.readouterr().out
+    assert "external_operation_ref: pi_cli_sqlite" in out
 
 
 def test_cli_transitions_file_backend_round_trip(tmp_path: Path, capsys) -> None:

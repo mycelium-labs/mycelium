@@ -117,6 +117,7 @@ from mycelium.state_flush import (
 )
 from mycelium.storage.postgres_ledger import PostgresLedgerStorage, PostgresTaskLedgerStorage
 from mycelium.storage.redis_ledger import RedisLedgerStorage, RedisTaskLedgerStorage
+from mycelium.storage.sqlite_ledger import SqliteLedgerStorage, SqliteTaskLedgerStorage
 from mycelium.task_ledger import (
     TaskFileLedgerStorage,
     TaskInMemoryLedgerStorage,
@@ -161,7 +162,7 @@ from mycelium.transition_resolution import (
     transition_needs_repair,
 )
 
-__version__ = "1.23.1"
+__version__ = "1.24.0"
 
 __all__ = [
     "ActionLedger",
@@ -221,6 +222,8 @@ __all__ = [
     "RedisTaskLedgerStorage",
     "PostgresLedgerStorage",
     "PostgresTaskLedgerStorage",
+    "SqliteLedgerStorage",
+    "SqliteTaskLedgerStorage",
     "get_task_ledger",
     "task_ledger",
     "task_ledger_sync",

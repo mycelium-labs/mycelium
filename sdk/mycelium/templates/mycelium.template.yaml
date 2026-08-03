@@ -18,8 +18,9 @@
 #        mycelium run --config mycelium.yaml -- python -m your_package.app
 #      Or keep explicit @config.apply / @config.apply_task / config.instrument.
 #
-# storage (ledgers): memory | file | redis | postgres
+# storage (ledgers): memory | file | sqlite | redis | postgres
 #   memory — process-local  |  file — needs path:
+#   sqlite — path: (+ optional table); zero-ops single-node durable
 #   redis  — url: or url_env: (+ optional prefix, in_flight_ttl)
 #   postgres — dsn: or dsn_env: (+ optional table)
 # state_flush / audit_receipt: memory | file only
@@ -83,10 +84,14 @@ transition:
 # action_ledger  (tool-level claim/settle)
 # ---------------------------------------------------------------------------
 action_ledger:
-  storage: file            # <TODO: memory | file | redis | postgres>
+  storage: file            # <TODO: memory | file | sqlite | redis | postgres>
   path: ./mycelium-ledger.json
   # unclassified_policy: warn   # warn (default): one-time warning on failed retry
                                 # strict: hard-block unclassified failed retries
+  # sqlite (zero-ops single-node durable):
+  # storage: sqlite
+  # path: ./mycelium-ledger.db
+  # table: mycelium_action_ledger
   # url_env: MYCELIUM_REDIS_URL          # redis
   # dsn_env: MYCELIUM_POSTGRES_DSN       # postgres
   # <TODO step 1: copy ledgered tool names from tools: keys below>
@@ -96,7 +101,7 @@ action_ledger:
 # task_ledger  (whole-task claim/settle; omit if unused)
 # ---------------------------------------------------------------------------
 task_ledger:
-  storage: file            # <TODO: memory | file | redis | postgres>
+  storage: file            # <TODO: memory | file | sqlite | redis | postgres>
   path: ./mycelium-task-ledger.json
   # url_env: MYCELIUM_REDIS_URL
   # dsn_env: MYCELIUM_POSTGRES_DSN
