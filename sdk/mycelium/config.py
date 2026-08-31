@@ -2244,7 +2244,12 @@ def _parse_tool_config(
     protect = raw.get("protect")
     bounded = raw.get("bounded")
     ledger_raw = raw.get("ledger")
-    audit_receipt = bool(raw.get("audit_receipt", False))
+    raw_audit = raw.get("audit_receipt")
+    if isinstance(raw_audit, str) and raw_audit.lower() == "false":
+        raw_audit = False
+    elif isinstance(raw_audit, str) and raw_audit.lower() == "true":
+        raw_audit = True
+    audit_receipt = bool(raw_audit if raw_audit is not None else False)
 
     if protect is not None and not isinstance(protect, dict):
         raise ConfigError(f"tool '{name}'.protect must be a mapping")
@@ -2278,7 +2283,7 @@ def _parse_tool_config(
             raise ConfigError(str(exc)) from exc
 
     ledger = _normalize_ledger_config(name, ledger_raw, action_ledger_global)
-    if audit_auto and ledger is not None and raw.get("audit_receipt") is not False:
+    if audit_auto and ledger is not None and raw_audit is not False:
         audit_receipt = True
 
     side_effect_class: SideEffectClass | None = None
@@ -2503,9 +2508,14 @@ def _parse_task_config(
             ledger_raw = {"id_from": id_from}
         elif isinstance(ledger_raw, dict):
             ledger_raw = {**ledger_raw, "id_from": id_from}
-    audit_receipt = bool(raw.get("audit_receipt", False))
+    raw_audit = raw.get("audit_receipt")
+    if isinstance(raw_audit, str) and raw_audit.lower() == "false":
+        raw_audit = False
+    elif isinstance(raw_audit, str) and raw_audit.lower() == "true":
+        raw_audit = True
+    audit_receipt = bool(raw_audit if raw_audit is not None else False)
     ledger = _normalize_ledger_config(name, ledger_raw, task_ledger_global)
-    if audit_auto and ledger is not None and raw.get("audit_receipt") is not False:
+    if audit_auto and ledger is not None and raw_audit is not False:
         audit_receipt = True
 
     callable_path = _parse_callable_path(

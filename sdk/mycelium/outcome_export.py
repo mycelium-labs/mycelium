@@ -286,10 +286,15 @@ class WebhookOutcomeStorage(OutcomeStorage):
         secret: str | bytes | None = None,
         timeout: float = 5.0,
     ) -> None:
+        import math
         if not url:
             raise ValueError("webhook url must be non-empty")
-        if timeout <= 0:
-            raise ValueError("webhook timeout must be positive")
+        if isinstance(timeout, bool):
+            raise TypeError("webhook timeout must not be a boolean")
+        if not isinstance(timeout, (int, float)):
+            raise TypeError("webhook timeout must be a number")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("webhook timeout must be a positive finite number")
         self._url = url
         self._headers = dict(headers or {})
         self._secret = secret.encode() if isinstance(secret, str) else secret
