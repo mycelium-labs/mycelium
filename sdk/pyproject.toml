@@ -58,6 +58,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "ruff",
+    "pyright",
     "fakeredis",
     "hypothesis",
     "langgraph>=1.2.9",
@@ -82,3 +83,10 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+include = [
+    "mycelium/api_stability.py",
+    "mycelium/audit_receipt.py",
+]

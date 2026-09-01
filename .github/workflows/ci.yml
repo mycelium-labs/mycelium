@@ -186,3 +186,7 @@ jobs:
       - name: Ruff
         working-directory: sdk
         run: ruff check mycelium tests
+
+      - name: Pyright
+        working-directory: sdk
+        run: pyright
