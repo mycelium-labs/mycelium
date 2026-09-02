@@ -424,6 +424,41 @@ audit_receipt:
     assert audit.agent_id == "payment-agent"
 
 
+@pytest.mark.parametrize(
+    "value", ['"false"', '"true"', "0", "1", "null", "[]", "{}"]
+)
+def test_state_flush_on_complete_requires_boolean(value: str) -> None:
+    config = load_config_from_string(f"""
+state_flush:
+  storage: memory
+  flush_on_complete: {value}
+""")
+
+    with pytest.raises(
+        ConfigError,
+        match=r"'state_flush\.flush_on_complete' must be a boolean",
+    ):
+        config.build_state_flush()
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("true", True), ("false", False), ("", True)],
+)
+def test_state_flush_on_complete_boolean_values_and_omitted_default(
+    value: str, expected: bool
+) -> None:
+    option = f"  flush_on_complete: {value}\n" if value else ""
+    config = load_config_from_string(f"""
+state_flush:
+  storage: memory
+{option}""")
+    state_flush = config.build_state_flush()
+
+    assert state_flush is not None
+    assert state_flush._flush_on_complete is expected
+
+
 def test_transition_lease_renew_interval_parsed() -> None:
     yaml_text = """
 transition:

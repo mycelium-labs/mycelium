@@ -1672,7 +1672,12 @@ class MyceliumConfig:
         flush_on = self.state_flush.get("flush_on")
         if flush_on is not None and not isinstance(flush_on, list):
             raise ConfigError("'state_flush.flush_on' must be a list")
-        flush_on_complete = bool(self.state_flush.get("flush_on_complete", True))
+        flush_on_complete = _parse_bool_option(
+            self.state_flush,
+            "flush_on_complete",
+            field="'state_flush.flush_on_complete'",
+            default=True,
+        )
         self._state_flush = StateFlush(
             storage=storage,
             flush_on=list(flush_on) if flush_on is not None else None,

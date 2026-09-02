@@ -7,6 +7,8 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Fixed
 
+- Require `state_flush.flush_on_complete` to be a YAML boolean instead of
+  accepting truthy values such as quoted `false`.
 - Reject non-finite and boolean authority-window clock-skew tolerances during
   policy construction and YAML configuration loading.
 - Require audit receipt flags in tool, task, and global configuration to be
