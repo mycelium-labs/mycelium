@@ -187,6 +187,10 @@ jobs:
         working-directory: sdk
         run: ruff check mycelium tests
 
+      - name: Pyright
+        working-directory: sdk
+        run: pyright --project pyproject.toml
+
   markdown-links:
     runs-on: ubuntu-latest
     steps:

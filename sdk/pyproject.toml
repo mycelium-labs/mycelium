@@ -58,6 +58,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "ruff",
+    "pyright>=1.1.350",
     "fakeredis",
     "hypothesis",
     "langgraph>=1.2.9",
@@ -85,6 +86,45 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.pyright]
+include = [
+    "mycelium/__init__.py",
+    "mycelium/api_stability.py",
+    "mycelium/audit_receipt.py",
+    "mycelium/authority_window.py",
+    "mycelium/budget_llm.py",
+    "mycelium/cache.py",
+    "mycelium/cli_migrations.py",
+    "mycelium/cli_transitions.py",
+    "mycelium/completion_contract.py",
+    "mycelium/config_artifacts.py",
+    "mycelium/config_detect.py",
+    "mycelium/config_schema.py",
+    "mycelium/decision.py",
+    "mycelium/entity_guard.py",
+    "mycelium/history_guard.py",
+    "mycelium/ledger_migrations.py",
+    "mycelium/loop_guard.py",
+    "mycelium/message_validator.py",
+    "mycelium/operator_auth.py",
+    "mycelium/provider_conformance.py",
+    "mycelium/quickstart.py",
+    "mycelium/reconcile.py",
+    "mycelium/schema.py",
+    "mycelium/scope_guard.py",
+    "mycelium/secret_protection.py",
+    "mycelium/session.py",
+    "mycelium/state_authority.py",
+    "mycelium/state_migrations.py",
+    "mycelium/tool_boundary.py",
+    "mycelium/tool_registry.py",
+    "mycelium/tool_runner.py",
+    "mycelium/transition_resolution.py",
+]
+pythonVersion = "3.10"
+reportMissingImports = false
+reportMissingTypeStubs = false
 
 # Keep repository-development material out of source archives. The sdist still
 # contains the README, build metadata, and the complete runtime package.

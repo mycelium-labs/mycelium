@@ -56,6 +56,7 @@ cd mycelium/sdk
 uv sync --extra dev --extra redis --extra postgres
 uv run pytest tests/ -v
 uv run ruff check mycelium tests
+uv run pyright
 ```
 
 ### Alternative: pip
@@ -68,6 +69,7 @@ source .venv/bin/activate
 python -m pip install -e ".[dev,redis,postgres]"
 pytest tests/ -v
 ruff check mycelium tests
+pyright
 ```
 
 On Windows PowerShell, activate the environment with
@@ -82,6 +84,7 @@ checks:
 cd sdk
 uv run pytest tests/ -v
 uv run ruff check mycelium tests
+uv run pyright
 ```
 
 Use the equivalent commands inside an activated pip environment if you are not

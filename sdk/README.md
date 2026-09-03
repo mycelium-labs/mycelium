@@ -2781,4 +2781,11 @@ Clone the GitHub repo to run proofs and tests. PyPI installs only the `mycelium`
 git clone https://github.com/mycelium-labs/mycelium.git
 cd mycelium/sdk && pip install -e ".[dev]"
 pytest tests/ -v
+pyright
 ```
+
+### Typing and Static Analysis
+
+The SDK enforces static typing using Pyright in CI:
+- **Baseline Coverage:** Stable public modules, API contracts, transition gates, and decorators are checked in CI (`pyright`).
+- **PEP 561 Status:** The package currently defers shipping `py.typed` until internal storage and simulation harness legacy annotations are fully unified.
