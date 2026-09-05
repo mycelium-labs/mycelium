@@ -57,6 +57,7 @@ uv sync --extra dev --extra redis --extra postgres
 uv run pytest tests/ -v
 uv run pytest --cov=mycelium --cov-report=term-missing
 uv run ruff check mycelium tests
+uv run pip-audit --desc on
 ```
 
 ### Alternative: pip
@@ -70,6 +71,7 @@ python -m pip install -e ".[dev,redis,postgres]"
 pytest tests/ -v
 pytest --cov=mycelium --cov-report=term-missing
 ruff check mycelium tests
+pip-audit --desc on
 ```
 
 On Windows PowerShell, activate the environment with
@@ -85,6 +87,7 @@ cd sdk
 uv run pytest tests/ -v
 uv run pytest --cov=mycelium --cov-report=term-missing
 uv run ruff check mycelium tests
+uv run pip-audit --desc on
 ```
 
 Use the equivalent commands inside an activated pip environment if you are not
@@ -198,6 +201,7 @@ Copy the applicable items into the pull request description:
 - [ ] Full `pytest tests/ -v` passes
 - [ ] Coverage gate passes (`pytest --cov=mycelium --cov-report=term-missing`)
 - [ ] `ruff check mycelium tests` passes
+- [ ] `pip-audit --desc on` passes (from `sdk/`)
 - [ ] Redis/Postgres tests ran, or the PR explains why they do not apply
 - [ ] No relevant tests were silently skipped
 - [ ] Compatibility and durable-state impact were reviewed
@@ -313,3 +317,21 @@ lychee --verbose --no-progress --offline \
   --exclude-path graphify-out \
   --exclude-path .cache \
   "**/*.md"
+```
+
+### Dependency vulnerability audit
+
+CI audits the SDK runtime and release extras for known vulnerabilities (#146).
+Run the same local check from `sdk/` before opening a pull request that
+touches dependencies:
+
+```bash
+pip install -e ".[dev,redis,postgres,observability]"
+pip-audit --desc on
+```
+
+`pip-audit` exits non-zero on findings and on advisory-service errors, so an
+unavailable service fails closed. Temporary exceptions must stay specific,
+justified, and time-bounded adhering to `sdk/.pip-audit-ignore` policy:
+`# Format: <VULN_ID> # reason: <rationale> (review: YYYY-MM-DD)`.
+Do not add broad skips, and do not auto-upgrade dependencies in the audit step.

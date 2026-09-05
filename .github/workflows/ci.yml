@@ -206,6 +206,24 @@ jobs:
         working-directory: sdk
         run: ruff check mycelium tests
 
+      - name: Dependency vulnerability audit
+        if: matrix.python-version == '3.12'
+        working-directory: sdk
+        # Dependency vulnerability gate (#146). pip-audit exits non-zero on
+        # findings or service errors. Exceptions must be recorded in
+        # sdk/.pip-audit-ignore with a reason and review date.
+        run: |
+          IGNORE_ARGS=()
+          if [ -f .pip-audit-ignore ]; then
+            while IFS= read -r line || [ -n "$line" ]; do
+              line="${line#"${line%%[![:space:]]*}"}"
+              [[ -z "$line" || "$line" =~ ^# ]] && continue
+              vuln_id=$(echo "$line" | awk '{print $1}')
+              [ -n "$vuln_id" ] && IGNORE_ARGS+=("--ignore-vuln" "$vuln_id")
+            done < .pip-audit-ignore
+          fi
+          pip-audit --desc on "${IGNORE_ARGS[@]}"
+
   markdown-links:
     runs-on: ubuntu-latest
     steps:

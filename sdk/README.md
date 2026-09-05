@@ -1395,8 +1395,8 @@ ledger.release(request_id, verified="not_executed",
 
 The action ledger deduplicates **retries of the same dispatch**. If the LLM emits a *new* `tool_call_id` each turn with the same tool + args, that is a new transition — the ledger allows it. Optional `loop_guard:` detects that thrash:
 
-1. Soft — `ToolBoundaryError` (`violation=loop_detected`) with an `llm_message`; body does not run  
-2. Hard — `LedgerHardBlockError`; **entire run** frozen until an operator releases it  
+1. Soft — `ToolBoundaryError` (`violation=loop_detected`) with an `llm_message`; body does not run
+2. Hard — `LedgerHardBlockError`; **entire run** frozen until an operator releases it
 
 ```yaml
 loop_guard:
@@ -2810,4 +2810,8 @@ git clone https://github.com/mycelium-labs/mycelium.git
 cd mycelium/sdk && pip install -e ".[dev]"
 pytest tests/ -v
 pytest --cov=mycelium --cov-report=term-missing
+ruff check mycelium tests
+pip-audit --desc on
 ```
+
+Audit dependencies for known vulnerabilities before opening a pull request. Temporary exceptions must be documented in `.pip-audit-ignore` with a reason and review date, and passed via `--ignore-vuln <ID>`.
