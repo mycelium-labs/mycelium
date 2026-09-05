@@ -4,8 +4,12 @@ This package is the first external-language interoperability experiment for
 Mycelium. The protocol remains language-neutral and the Python sidecar remains the
 authority for identity, policy, claims, fencing, state transitions, and recovery.
 It targets Node.js 18 or newer with native `fetch` and requires the frozen
-development protocol `v1alpha1`. Version `0.1.0` is prepared for the npm
-`experimental` channel but is not published yet.
+development protocol `v1alpha1`. Version `0.1.0` is published on npm as an
+experimental preview.
+
+```sh
+npm install @mycelium-labs/sidecar-client@experimental
+```
 
 ## Start the sidecar
 
@@ -93,6 +97,7 @@ npm run build
 npm run typecheck
 ```
 
-This package is experimental. Publishing it with the configured
-`experimental` distribution tag keeps it out of npm's default `latest` channel.
-Do not treat it as a production-supported SDK.
+This package is experimental. npm attached both `experimental` and `latest` to
+the first published version; attempted removal of the automatic `latest` tag was
+rejected by the registry. Use the explicit `@experimental` install command and
+do not treat the package as a production-supported SDK.

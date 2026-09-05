@@ -1,6 +1,7 @@
 # Mycelium sidecar protocol v1alpha1
 
-**Status:** frozen development protocol. Not published and not production-ready.
+**Status:** frozen development protocol with published experimental
+implementations. Not production-ready.
 
 `v1alpha1` is the first immutable interoperability target for the Mycelium
 sidecar and language clients. Freezing this revision means implementations can
@@ -73,7 +74,7 @@ this fingerprint under `v1alpha1`.
 | Implementation | Status |
 |---|---|
 | Python development sidecar | Published in `mycelium-runtime==1.38.2`; implements and advertises `v1alpha1` |
-| TypeScript client | Requires `v1alpha1`; npm package prepared and unpublished |
+| TypeScript client | Published as `@mycelium-labs/sidecar-client@0.1.0`; requires `v1alpha1` |
 | Go client | Published as module `v0.1.0`; requires `v1alpha1` |
 | Raw HTTP clients | May use the same authenticated OpenAPI contract |
 
@@ -90,8 +91,8 @@ Before publishing any preview package or tag:
 - [x] Preserve fail-closed handling for unknown safety-critical values.
 - [x] Approve the release coordinates: `mycelium-runtime==1.38.2`,
   `@mycelium-labs/sidecar-client@0.1.0`, and Go module `v0.1.0`.
-- [x] Prepare `@mycelium-labs/sidecar-client@0.1.0` as a public npm preview on
-  the `experimental` distribution tag. It remains unpublished until approval.
+- [x] Publish `@mycelium-labs/sidecar-client@0.1.0` as a public npm preview on
+  the `experimental` distribution tag.
 - [x] Approve the Go submodule tag `clients/go/v0.1.0`.
 - [x] Approve `mycelium-runtime==1.38.2` as the first Python package version
   containing the sidecar preview.
@@ -120,8 +121,11 @@ Before publishing any preview package or tag:
   integration documentation.
 - Go module `v0.1.0` was published from the CI-verified commit and confirmed
   through the public Go module proxy.
-- TypeScript npm publication remains pending because no npm credentials are
-  configured locally or in the repository's GitHub Actions secrets.
+- TypeScript `0.1.0` was published publicly to npm after interactive 2FA and
+  confirmed through the unauthenticated registry endpoint. The registry exposes
+  the intended `experimental` tag and also retained an automatic `latest` tag
+  for this first package version; an authenticated removal attempt returned
+  HTTP 400.
 
 ## Production gates
 
@@ -138,7 +142,7 @@ They are not required merely to experiment with the local trusted-client profile
 ## Release decision
 
 The Python reference engine and development sidecar are published in
-`mycelium-runtime==1.38.2`, and the experimental Go transport client is
-published as module `v0.1.0`. The frozen protocol remains development-only, and
-publication does not expand its production guarantees. The prepared TypeScript
-client remains unpublished until npm authentication is configured.
+`mycelium-runtime==1.38.2`, the experimental TypeScript transport client is
+published as `@mycelium-labs/sidecar-client@0.1.0`, and the experimental Go
+transport client is published as module `v0.1.0`. The frozen protocol remains
+development-only, and publication does not expand its production guarantees.
