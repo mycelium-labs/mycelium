@@ -59,6 +59,7 @@ dev = [
     "pytest-asyncio",
     "pytest-cov>=5.0.0",
     "ruff",
+    "bandit>=1.7.9",
     "fakeredis",
     "hypothesis",
     "langgraph>=1.2.9",
@@ -95,6 +96,10 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "build", "dist", ".tox"]
+skips = ["B101", "B105", "B110"]
 
 # Keep repository-development material out of source archives. The sdist still
 # contains the README, build metadata, and the complete runtime package.

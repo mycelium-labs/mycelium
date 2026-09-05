@@ -301,7 +301,7 @@ def cmd_run(config_path: Path, command: list[str]) -> int:
     env[AUTO_CONFIG_ENV] = str(resolved_config)
 
     try:
-        os.execvpe(child_command[0], child_command, env)
+        os.execvpe(child_command[0], child_command, env)  # nosec B606  # execvpe replaces process with validated child command
     except OSError as exc:
         print(f"error: cannot start {child_command[0]!r}: {exc}", file=sys.stderr)
         return 127

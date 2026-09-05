@@ -206,6 +206,11 @@ jobs:
         working-directory: sdk
         run: ruff check mycelium tests
 
+      - name: Bandit static security scanner
+        if: matrix.python-version == '3.12'
+        working-directory: sdk
+        run: bandit -c pyproject.toml -r mycelium
+
   markdown-links:
     runs-on: ubuntu-latest
     steps:

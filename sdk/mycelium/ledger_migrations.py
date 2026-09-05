@@ -91,7 +91,7 @@ def inspect_ledger_schema_versions(raw: dict[str, Any]) -> dict[int, int]:
             ).fetchone()
             if exists is None:
                 return {}
-            rows = conn.execute(f"SELECT payload FROM {table}").fetchall()
+            rows = conn.execute(f"SELECT payload FROM {table}").fetchall()  # nosec B608  # validated table name
         payloads = []
         for (payload,) in rows:
             try:

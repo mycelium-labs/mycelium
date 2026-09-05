@@ -663,7 +663,7 @@ class SqliteDestructiveGrantStore:
             with self._connect() as conn:
                 self._ensure_schema(conn)
                 conn.execute(
-                    f"INSERT INTO {self._table} (grant_id, payload) VALUES (?, ?) "
+                    f"INSERT INTO {self._table} (grant_id, payload) VALUES (?, ?) "  # nosec B608
                     "ON CONFLICT(grant_id) DO UPDATE SET payload = excluded.payload",
                     (grant.grant_id, payload),
                 )
@@ -674,7 +674,7 @@ class SqliteDestructiveGrantStore:
             with self._connect() as conn:
                 self._ensure_schema(conn)
                 row = conn.execute(
-                    f"SELECT payload FROM {self._table} WHERE grant_id = ?",
+                    f"SELECT payload FROM {self._table} WHERE grant_id = ?",  # nosec B608
                     (grant_id,),
                 ).fetchone()
         if row is None:
@@ -687,14 +687,14 @@ class SqliteDestructiveGrantStore:
                 self._ensure_schema(conn)
                 conn.execute("BEGIN IMMEDIATE")
                 row = conn.execute(
-                    f"SELECT payload FROM {self._table} WHERE grant_id = ?",
+                    f"SELECT payload FROM {self._table} WHERE grant_id = ?",  # nosec B608
                     (grant_id,),
                 ).fetchone()
                 rec = json.loads(row["payload"]) if row is not None else None
                 result = _consume_record(rec, request_id, now)
                 if rec is not None and result.status == DECISION_ALLOWED:
                     conn.execute(
-                        f"UPDATE {self._table} SET payload = ? WHERE grant_id = ?",
+                        f"UPDATE {self._table} SET payload = ? WHERE grant_id = ?",  # nosec B608
                         (json.dumps(rec, default=str), grant_id),
                     )
                 conn.commit()
@@ -780,7 +780,7 @@ class PostgresDestructiveGrantStore:
             with self._psycopg.connect(self._dsn) as conn:
                 self._ensure_schema(conn)
                 conn.execute(
-                    f"INSERT INTO {self._table} (grant_id, payload) VALUES (%s, %s::jsonb) "
+                    f"INSERT INTO {self._table} (grant_id, payload) VALUES (%s, %s::jsonb) "  # nosec B608
                     "ON CONFLICT (grant_id) DO UPDATE SET payload = EXCLUDED.payload",
                     (grant.grant_id, payload),
                 )
@@ -791,7 +791,7 @@ class PostgresDestructiveGrantStore:
             with self._psycopg.connect(self._dsn) as conn:
                 self._ensure_schema(conn)
                 row = conn.execute(
-                    f"SELECT payload FROM {self._table} WHERE grant_id = %s",
+                    f"SELECT payload FROM {self._table} WHERE grant_id = %s",  # nosec B608
                     (grant_id,),
                 ).fetchone()
         if row is None:
@@ -807,7 +807,7 @@ class PostgresDestructiveGrantStore:
                 self._ensure_schema(conn)
                 with conn.transaction():
                     row = conn.execute(
-                        f"SELECT payload FROM {self._table} "
+                        f"SELECT payload FROM {self._table} "  # nosec B608
                         "WHERE grant_id = %s FOR UPDATE",
                         (grant_id,),
                     ).fetchone()
@@ -821,7 +821,7 @@ class PostgresDestructiveGrantStore:
                     result = _consume_record(rec, request_id, now)
                     if rec is not None and result.status == DECISION_ALLOWED:
                         conn.execute(
-                            f"UPDATE {self._table} SET payload = %s::jsonb "
+                            f"UPDATE {self._table} SET payload = %s::jsonb "  # nosec B608
                             "WHERE grant_id = %s",
                             (json.dumps(rec, default=str), grant_id),
                         )

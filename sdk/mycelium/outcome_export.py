@@ -324,7 +324,7 @@ class WebhookOutcomeStorage(OutcomeStorage):
             signature = hmac.new(self._secret, body, hashlib.sha256).hexdigest()
             headers["X-Mycelium-Signature"] = f"sha256={signature}"
         request = Request(self._url, data=body, headers=headers, method="POST")
-        with urlopen(request, timeout=self._timeout) as response:  # noqa: S310
+        with urlopen(request, timeout=self._timeout) as response:  # nosec B310  # noqa: S310
             response.read(1)
 
     def list_all(self) -> list[OutcomeRow]:
