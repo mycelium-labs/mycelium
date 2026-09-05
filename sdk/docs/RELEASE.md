@@ -134,8 +134,49 @@ On merge to `main`, [release.yml](../../.github/workflows/release.yml) tags
 uploads to PyPI. Confirm:
 
 - [ ] GitHub Release notes look right (from CHANGELOG extract).
+- [ ] GitHub Release includes the CycloneDX SBOM artifact (`mycelium-runtime-X.Y.Z.cdx.json`).
 - [ ] PyPI shows the new version: https://pypi.org/project/mycelium-runtime/
 - [ ] Hotfix: notify affected design partners; otherwise no “blast” needed.
+
+---
+
+## Software Bill of Materials (SBOM)
+
+Releases automatically generate and attach a machine-readable Software Bill of Materials (SBOM) in CycloneDX JSON format (`mycelium-runtime-<version>.cdx.json`) as a release asset in GitHub Releases and as a workflow artifact in GitHub Actions.
+
+### Reproducing and verifying locally
+
+To generate and verify the CycloneDX SBOM locally:
+
+1. Install build tools and `cyclonedx-bom`:
+   ```bash
+   pip install build "cyclonedx-bom>=4.0.0"
+   ```
+
+2. Build the package wheel and sdist:
+   ```bash
+   python -m build sdk
+   ```
+
+3. Install the built wheel into a clean virtual environment:
+   ```bash
+   python -m venv .sbom-env
+   .sbom-env/bin/pip install sdk/dist/*.whl
+   ```
+
+4. Generate the CycloneDX SBOM:
+   ```bash
+   cyclonedx-py environment .sbom-env/bin/python \
+     --pyproject sdk/pyproject.toml \
+     --mc-type library \
+     --output-format JSON \
+     --output-file sdk/dist/mycelium-runtime.cdx.json
+   ```
+
+5. Verify the generated SBOM with standard tooling:
+   ```bash
+   python -c "import json; data = json.load(open('sdk/dist/mycelium-runtime.cdx.json')); print('Format:', data['bomFormat'], data['specVersion']); print('Root:', data['metadata']['component']['name'], data['metadata']['component']['version'])"
+   ```
 
 ---
 

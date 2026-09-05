@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -27,8 +27,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install build tools
-        run: pip install build hatchling
+      - name: Install build and SBOM tools
+        run: pip install build hatchling "cyclonedx-bom>=4.0.0"
 
       - name: Build sdist and wheel
         run: python -m build
@@ -37,6 +37,99 @@ jobs:
         run: >-
           python ../.github/scripts/check-distribution-contents.py
           dist/*.whl dist/*.tar.gz
+
+      - name: Generate CycloneDX SBOM
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p sbom
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          python -m venv "${RUNNER_TEMP}/sbom-env"
+          "${RUNNER_TEMP}/sbom-env/bin/pip" install dist/*.whl
+          cyclonedx-py environment "${RUNNER_TEMP}/sbom-env/bin/python" \
+            --pyproject pyproject.toml \
+            --mc-type library \
+            --output-format JSON \
+            --output-file "sbom/mycelium-runtime-${VERSION}.cdx.json"
+          python - <<'PY'
+          import json, os, subprocess
+
+          version = os.environ.get("VERSION")
+          if not version:
+              import tomllib
+              with open("pyproject.toml", "rb") as f:
+                  version = tomllib.load(f)["project"]["version"]
+
+          sbom_path = f"sbom/mycelium-runtime-{version}.cdx.json"
+          with open(sbom_path, "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          assert data.get("bomFormat") == "CycloneDX"
+          component = data.get("metadata", {}).get("component", {})
+          assert component.get("name") == "mycelium-runtime"
+          assert component.get("version") == version
+
+          # Associate exact source commit SHA with root component (Issue #147)
+          commit_sha = os.environ.get("SOURCE_COMMIT")
+          if not commit_sha:
+              try:
+                  commit_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+              except Exception:
+                  commit_sha = ""
+
+          if commit_sha:
+              repo = os.environ.get("GITHUB_REPOSITORY", "mycelium-labs/mycelium")
+              ext_refs = component.setdefault("externalReferences", [])
+              ext_refs.append({
+                  "type": "vcs",
+                  "url": f"https://github.com/{repo}/tree/{commit_sha}",
+                  "comment": f"Source commit {commit_sha}",
+              })
+              properties = component.setdefault("properties", [])
+              properties.append({
+                  "name": "vcs:commit",
+                  "value": commit_sha,
+              })
+
+          with open(sbom_path, "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2)
+          PY
+
+      - name: Upload SBOM build artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mycelium-runtime-sbom
+          path: sdk/sbom/*
+
+      - name: Upload SBOM to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          TAG="v${VERSION}"
+          RELEASE_FOUND=false
+          # Wait up to 60s for release.yml to finish creating the release if triggered by tag push
+          for i in $(seq 1 12); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              RELEASE_FOUND=true
+              break
+            fi
+            echo "GitHub Release ${TAG} not found yet; waiting 5s (attempt $i/12)..."
+            sleep 5
+          done
+
+          if [ "$RELEASE_FOUND" = "true" ]; then
+            echo "Uploading SBOM to GitHub Release ${TAG}..."
+            gh release upload "$TAG" "sbom/mycelium-runtime-${VERSION}.cdx.json" --clobber
+          elif [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ]; then
+            echo "GitHub Release ${TAG} does not exist for workflow_dispatch; skipping release asset upload."
+          else
+            echo "::error::GitHub Release ${TAG} not found after timeout; failing to prevent incomplete release without SBOM."
+            exit 1
+          fi
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
