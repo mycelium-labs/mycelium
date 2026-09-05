@@ -74,7 +74,7 @@ this fingerprint under `v1alpha1`.
 |---|---|
 | Python development sidecar | Published in `mycelium-runtime==1.38.2`; implements and advertises `v1alpha1` |
 | TypeScript client | Requires `v1alpha1`; npm package prepared and unpublished |
-| Go client | Requires `v1alpha1`; `v0.1.0` tag prepared and unpublished |
+| Go client | Published as module `v0.1.0`; requires `v1alpha1` |
 | Raw HTTP clients | May use the same authenticated OpenAPI contract |
 
 TypeScript and Go are interoperability examples. They do not define the protocol
@@ -118,8 +118,10 @@ Before publishing any preview package or tag:
 - PyPI publication completed with wheel, source archive, and digital
   attestations. The live package description contains the language-neutral
   integration documentation.
-- TypeScript npm publication and the Go module tag remain separate,
-  independently approved release actions.
+- Go module `v0.1.0` was published from the CI-verified commit and confirmed
+  through the public Go module proxy.
+- TypeScript npm publication remains pending because no npm credentials are
+  configured locally or in the repository's GitHub Actions secrets.
 
 ## Production gates
 
@@ -136,7 +138,7 @@ They are not required merely to experiment with the local trusted-client profile
 ## Release decision
 
 The Python reference engine and development sidecar are published in
-`mycelium-runtime==1.38.2`. The frozen protocol remains development-only, and
+`mycelium-runtime==1.38.2`, and the experimental Go transport client is
+published as module `v0.1.0`. The frozen protocol remains development-only, and
 publication does not expand its production guarantees. The prepared TypeScript
-and Go clients remain unpublished until their separate release actions are
-approved and verified.
+client remains unpublished until npm authentication is configured.
