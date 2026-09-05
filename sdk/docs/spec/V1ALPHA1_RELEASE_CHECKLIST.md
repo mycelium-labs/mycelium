@@ -72,7 +72,7 @@ this fingerprint under `v1alpha1`.
 
 | Implementation | Status |
 |---|---|
-| Python development sidecar | Implements and advertises `v1alpha1` |
+| Python development sidecar | Published in `mycelium-runtime==1.38.2`; implements and advertises `v1alpha1` |
 | TypeScript client | Requires `v1alpha1`; npm package prepared and unpublished |
 | Go client | Requires `v1alpha1`; `v0.1.0` tag prepared and unpublished |
 | Raw HTTP clients | May use the same authenticated OpenAPI contract |
@@ -96,9 +96,9 @@ Before publishing any preview package or tag:
 - [x] Approve `mycelium-runtime==1.38.2` as the first Python package version
   containing the sidecar preview.
 - [x] Add Python release notes that state the development-only limitations.
-- [x] Run the local portions of the project release checklist for the selected
-  Python release. Release-PR CI and post-publication checks remain pending.
-- [ ] Obtain explicit approval before publishing or tagging anything.
+- [x] Run the Python release checklist, including CI on Python 3.10 through
+  3.13, package installation, concurrency proofs, lint, and Markdown links.
+- [x] Obtain explicit approval before publishing or tagging anything.
 
 ## Validation recorded on 2026-09-05
 
@@ -109,10 +109,17 @@ Before publishing any preview package or tag:
 - TypeScript: typecheck, build, and npm pack dry run passed. The package contains
   13 intended files and uses the `experimental` distribution tag.
 - Go: `go vet ./...` and `go build ./...` passed for the declared module path.
-- Registry collision checks: Python `1.38.2`, the npm package name, and the Go
-  submodule tag were all absent when checked.
-- Pending external gate: push the commits, open or update the release PR, and
-  require green CI for Python 3.10 through 3.13 before any publication action.
+- Registry collision checks before release: Python `1.38.2`, the npm package
+  name, and the Go submodule tag were all absent when checked.
+- GitHub CI passed on the final tagged commit for Python 3.10 through 3.13,
+  package installation, concurrency proofs, lint, and Markdown links.
+- The corrected `v1.38.2` tag resolves to the final documented commit, and the
+  GitHub Release was recreated from that tag.
+- PyPI publication completed with wheel, source archive, and digital
+  attestations. The live package description contains the language-neutral
+  integration documentation.
+- TypeScript npm publication and the Go module tag remain separate,
+  independently approved release actions.
 
 ## Production gates
 
@@ -128,6 +135,8 @@ They are not required merely to experiment with the local trusted-client profile
 
 ## Release decision
 
-No artifact is published by this freeze. The next authorized release action is to
-choose package names and preview versions, complete the applicable unchecked
-gates above, and obtain explicit publication approval.
+The Python reference engine and development sidecar are published in
+`mycelium-runtime==1.38.2`. The frozen protocol remains development-only, and
+publication does not expand its production guarantees. The prepared TypeScript
+and Go clients remain unpublished until their separate release actions are
+approved and verified.
