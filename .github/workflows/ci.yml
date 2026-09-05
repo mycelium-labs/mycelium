@@ -57,6 +57,9 @@ jobs:
             exit 1
           fi
 
+      - name: Verify architecture map source provenance
+        run: python .github/scripts/check-architecture-provenance.py
+
   package:
     runs-on: ubuntu-latest
     steps:

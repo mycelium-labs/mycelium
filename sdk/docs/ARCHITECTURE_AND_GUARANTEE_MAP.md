@@ -6,9 +6,31 @@ is conditional on its stated prerequisites and links to both implementation and
 tests. It does not claim that installing Mycelium, loading YAML, or passing a
 synthetic verification run proves an application's real provider integration.
 
-Validated against the repository at commit `8c5b4a7` (Mycelium `1.38.0`). The
-companion [failure and threat model](FAILURE_AND_THREAT_MODEL.md) contains the
-larger failure catalogue and exhaustive guarantee-to-test index.
+## Source provenance and review baseline
+
+Validated against the repository at review base commit `8c5b4a7` (Mycelium `1.38.0`).
+The machine-verifiable source manifest is tracked in [architecture_provenance.json](architecture_provenance.json).
+
+### Provenance model and guarantees
+
+To eliminate the impossible Git self-reference problem (a tracked architecture document cannot contain the Git commit SHA that includes the document itself), Mycelium couples an **ancestor review base** with a **cryptographic source file manifest**:
+
+1. **Review Base Ancestry**: The recorded `review_base_commit` (`8c5b4a7`) is verified to exist in the repository object graph and to be an ancestor of `HEAD`.
+2. **Cryptographic Manifest**: [architecture_provenance.json](architecture_provenance.json) records the SHA-256 digests of all 15 canonical Python runtime modules and 27 regression test suites supporting the architecture trace below.
+
+**What this provenance statement guarantees:**
+- **Audit Traceability**: Readers and security auditors have an immutable reference to the exact baseline source tree against which architecture guarantees were verified.
+- **Automated Drift Detection**: Continuous integration verifies that the review base commit exists as an ancestor and that all linked architecture files remain present and accounted for.
+- **Maintainer Update Command**: Maintainers can refresh the provenance baseline with a single deterministic command:
+  ```console
+  python .github/scripts/update-architecture-provenance.py
+  ```
+
+**What this does not prove:**
+- A valid provenance record does not guarantee that third-party runtime dependencies (e.g., external Redis or PostgreSQL engines) satisfy their host assumptions (**A**).
+- It does not substitute for active synthetic integration tests (exercised via `mycelium verify`).
+
+The companion [failure and threat model](FAILURE_AND_THREAT_MODEL.md) contains the larger failure catalogue and exhaustive guarantee-to-test index.
 
 ## Legend
 
