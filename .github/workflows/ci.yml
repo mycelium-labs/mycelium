@@ -57,6 +57,9 @@ jobs:
             exit 1
           fi
 
+      - name: Verify failure & threat model guarantee-to-test map
+        run: python .github/scripts/check-guarantee-test-map.py
+
   package:
     runs-on: ubuntu-latest
     steps:

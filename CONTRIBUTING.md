@@ -85,6 +85,7 @@ cd sdk
 uv run pytest tests/ -v
 uv run pytest --cov=mycelium --cov-report=term-missing
 uv run ruff check mycelium tests
+python ../.github/scripts/check-guarantee-test-map.py
 ```
 
 Use the equivalent commands inside an activated pip environment if you are not
