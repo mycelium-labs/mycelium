@@ -313,3 +313,19 @@ lychee --verbose --no-progress --offline \
   --exclude-path graphify-out \
   --exclude-path .cache \
   "**/*.md"
+```
+
+### Architecture map source provenance checks
+
+When modifying files referenced by `sdk/docs/ARCHITECTURE_AND_GUARANTEE_MAP.md`,
+verify the machine-verifiable source provenance manifest:
+
+```bash
+python .github/scripts/check-architecture-provenance.py
+```
+
+To update the provenance manifest when architectural changes are intentionally audited:
+
+```bash
+python .github/scripts/update-architecture-provenance.py
+```
