@@ -1,9 +1,12 @@
-# Failure-mode catalog (AF-001…AF-011)
+# Failure-mode catalog (AF-001…AF-012)
 
 **The taxonomy is the product story.** Mycelium is the reliability layer for AI
-agents; these IDs are the public promise. Stable across the SDK README,
-handbook, and changelogs. Sourced from a GitHub-issue corpus across LangChain,
-LangGraph, CrewAI, AutoGen, Cline, OpenHands, and related stacks.
+agents; these IDs make tool actions reliable across their full lifecycle:
+validation and authority before execution, runtime control during the run, and
+outcome resolution and evidence afterward. No single AF class defines the
+whole product. Stable across the SDK README, handbook, and changelogs. Sourced
+from a GitHub-issue corpus across LangChain, LangGraph, CrewAI, AutoGen, Cline,
+OpenHands, and related stacks.
 
 | ID | Failure mode | Mycelium surface |
 |----|--------------|------------------|
@@ -36,8 +39,9 @@ truth for later tool calls. Wrong lookup → wrong write → wrong confirmation.
 amounts / paths into mutating tools; plans that never re-ground against source
 context.
 
-**Why not core yet:** needs a judge model (precision/recall tradeoffs). Outside
-the deterministic `ALLOW` / `BLOCK` chassis.
+**Why not a deterministic SDK guard yet:** needs a judge model
+(precision/recall tradeoffs). Outside the deterministic `ALLOW` / `BLOCK`
+chassis.
 
 ---
 
@@ -56,9 +60,10 @@ spans/dashboards.
 mid-action with unknown commit; logs that cannot stand as auditor-verifiable
 proof.
 
-**Flagship promise:** any tool, any provider — prove run-or-not and enforce
-at-most-once. Gmail is the only adapter currently shipped; other providers use
-the same `Reconciler` contract and must supply their own adapter.
+**AF-002 promise:** any tool, any provider — prove run-or-not and enforce
+at-most-once. This is the catalog's execution/recovery capability, not the
+product identity. Gmail is the only adapter currently shipped; other providers
+use the same `Reconciler` contract and must supply their own adapter.
 
 **Guards:** transition envelope · `ActionLedger` / `TaskLedger` · reconcile ·
 `StateFlush` · audit receipts · default-on `on_args_drift` (identity-conflict;

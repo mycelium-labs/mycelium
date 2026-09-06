@@ -1,10 +1,13 @@
 # Failure & threat model for the transition / ledger core
 
 A plain-language answer to: *what does Mycelium actually protect, what does it
-not, and where is each claim proven?* This is about the **transition / action-ledger
-core** (`@ledger` / `@ledger_sync`, the `ActionLedger`, resolution gates,
-reconciliation, operator release). It deliberately excludes the optional guard
-surface (`@protect`, `HistoryGuard`, `MessageValidator`, `@bounded`, `Session`).
+not, and where is each claim proven?* This is about the **transition /
+action-ledger core** (`@ledger` / `@ledger_sync`, the `ActionLedger`, resolution
+gates, reconciliation, operator release). It deliberately excludes the
+additional guard surface (`@protect`, `HistoryGuard`, `MessageValidator`,
+`@bounded`, `Session`). It therefore documents AF-002 execution and recovery,
+not Mycelium's full product promise across validation, authority, run control,
+completion, and evidence.
 
 The companion runbook is the README's [Operator runbook: your agent
 hard-blocked](../README.md#operator-runbook-your-agent-hard-blocked). The
@@ -24,7 +27,7 @@ test.
 
 ## A. Scope
 
-Mycelium's core promise is narrow and specific (AF-002 flagship):
+The AF-002 ledger guarantee documented here is narrow and specific:
 
 > **Any tool, any provider: when a side-effecting tool is configured with a
 > durable ledger and a transition binding, Mycelium proves run-or-not and
