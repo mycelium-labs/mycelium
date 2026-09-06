@@ -105,20 +105,6 @@ jobs:
             exit 1
           fi
 
-      - name: Install SDK
-        if: steps.check.outputs.should_release == 'true'
-        run: pip install -e "./sdk[dev]"
-
-      - name: Run tests
-        if: steps.check.outputs.should_release == 'true'
-        working-directory: sdk
-        run: pytest tests/ -v
-
-      - name: Run lint
-        if: steps.check.outputs.should_release == 'true'
-        working-directory: sdk
-        run: ruff check mycelium tests
-
       - name: Extract changelog section
         if: steps.check.outputs.should_release == 'true'
         run: |
@@ -187,8 +173,13 @@ jobs:
           echo "::notice::  □ Require status checks to pass before merging"
           echo "::notice::    □ Require branches to be up to date"
           echo "::notice::    Status checks that are required:"
-          echo "::notice::      - test (3.10)"
-          echo "::notice::      - test (3.11)"
-          echo "::notice::      - test (3.12)"
-          echo "::notice::      - test (3.13)"
+          echo "::notice::      - version-hygiene"
+          echo "::notice::      - static"
+          echo "::notice::      - compatibility (3.10)"
+          echo "::notice::      - compatibility (3.11)"
+          echo "::notice::      - compatibility (3.13)"
+          echo "::notice::      - test"
+          echo "::notice::      - package-install (3.10)"
+          echo "::notice::      - package-install (3.13)"
+          echo "::notice::      - markdown-links"
           echo "::notice::  □ Do NOT include administrators (keep your merge escape hatch)"

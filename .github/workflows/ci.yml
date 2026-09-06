@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   version-hygiene:
     # Docs churn must not move the version line (#71).
@@ -58,7 +62,7 @@ jobs:
           fi
 
       - name: Verify architecture map source provenance
-        run: python .github/scripts/check-architecture-provenance.py
+        run: python .github/scripts/check-architecture-provenance.py --strict
 
   package:
     runs-on: ubuntu-latest
@@ -92,7 +96,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        # The universal wheel and sdist only need endpoint smoke tests here.
+        # Runtime behavior is still tested on every supported Python version below.
+        python-version: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -119,12 +125,60 @@ jobs:
             "${environment}/bin/python" .github/scripts/test-installed-skill.py
           done
 
-  test:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install SDK
+        run: pip install -e "./sdk[dev]"
+
+      - name: Ruff
+        working-directory: sdk
+        run: ruff check mycelium tests
+
+      - name: Bandit static security scanner
+        working-directory: sdk
+        run: bandit -c pyproject.toml -r mycelium
+
+      - name: Documentation and provenance tests
+        working-directory: sdk
+        run: pytest tests/test_architecture_provenance.py tests/test_doc_commands.py -q
+
+  compatibility:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install SDK
+        run: pip install -e "./sdk[dev]"
+
+      - name: SDK compatibility tests
+        working-directory: sdk
+        run: >
+          pytest tests/ -q
+          --ignore=tests/test_architecture_provenance.py
+          --ignore=tests/test_doc_commands.py
+
+  test:
+    runs-on: ubuntu-latest
 
     services:
       redis:
@@ -164,27 +218,24 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Install SDK
         # redis + postgres extras so real-backend proofs import the drivers.
         run: pip install -e "./sdk[dev,redis,postgres]"
 
-      - name: SDK unit tests
-        if: matrix.python-version != '3.12'
+      - name: SDK tests with real backends and coverage gate
         working-directory: sdk
-        # Full suite already exercises Redis/Postgres under REQUIRE_*=1.
-        run: pytest tests/ -v
-
-      - name: SDK unit tests with coverage gate
-        if: matrix.python-version == '3.12'
-        working-directory: sdk
-        # Full suite already exercises Redis/Postgres under REQUIRE_*=1.
-        # Run coverage measurement and enforce fail-under gate on primary Python 3.12.
-        run: pytest tests/ -v --cov=mycelium --cov-report=term-missing
+        # Real-backend and concurrency proofs run once on the primary Python.
+        # Static documentation checks have their own independent job.
+        run: >
+          pytest tests/ -q
+          --ignore=tests/test_architecture_provenance.py
+          --ignore=tests/test_doc_commands.py
+          --cov=mycelium --cov-report=term-missing
 
       - name: Output coverage report to job summary
-        if: always() && matrix.python-version == '3.12'
+        if: always()
         working-directory: sdk
         run: |
           if [ -f .coverage ]; then
@@ -194,35 +245,13 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Concurrency proofs must not skip
-        working-directory: sdk
-        # Explicit gate for the AF-002 at-most-once guarantee (#69).
-        # Focused re-run of concurrency proofs only (not Postgres identity
-        # tests — those already ran above and share durable state).
-        run: >
-          pytest
-          tests/test_proof_two_worker_redis.py
-          tests/test_multiprocess_concurrency.py
-          tests/test_process_kill_crash_window.py
-          tests/test_example_langgraph_redis_crash.py
-          -v --tb=short
-
-      - name: Ruff
-        working-directory: sdk
-        run: ruff check mycelium tests
-
-      - name: Bandit static security scanner
-        if: matrix.python-version == '3.12'
-        working-directory: sdk
-        run: bandit -c pyproject.toml -r mycelium
-
   markdown-links:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check Markdown links and heading anchors
-        uses: lycheeverse/lychee-action@v2
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
         with:
           args: >-
             --verbose
