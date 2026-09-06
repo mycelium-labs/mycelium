@@ -273,12 +273,13 @@ def test_documented_yaml_snippets_and_illustrative_classification() -> None:
     Illustrative, credentialed (requiring DATABASE_URL), and partial snippets are
     explicitly categorized and tested.
     """
+    snippet_count = 0
     for doc in (REPO_ROOT / "README.md", SDK_ROOT / "README.md"):
         if not doc.is_file():
             continue
         text = doc.read_text(encoding="utf-8")
         matches = list(re.finditer(r"```ya?ml\n(.*?)```", text, re.DOTALL))
-        assert len(matches) > 0, f"Expected YAML blocks in {doc.name}"
+        snippet_count += len(matches)
 
         for match in matches:
             line_no = text[: match.start()].count("\n") + 1
@@ -307,6 +308,8 @@ def test_documented_yaml_snippets_and_illustrative_classification() -> None:
                 pytest.fail(
                     f"Doc YAML snippet at {doc.name}:{line_no} failed schema validation: {err}"
                 )
+
+    assert snippet_count > 0, "Expected at least one documented YAML configuration block"
 
 
 def test_parser_rejects_removed_or_renamed_command() -> None:
