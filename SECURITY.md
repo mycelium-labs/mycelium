@@ -1,9 +1,10 @@
 # Security policy
 
 Mycelium is a reliability and safety boundary around **consequential tool
-execution** (payments, outbound email, API mutations, and similar side
-effects). Security-sensitive reports deserve a **private** path — not a public
-issue comment thread.
+actions**: validation and authority before execution, runtime control, and
+outcome evidence or recovery afterward. Payments, outbound email, API
+mutations, and similar side effects are examples. Security-sensitive reports
+deserve a **private** path — not a public issue comment thread.
 
 ## Supported versions
 

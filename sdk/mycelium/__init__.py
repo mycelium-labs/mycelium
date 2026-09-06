@@ -1,4 +1,4 @@
-"""Mycelium runtime: the reliability layer for AI agents.
+"""Mycelium runtime: full-lifecycle reliability for AI-agent tool actions.
 
 The public surface is resolved on first attribute access.  Keeping the
 namespace here (rather than importing every subsystem) makes ``import

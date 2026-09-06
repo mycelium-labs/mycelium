@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mycelium-runtime"
 version = "1.38.2"
-description = "The reliability layer for AI agents — prove run-or-not and enforce at-most-once at the tool boundary"
+description = "The reliability layer for AI agents — validate, control, and verify tool actions across their lifecycle"
 authors = [
   { name = "Nandana Dileep" },
 ]
