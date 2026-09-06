@@ -95,8 +95,11 @@ the PR description — do not skip silently.
 - [ ] No other `mycelium-runtime` version was published **today** (unless hotfix).
 - [ ] CHANGELOG tells a **coherent story** (why this batch, not a diary of
       micro-commits).
-- [ ] Positioning matches the reliability-layer story (catalog / AF-002
-      flagship; Gmail = demo adapter; no velocity-as-virtue language).
+- [ ] Positioning describes full-lifecycle tool-action reliability (validation
+      and authority before execution; runtime control; outcome resolution and
+      evidence afterward). Public onboarding uses plain-language risk names,
+      numbered incident IDs stay internal, Gmail is an example adapter, and
+      release velocity is not presented as a virtue.
 
 ### Correctness
 

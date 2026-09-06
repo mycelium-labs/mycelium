@@ -191,7 +191,7 @@ jobs:
 
       - name: Concurrency proofs must not skip
         working-directory: sdk
-        # Explicit gate for the flagship at-most-once story (#69).
+        # Explicit gate for the AF-002 at-most-once guarantee (#69).
         # Focused re-run of concurrency proofs only (not Postgres identity
         # tests — those already ran above and share durable state).
         run: >

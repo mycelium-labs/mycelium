@@ -3,6 +3,17 @@
 Release policy: **batch; calm over velocity.** Prefer one coherent cut over many
 small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEASE.md).
 
+## Unreleased
+
+### Changed
+
+- Reframe the README, SDK guide, package metadata, setup skill, and release
+  guidance around full-lifecycle tool-action reliability: validation and
+  authority before execution, runtime control, and outcome resolution and
+  evidence afterward. The public READMEs now use plain-language risk names;
+  internal incident IDs stay out of onboarding copy. At-most-once execution
+  remains a documented capability and default first-tool scaffold.
+
 ## 1.38.2 (2026-09-05)
 
 This release adds the first development-only, language-neutral sidecar

@@ -43,6 +43,12 @@ leave vague TODOs such as "configure this later."
 
 ## Feature applicability
 
+Mycelium makes tool actions reliable across their full lifecycle. Do not reduce
+an integration to duplicate prevention or the action ledger alone. Inspect
+pre-execution validation and authority, run-level controls, and post-attempt
+outcome/recovery needs for every reachable tool. The ledger is a common
+production foundation and default on-ramp, not the whole product.
+
 Do not enable every available Mycelium feature. Enable every feature that
 applies and is genuinely wired. An omitted inapplicable feature is not an
 integration failure.
