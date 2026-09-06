@@ -51,7 +51,7 @@ class HttpSandboxProvider:
             headers["Authorization"] = f"Bearer {self.token}"
         request = Request(url, data=data, headers=headers, method=method)
         try:
-            with urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - explicit opt-in URL
+            with urlopen(request, timeout=self.timeout) as response:  # nosec B310  # noqa: S310 - explicit opt-in URL
                 raw = response.read()
         except HTTPError as exc:
             if exc.code == 404 and method == "GET":

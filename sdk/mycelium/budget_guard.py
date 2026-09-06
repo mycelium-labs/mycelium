@@ -446,7 +446,7 @@ class SqliteBudgetGuardStorage(BudgetGuardStorage):
             with self._connect() as conn:
                 self._ensure_schema(conn)
                 row = conn.execute(
-                    f"SELECT payload FROM {self._table} WHERE scope_key = ?",
+                    f"SELECT payload FROM {self._table} WHERE scope_key = ?",  # nosec B608
                     (scope_key,),
                 ).fetchone()
         if row is None:
@@ -460,7 +460,7 @@ class SqliteBudgetGuardStorage(BudgetGuardStorage):
             with self._connect() as conn:
                 self._ensure_schema(conn)
                 conn.execute(
-                    f"INSERT INTO {self._table} (scope_key, payload) VALUES (?, ?) "
+                    f"INSERT INTO {self._table} (scope_key, payload) VALUES (?, ?) "  # nosec B608
                     "ON CONFLICT(scope_key) DO UPDATE SET payload = excluded.payload",
                     (state.scope_key, payload),
                 )
@@ -476,7 +476,7 @@ class SqliteBudgetGuardStorage(BudgetGuardStorage):
                 self._ensure_schema(conn)
                 conn.execute("BEGIN IMMEDIATE")
                 row = conn.execute(
-                    f"SELECT payload FROM {self._table} WHERE scope_key = ?",
+                    f"SELECT payload FROM {self._table} WHERE scope_key = ?",  # nosec B608
                     (scope_key,),
                 ).fetchone()
                 state = (
@@ -487,7 +487,7 @@ class SqliteBudgetGuardStorage(BudgetGuardStorage):
                 result = fn(state)
                 state.updated_at = time.time()
                 conn.execute(
-                    f"INSERT INTO {self._table} (scope_key, payload) VALUES (?, ?) "
+                    f"INSERT INTO {self._table} (scope_key, payload) VALUES (?, ?) "  # nosec B608
                     "ON CONFLICT(scope_key) DO UPDATE SET payload = excluded.payload",
                     (scope_key, json.dumps(state.to_dict(), default=str)),
                 )
@@ -498,7 +498,7 @@ class SqliteBudgetGuardStorage(BudgetGuardStorage):
         with self._lock:
             with self._connect() as conn:
                 self._ensure_schema(conn)
-                rows = conn.execute(f"SELECT payload FROM {self._table}").fetchall()
+                rows = conn.execute(f"SELECT payload FROM {self._table}").fetchall()  # nosec B608
         return [BudgetRunState.from_dict(json.loads(r["payload"])) for r in rows]
 
 
@@ -600,7 +600,7 @@ class PostgresBudgetGuardStorage(BudgetGuardStorage):
             with self._psycopg.connect(self._dsn) as conn:
                 self._ensure_schema(conn)
                 row = conn.execute(
-                    f"SELECT payload FROM {self._table} WHERE scope_key = %s",
+                    f"SELECT payload FROM {self._table} WHERE scope_key = %s",  # nosec B608
                     (scope_key,),
                 ).fetchone()
         if row is None:
@@ -617,7 +617,7 @@ class PostgresBudgetGuardStorage(BudgetGuardStorage):
             with self._psycopg.connect(self._dsn) as conn:
                 self._ensure_schema(conn)
                 conn.execute(
-                    f"INSERT INTO {self._table} (scope_key, payload) VALUES (%s, %s::jsonb) "
+                    f"INSERT INTO {self._table} (scope_key, payload) VALUES (%s, %s::jsonb) "  # nosec B608
                     "ON CONFLICT (scope_key) DO UPDATE SET payload = EXCLUDED.payload",
                     (state.scope_key, payload),
                 )
@@ -633,7 +633,7 @@ class PostgresBudgetGuardStorage(BudgetGuardStorage):
                 self._ensure_schema(conn)
                 with conn.transaction():
                     row = conn.execute(
-                        f"SELECT payload FROM {self._table} "
+                        f"SELECT payload FROM {self._table} "  # nosec B608
                         "WHERE scope_key = %s FOR UPDATE",
                         (scope_key,),
                     ).fetchone()
@@ -647,7 +647,7 @@ class PostgresBudgetGuardStorage(BudgetGuardStorage):
                     result = fn(state)
                     state.updated_at = time.time()
                     conn.execute(
-                        f"INSERT INTO {self._table} (scope_key, payload) "
+                        f"INSERT INTO {self._table} (scope_key, payload) "  # nosec B608
                         "VALUES (%s, %s::jsonb) "
                         "ON CONFLICT (scope_key) DO UPDATE SET payload = EXCLUDED.payload",
                         (scope_key, json.dumps(state.to_dict(), default=str)),
@@ -658,7 +658,7 @@ class PostgresBudgetGuardStorage(BudgetGuardStorage):
         with self._lock:
             with self._psycopg.connect(self._dsn) as conn:
                 self._ensure_schema(conn)
-                rows = conn.execute(f"SELECT payload FROM {self._table}").fetchall()
+                rows = conn.execute(f"SELECT payload FROM {self._table}").fetchall()  # nosec B608
         out: list[BudgetRunState] = []
         for row in rows:
             payload = row[0]

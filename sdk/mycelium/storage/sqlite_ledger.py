@@ -19,12 +19,15 @@ E = TypeVar("E")
 _TABLE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
+# In SQLite, table names cannot be parameterized with `?` placeholders.
+# All table names are strictly validated against `^[a-z][a-z0-9_]*$` upon
+# initialization to prevent SQL injection before dynamic string formatting into queries.
 def _validate_table_name(table: str) -> str:
     if not _TABLE_RE.fullmatch(table):
         raise ValueError(
             f"invalid SQLite table name {table!r}; use lowercase letters, digits, underscores"
         )
-    return table
+    return table  # nosec B608
 
 
 def _payload_dict(raw: Any) -> dict[str, Any]:
@@ -93,7 +96,7 @@ class SqliteEntryStorage:
             with self._connect() as conn:
                 self._ensure_schema(conn)
                 row = conn.execute(
-                    f"SELECT payload FROM {self._table} WHERE request_id = ?",
+                    f"SELECT payload FROM {self._table} WHERE request_id = ?",  # nosec B608
                     (request_id,),
                 ).fetchone()
         if row is None:
@@ -107,7 +110,7 @@ class SqliteEntryStorage:
             with self._connect() as conn:
                 self._ensure_schema(conn)
                 existing = conn.execute(
-                    f"SELECT request_id FROM {self._table} "
+                    f"SELECT request_id FROM {self._table} "  # nosec B608
                     "WHERE COALESCE(json_extract(payload, '$.effect_id'), request_id) = ? "
                     "LIMIT 1",
                     (effect_id,),
@@ -116,7 +119,7 @@ class SqliteEntryStorage:
                     conn.commit()
                     return
                 conn.execute(
-                    f"INSERT INTO {self._table} (request_id, payload) VALUES (?, ?) "
+                    f"INSERT INTO {self._table} (request_id, payload) VALUES (?, ?) "  # nosec B608
                     "ON CONFLICT(request_id) DO UPDATE SET payload = excluded.payload",
                     (entry.request_id, payload),
                 )
@@ -140,7 +143,7 @@ class SqliteEntryStorage:
                 conn.execute("BEGIN IMMEDIATE")
                 try:
                     cur = conn.execute(
-                        f"INSERT OR IGNORE INTO {self._table} (request_id, payload) VALUES (?, ?)",
+                        f"INSERT OR IGNORE INTO {self._table} (request_id, payload) VALUES (?, ?)",  # nosec B608
                         (entry.request_id, fresh_payload),
                     )
                     if cur.rowcount == 1:
@@ -148,12 +151,12 @@ class SqliteEntryStorage:
                         return "claimed", None
 
                     row = conn.execute(
-                        f"SELECT request_id, payload FROM {self._table} WHERE request_id = ?",
+                        f"SELECT request_id, payload FROM {self._table} WHERE request_id = ?",  # nosec B608
                         (entry.request_id,),
                     ).fetchone()
                     if row is None:
                         row = conn.execute(
-                            f"SELECT request_id, payload FROM {self._table} "
+                            f"SELECT request_id, payload FROM {self._table} "  # nosec B608
                             "WHERE COALESCE(json_extract(payload, '$.effect_id'), request_id) = ? "
                             "ORDER BY request_id LIMIT 1",
                             (effect_id,),
@@ -161,7 +164,7 @@ class SqliteEntryStorage:
                     if row is None:
                         # Rare race: row vanished between IGNORE miss and lookup.
                         inserted = conn.execute(
-                            f"INSERT OR IGNORE INTO {self._table} "
+                            f"INSERT OR IGNORE INTO {self._table} "  # nosec B608
                             "(request_id, payload) VALUES (?, ?)",
                             (entry.request_id, fresh_payload),
                         )
@@ -169,7 +172,7 @@ class SqliteEntryStorage:
                             conn.commit()
                             return "claimed", None
                         row = conn.execute(
-                            f"SELECT request_id, payload FROM {self._table} "
+                            f"SELECT request_id, payload FROM {self._table} "  # nosec B608
                             "WHERE COALESCE(json_extract(payload, '$.effect_id'), request_id) = ? "
                             "ORDER BY request_id LIMIT 1",
                             (effect_id,),
@@ -197,7 +200,7 @@ class SqliteEntryStorage:
                         claim_entry, now=now, lease_ttl=lease_ttl, prior=existing
                     )
                     conn.execute(
-                        f"UPDATE {self._table} SET payload = ? WHERE request_id = ?",
+                        f"UPDATE {self._table} SET payload = ? WHERE request_id = ?",  # nosec B608
                         (json.dumps(reclaimed.to_dict(), default=str), active_request_id),
                     )
                     conn.commit()
@@ -222,7 +225,7 @@ class SqliteEntryStorage:
         outcomes = sorted(expected_terminal_outcomes)
         placeholders = ", ".join("?" for _ in outcomes)
         sql = (
-            f"UPDATE {self._table} SET payload = ? "
+            f"UPDATE {self._table} SET payload = ? "  # nosec B608
             f"WHERE request_id = ? "
             f"AND json_extract(payload, '$.terminal_outcome') IN ({placeholders})"
         )
@@ -255,7 +258,7 @@ class SqliteEntryStorage:
         with self._lock:
             with self._connect() as conn:
                 self._ensure_schema(conn)
-                rows = conn.execute(f"SELECT payload FROM {self._table}").fetchall()
+                rows = conn.execute(f"SELECT payload FROM {self._table}").fetchall()  # nosec B608
         return [self._from_dict(_payload_dict(row["payload"])) for row in rows]
 
     def delete_entries(self, request_ids: list[str]) -> int:
@@ -266,7 +269,7 @@ class SqliteEntryStorage:
             with self._connect() as conn:
                 self._ensure_schema(conn)
                 result = conn.execute(
-                    f"DELETE FROM {self._table} WHERE request_id IN ({placeholders})",
+                    f"DELETE FROM {self._table} WHERE request_id IN ({placeholders})",  # nosec B608
                     request_ids,
                 )
                 conn.commit()
@@ -277,14 +280,14 @@ class SqliteEntryStorage:
             with self._connect() as conn:
                 self._ensure_schema(conn)
                 row = conn.execute(
-                    f"SELECT request_id FROM {self._table} "
+                    f"SELECT request_id FROM {self._table} "  # nosec B608
                     "WHERE COALESCE(json_extract(payload, '$.effect_id'), request_id) = ? "
                     "ORDER BY request_id LIMIT 1",
                     (effect_id,),
                 ).fetchone()
                 if row is not None:
                     return str(row["request_id"])
-                rows = conn.execute(f"SELECT request_id, payload FROM {self._table}").fetchall()
+                rows = conn.execute(f"SELECT request_id, payload FROM {self._table}").fetchall()  # nosec B608
         candidates: list[tuple[float, str]] = []
         for row in rows:
             request_id = str(row["request_id"])

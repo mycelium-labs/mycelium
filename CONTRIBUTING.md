@@ -57,6 +57,7 @@ uv sync --extra dev --extra redis --extra postgres
 uv run pytest tests/ -v
 uv run pytest --cov=mycelium --cov-report=term-missing
 uv run ruff check mycelium tests
+uv run bandit -c pyproject.toml -r mycelium
 ```
 
 ### Alternative: pip
@@ -70,6 +71,7 @@ python -m pip install -e ".[dev,redis,postgres]"
 pytest tests/ -v
 pytest --cov=mycelium --cov-report=term-missing
 ruff check mycelium tests
+bandit -c pyproject.toml -r mycelium
 ```
 
 On Windows PowerShell, activate the environment with
@@ -85,6 +87,7 @@ cd sdk
 uv run pytest tests/ -v
 uv run pytest --cov=mycelium --cov-report=term-missing
 uv run ruff check mycelium tests
+uv run bandit -c pyproject.toml -r mycelium
 ```
 
 Use the equivalent commands inside an activated pip environment if you are not
@@ -198,6 +201,7 @@ Copy the applicable items into the pull request description:
 - [ ] Full `pytest tests/ -v` passes
 - [ ] Coverage gate passes (`pytest --cov=mycelium --cov-report=term-missing`)
 - [ ] `ruff check mycelium tests` passes
+- [ ] `bandit -c pyproject.toml -r mycelium` passes
 - [ ] Redis/Postgres tests ran, or the PR explains why they do not apply
 - [ ] No relevant tests were silently skipped
 - [ ] Compatibility and durable-state impact were reviewed
