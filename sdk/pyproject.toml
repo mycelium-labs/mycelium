@@ -62,6 +62,7 @@ dev = [
     "fakeredis",
     "hypothesis",
     "langgraph>=1.2.9",
+    "cyclonedx-bom>=4.0.0",
 ]
 langgraph = [
     "langgraph>=1.2.9",
