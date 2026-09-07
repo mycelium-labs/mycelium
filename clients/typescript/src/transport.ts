@@ -21,7 +21,7 @@ function validLoopbackBase(value: string): string {
   const ipv4Loopback = octets.length === 4
     && octets[0] === "127"
     && octets.slice(1).every(
-      (part) => /^(?:0|[1-9]\\d{0,2})$/.test(part) && Number(part) <= 255
+      (part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255
     );
   if (!ipv4Loopback && host !== "::1") throw new Error("baseUrl must use an explicit loopback address");
   return url.toString().replace(/\/$/, "");

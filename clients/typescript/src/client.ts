@@ -94,5 +94,10 @@ export class MyceliumClient {
   async attachProviderReference(handle: EffectHandle, request: Omit<ProviderReferenceRequest, keyof FencedRequest>): Promise<EffectReply> { return projection(await this.transport.request("POST", `/v1/effects/${encodeURIComponent(handle.effectId)}/provider-reference`, this.handle(handle, { provider_operation_ref: request.providerOperationRef }))); }
   async completeEffect(handle: EffectHandle, request: Omit<CompleteEffectRequest, keyof FencedRequest>): Promise<EffectReply> { return projection(await this.transport.request("POST", `/v1/effects/${encodeURIComponent(handle.effectId)}/complete`, this.handle(handle, { result: request.result }))); }
   async failEffect(handle: EffectHandle, request: Omit<FailEffectRequest, keyof FencedRequest> = {}): Promise<EffectReply> { return projection(await this.transport.request("POST", `/v1/effects/${encodeURIComponent(handle.effectId)}/fail`, this.handle(handle, { ...(request.boundary === undefined ? {} : { boundary: request.boundary }) }))); }
-  async reconcileEffect(effectId: string, request: ReconcileRequest): Promise<EffectReply> { const raw = await this.transport.request<Record<string, unknown>>("POST", `/v1/effects/${encodeURIComponent(effectId)}/reconcile`, wireIdentity(request, this.options)); return projection(raw); }
+  async reconcileEffect(effectId: string, request: ReconcileRequest): Promise<EffectReply> {
+    const raw = await this.transport.request<Record<string, unknown>>("POST", `/v1/effects/${encodeURIComponent(effectId)}/reconcile`, wireIdentity(request, this.options));
+    const effect = projection(raw);
+    if (raw.reconciliation !== "authoritative-engine-result") throw new MyceliumProtocolError("invalid reconciliation response", { code: "INVALID_RESPONSE", httpStatus: 200, effectId: effect.effectId });
+    return effect;
+  }
 }
