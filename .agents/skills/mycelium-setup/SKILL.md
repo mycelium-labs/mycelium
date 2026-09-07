@@ -1,6 +1,6 @@
 ---
 name: mycelium-setup
-description: Set up or repair Mycelium in an existing Python agent project, including CRM agents, by inspecting the application, filling or merging mycelium.yaml, wiring real tool boundaries, and verifying the integration. Use when the user asks to install, configure, integrate, or fully wire Mycelium. Do not use for unrelated application work or ordinary Mycelium SDK development.
+description: Set up or repair Mycelium in an existing agent project, including Python, TypeScript, Go, and CRM agents, by inspecting the application, selecting the supported integration path, wiring real tool boundaries, and verifying the integration. Use when the user asks to install, configure, integrate, or fully wire Mycelium. Do not use for unrelated application work or ordinary Mycelium SDK development.
 ---
 
 # Set Up Mycelium
@@ -20,6 +20,25 @@ Generate a reference configuration in a temporary directory with the installed
 CLI (`mycelium init --full`), and inspect `mycelium --help`, `mycelium doctor
 --help`, and `mycelium verify --help`. Never overwrite the application's current
 configuration merely to obtain a template.
+
+## Runtime integration path
+
+Detect the application's language before choosing setup steps:
+
+- **Python:** use the in-process runtime, `mycelium.yaml`, supported framework
+  integration, decorators, or the manual API.
+- **TypeScript or Go:** use the published experimental client with a local
+  Python sidecar speaking `v1alpha1`.
+- **Another language:** use the same authenticated HTTP/OpenAPI contract
+  directly.
+
+For a non-Python project, do not port or recreate Mycelium's state machine.
+Configure the local sidecar with one tenant/application, owner-only bearer-token
+file, absolute ledger/outcome paths, and an explicit loopback port. Wire the host
+to follow claim → provider boundary → complete/fail and to treat every
+non-`EXECUTE` disposition as “do not call the provider.” State clearly that the
+current sidecar is experimental, trusted-local, and not approved for remote or
+multi-tenant production use.
 
 ## Configuration completion contract
 
@@ -85,10 +104,15 @@ authority, or secret is missing, classify it as deferred and keep it fail closed
    per run, read
    [references/dynamic-destination-authority.md](references/dynamic-destination-authority.md)
    before declaring that no truthful static entity allowlist exists.
-4. Add the appropriate `mycelium-runtime` dependency/extras using the project's
-   existing package manager. Preserve existing version policy. Do not bump the
-   application's version.
-5. Create or merge `mycelium.yaml`. Preserve deliberate existing settings.
+4. Add the appropriate integration dependencies. Python projects install
+   `mycelium-runtime` and relevant extras. TypeScript projects use
+   `@mycelium-labs/sidecar-client@experimental`; Go projects use
+   `github.com/mycelium-labs/mycelium/clients/go@v0.1.0`. Non-Python paths also
+   need the Python sidecar as a separately managed local process. Preserve
+   existing version policy. Do not bump the application's version.
+5. For in-process Python, create or merge `mycelium.yaml`. For a non-Python
+   project, create or merge the separate `kind: mycelium-sidecar` development
+   configuration instead. Preserve deliberate existing settings.
    Record the applicability decision for each meaningful feature: enabled,
    deferred for host work, deferred for operator input, or not applicable.
    Prefer current template defaults, explicit callable paths, stable transition
