@@ -120,6 +120,19 @@ the PR description — do not skip silently.
 - [ ] Handbook (`mycelium-labs.github.io`) version/lede not wildly stale for
       user-visible cuts (batch handbook updates with the release when practical).
 
+### Language-neutral protocol and clients (when applicable)
+
+- [ ] A wire-visible change uses a new protocol revision; frozen `v1alpha1`
+      behavior was not silently changed.
+- [ ] Python sidecar OpenAPI, Transition Envelope schema/fixtures, examples, and
+      protocol status document agree.
+- [ ] TypeScript client passes typecheck, build, and `npm pack --dry-run`; Go
+      client passes `go vet ./...`, `go test ./...`, and `go build ./...`.
+- [ ] Client versions, Git tags, npm distribution tags, Go module tags, README
+      install commands, and CHANGELOG publication claims agree.
+- [ ] Publishing npm or Go artifacts received separate explicit approval; a
+      Python release does not implicitly publish them.
+
 ### Versioning artifacts (same PR)
 
 - [ ] `sdk/pyproject.toml` `version` bumped once for this cut.

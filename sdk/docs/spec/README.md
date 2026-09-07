@@ -1,10 +1,32 @@
-# Effect State Spec Notes
+# Language-neutral Transition Envelope
 
-Mycelium is language-agnostic at this protocol boundary. The Python sidecar is
-the authoritative engine; TypeScript, Go, and future clients speak the same
-HTTP/OpenAPI contract without duplicating the ledger or transition state
-machine. This is interoperability, not a claim that every language has an
-independent Mycelium engine.
+Mycelium's engine is written in Python. This protocol gives every other
+language the same doorway into it.
+
+A TypeScript, Go, Java, Rust, or other application sends ordinary HTTP/JSON to
+a local Mycelium sidecar. The sidecar derives action identity, decides whether
+execution may proceed, and records state transitions in the authoritative
+Python engine. Language clients stay small: they format requests and parse
+responses instead of duplicating the ledger, policy, fencing, or recovery state
+machine.
+
+```text
+application in any language
+          ↓ HTTP/JSON Transition Envelope
+local Python sidecar
+          ↓
+authoritative Mycelium engine and ledger
+```
+
+Published experimental clients:
+
+- TypeScript: [`@mycelium-labs/sidecar-client@0.1.0`](../../../clients/typescript/README.md)
+- Go: [`github.com/mycelium-labs/mycelium/clients/go@v0.1.0`](../../../clients/go/README.md)
+- Other languages: use the same authenticated OpenAPI contract directly.
+
+This is language-neutral interoperability, not a separate Mycelium engine in
+every language. The current `v1alpha1` profile is for trusted local development,
+not remote or multi-tenant production deployment.
 
 ## Language-neutral protocol design
 
@@ -33,6 +55,11 @@ The development sidecar serves the frozen `v1alpha1` machine-readable OpenAPI
 `GET /v1/openapi.json`. It is generated directly from `mycelium.sidecar` so the
 served document remains the single transport description. `/health` is the only
 unauthenticated route; every other route uses the local bearer scheme.
+
+The served OpenAPI document is authoritative for implemented HTTP routes and
+operation-specific payloads. The companion JSON Schema describes the broader
+Transition Envelope projections, including stored records and reserved command
+forms; its command names must not be interpreted as additional sidecar routes.
 
 The implementation remains authoritative for runtime trust. Generated types do
 not grant ownership, validate a fence, authorize a provider call, or resolve an

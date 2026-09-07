@@ -258,6 +258,13 @@ as compatibility-sensitive.
 - Update `sdk/mycelium/__init__.py` and API tests when adding public symbols.
 - Discuss intentional breaking changes in an issue before implementation.
 
+The language-neutral sidecar contract is also compatibility-sensitive. Keep the
+Python sidecar authoritative and keep language clients thin; do not duplicate
+the ledger or transition state machine in TypeScript, Go, or another client.
+Changes to `v1alpha1` wire behavior require a new protocol revision. When
+working on the protocol, align the OpenAPI document, JSON Schema, fixtures,
+examples, and every published client.
+
 ## Documentation and changelog
 
 Keep documentation precise about guarantees and limitations. Examples must use

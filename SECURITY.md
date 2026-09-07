@@ -21,6 +21,21 @@ Release cadence and semver rules: [`sdk/docs/RELEASE.md`](sdk/docs/RELEASE.md).
 Security issues may justify an out-of-band PATCH even when the normal batch
 cadence would wait.
 
+## Language-neutral sidecar security boundary
+
+The TypeScript and Go clients connect to the authoritative Python engine through
+the `v1alpha1` HTTP/JSON sidecar protocol. These clients are transport helpers;
+they do not independently enforce policy, fencing, state transitions, or
+recovery.
+
+The current sidecar profile is experimental and restricted to trusted local
+clients over authenticated loopback HTTP. It is not approved for remote
+binding, multi-tenant hosting, hostile clients, or production authentication.
+The host application still executes provider calls, can bypass the sidecar, and
+must report provider-boundary events truthfully. See the
+[protocol status and production gates](sdk/docs/spec/V1ALPHA1_RELEASE_CHECKLIST.md)
+before evaluating a sidecar-related security claim.
+
 ## Reporting a vulnerability
 
 **Do not** open a public GitHub issue for an exploitable or suspected
@@ -110,6 +125,8 @@ provider and deployment configuration.
 
 - Failure and threat model (ledger core guarantees and limits):
   [`sdk/docs/FAILURE_AND_THREAT_MODEL.md`](sdk/docs/FAILURE_AND_THREAT_MODEL.md)
+- Language-neutral sidecar status and production gates:
+  [`sdk/docs/spec/V1ALPHA1_RELEASE_CHECKLIST.md`](sdk/docs/spec/V1ALPHA1_RELEASE_CHECKLIST.md)
 - Provider conformance commands and report limitations:
   [`sdk/README.md#provider-adapter-conformance-and-signed-reports`](sdk/README.md#provider-adapter-conformance-and-signed-reports)
 - Release and hotfix policy:

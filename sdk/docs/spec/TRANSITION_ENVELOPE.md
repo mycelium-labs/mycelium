@@ -336,34 +336,40 @@ Python capabilities but are not a promise of a particular endpoint shape.
 
 ## 4.1 Commands and replies
 
-### `propose_effect`
+### `derive_effect_identity`
 
 Request: identity fields, tool contract reference, canonical input, requested
 policy/canonicalization versions, and optional provider-key metadata.
 
-Reply: canonical `effect_id`, current state, identity digest, and either a new
-record or a conflict with the existing canonical record.
+Reply: canonical `effect_id`, canonical JSON, canonical byte count, and identity
+namespace. The shipped route is `POST /v1/identities/derive`.
 
-Idempotency: repeat with identical identity returns the same record. Different
-canonical input under the same business identity returns `IDENTITY_CONFLICT`.
+This operation is read-only. Repeating identical identity returns the same
+derived value; only `claim_effect` creates or resolves a ledger record.
 
 ### `claim_effect`
 
-Request: `effect_id` or host request identity, authenticated owner, dispatch ID,
-and optional lease request.
+Request: the complete identity candidate, validated decision evidence when
+available, and an optional lease request. The engine derives and verifies the
+effect ID.
 
-Reply: one of `CLAIMED`, `COMMITTED` with stored result, `ACTIVE_OWNER` with safe
-poll metadata, or `BLOCKED`/`UNKNOWN` with next action.
+Reply: one of the seven frozen dispositions: `EXECUTE`,
+`RETURN_STORED_RESULT`, `WAIT_FOR_OWNER`, `RECORD_DECISION`, `UNKNOWN`,
+`DENIED`, or `TERMINAL_ABORTED`.
 
 The engine atomically selects the canonical row, checks state and policy, assigns
-a higher fence for a valid new owner, and returns the lease. The client cannot
-choose the fence.
+a higher fence for a valid new owner, and returns owner/lease authority only
+with `EXECUTE`. Every other disposition means the client must not call the
+provider. The client cannot choose the fence.
 
-### `record_decision`
+### Decision recording inside `claim_effect`
 
-Request: effect ID, owner, fence, decision facts, and policy version.
+`v1alpha1` has no separate `record_decision` HTTP route. A claim may carry
+validated decision facts; the sidecar records them through the authoritative
+engine before returning `EXECUTE`.
 
-Reply: `ATTEMPTING` if allowed, `ABORTED` if denied, or a conflict.
+An allowed decision produces an `ATTEMPTING` projection with `EXECUTE`; a
+denial produces `DENIED`/`ABORTED`.
 
 This is the single mutation gate for an allowed consequential attempt. Policy
 facts must be sanitized and durably recorded atomically with the state change.
@@ -410,54 +416,36 @@ The client may report what it observed, but the engine selects the safe state.
 A failure after or near the provider boundary must not be presented as safe
 pre-effect failure merely because the transport failed.
 
-### `get_effect` / `poll_effect`
+### `get_effect`
 
-Request: effect ID or business request identity, optional owner/fence and wait
-parameters.
+Request: effect ID.
 
 Reply: authoritative record projection, current lease validity, state, result if
-available, and next permitted operation.
+available, and current ownership/fence information. The shipped route is
+`GET /v1/effects/{effect_id}`; clients poll by repeating this read.
 
 Polling is read-only. It must never claim or execute the provider effect.
 
-### `request_reconciliation`
+### `reconcile_effect`
 
-Request: effect ID, reconciler ID, provider reference, and read-only capability
-metadata.
+Request: effect ID plus its complete identity candidate. The sidecar asks the
+authoritative engine to resolve the existing record with its configured
+reconciler.
 
-Reply: accepted job/token or immediate reconciliation status.
-
-The engine verifies that the reconciler is registered and read-only according to
-its configured trust model. A client cannot authorize itself as a reconciler.
-
-### `submit_reconciliation`
-
-Request: effect ID, reconciliation token, reconciler identity, verdict, evidence
-reference, and optional provider result.
-
-Reply: `COMMITTED`, eligible retry state, or `UNKNOWN`.
+Reply: authoritative state with
+`reconciliation: "authoritative-engine-result"`, or
+`RECONCILIATION_UNAVAILABLE`.
 
 `COMPLETED` never executes the provider call. `NOT_EXECUTED` permits at most one
 new claim subject to CAS and worker-death rules. `UNKNOWN`, malformed evidence,
 provider errors, and timeouts remain blocked.
 
-### `request_operator_resolution` / `apply_operator_resolution`
+### Later operations outside `v1alpha1`
 
-A request may create an auditable approval workflow. Applying a resolution
-requires authenticated operator identity, authorization evidence, reason, effect
-identity, and current state. The engine, not the client, checks that the decision
-is allowed, one-shot, and fenced.
-
-A `completed` resolution stores the effect as completed only when the operator has
-verified it. A `not_executed` resolution authorizes one later execution; it does
-not itself execute anything.
-
-### `emit_outcome` / `get_outcomes`
-
-The engine emits append-only outcome evidence for claims, denials, completions,
-failures, fence rejections, and resolutions. Retrieval/export is read-only and
-must preserve tenant and authorization boundaries. Production durability is a
-deployment requirement, not implied by a successful HTTP response.
+`request_operator_resolution`, `apply_operator_resolution`, `emit_outcome`, and
+`get_outcomes` describe future protocol work. They are not routes in the frozen
+development profile. Operator authorization and outcome storage remain
+engine/deployment responsibilities.
 
 ## 4.2 Expected protocol errors
 
@@ -557,12 +545,12 @@ cross-field CAS rules. Those belong to the engine and conformance suite.
 
 ### First execution
 
-1. Client proposes canonical input.
-2. Engine returns `effect_id` and `INTENDED`.
-3. Client claims; engine returns owner, lease, fence.
-4. Client records allowed decision; engine returns `ATTEMPTING`.
-5. Client reports `crossed`, calls provider, reports provider reference.
-6. Client completes with result; engine returns `COMMITTED`.
+1. Client may call `derive_effect_identity` to preview the engine-derived ID.
+2. Client calls `claim_effect` with the complete identity and validated decision.
+3. Engine returns `EXECUTE`, owner, lease, fence, and an `ATTEMPTING` projection.
+4. Client reports `maybe_crossed` immediately before calling the provider.
+5. Client may attach a provider reference, then reports `complete` or `fail`.
+6. A successful completion returns a `COMMITTED` projection and stored result.
 
 ### Duplicate dispatch with stored result
 
@@ -572,10 +560,10 @@ and does not return provider execution authorization.
 
 ### Active-owner polling
 
-A second worker receives `ACTIVE_OWNER`, the current lease validity, and no
-execution authorization. It polls. If the owner completes, polling returns the
-stored result. If the lease expires, takeover is considered only under the engine's
-worker-death and effect-state policy.
+A second worker receives `WAIT_FOR_OWNER` and no execution authorization. It
+inspects the effect again later. If the owner completes, the next claim returns
+`RETURN_STORED_RESULT`. If the lease expires, takeover is considered only under
+the engine's worker-death and effect-state policy.
 
 ### Argument drift
 
@@ -592,8 +580,7 @@ unchanged and no result is overwritten.
 ### Ambiguous provider outcome
 
 The client reports `maybe_crossed` and a timeout. The engine moves to `UNKNOWN`.
-A duplicate dispatch receives `UNKNOWN_REQUIRES_RESOLUTION`, never automatic
-execution.
+A duplicate claim receives the `UNKNOWN` disposition, never automatic execution.
 
 ### Reconciliation outcomes
 
@@ -886,7 +873,7 @@ Configure it with an absolute YAML file containing `kind: mycelium-sidecar`, a
 loopback literal host, one tenant and application, an owner-only bearer-token file containing exactly 43 base64url characters or 64
 hexadecimal characters,
 absolute file-ledger and outcome paths, `identity-v1`, and a request-body limit.
-Start it with `mycelium sidecar serve --config /absolute/path/to/sidecar.yaml`.
+Start it with `mycelium sidecar serve --config /absolute/path/sidecar.yaml`.
 The token is sent only as `Authorization: Bearer ...`; it is never a command-line
 value. `/health` is the only unauthenticated endpoint. Authenticated endpoints are
 `/v1/capabilities`, `/v1/openapi.json`, `/v1/identities/derive`,
@@ -967,51 +954,49 @@ The TypeScript package is a **transport client**, not a second runtime. Its
 responsibilities are:
 
 * validate basic JSON shapes and supported protocol versions;
-* serialize canonical input using the published profile;
-* send commands and correlate replies;
-* propagate host-owned `agent_id`, `run_id`, `dispatch_id`, and `request_id`;
-* hold the current lease/fence token and report provider-boundary events;
+* encode typed decimal and URL values using the published profiles;
+* send commands over authenticated loopback HTTP and parse replies;
+* propagate host-owned business, tenant, application, tool, and scope identity;
+* retain the returned owner/fence handle and report provider-boundary events;
 * return stored results without invoking the provider when the engine says so;
 * map error codes into ergonomic error objects;
-* expose framework hooks for retries/redispatch;
 * redact secrets from logs and error objects;
 * provide a helper for one separately represented external effect.
 
 It must not implement state transitions, authoritative hashes, claim arbitration,
 reconciliation authorization, or operator rules.
 
-Illustrative API, not implementation:
+Shipped `0.1.0` API:
 
 ```ts
-type EffectHandle<T> = {
-  effectId: string;
-  claim(): Promise<ClaimReply<T>>;
-  recordBoundary(event: BoundaryEvent, ref?: string): Promise<Envelope<T>>;
-  complete(result: T, ref?: string): Promise<Envelope<T>>;
-  fail(error: SafeFailure): Promise<Envelope<T>>;
-  poll(): Promise<Envelope<T>>;
-};
+import { MyceliumClient } from "@mycelium-labs/sidecar-client";
 
-const effect = await mycelium.propose({
-  toolId: "external_operation",
-  requestId: "business-operation-884",
-  scope: { tenant: "tenant-a", entity: "record-9" },
-  input: { operation: "update", entity: "record-9", value: "new-value" }
+const client = new MyceliumClient({
+  baseUrl: "http://127.0.0.1:8787",
+  token: process.env.MYCELIUM_SIDECAR_TOKEN!,
+  tenantId: "tenant-a",
+  applicationId: "app-a",
 });
 
-const claim = await effect.claim();
-if (claim.kind === "stored_result") return claim.result;
-if (claim.kind !== "execution_authorized") return await effect.poll();
+await client.assertCompatible();
+const claim = await client.claimEffect({
+  businessRequestId: "business-operation-884",
+  toolId: "external_operation",
+  toolContractVersion: "1",
+  destination: { entity: "record-9" },
+  executionScope: { tenant: "tenant-a" },
+  input: { operation: "update", value: "new-value" },
+  decision: { allowed: true, verdicts: [], denied_reasons: [] },
+});
 
-await effect.recordBoundary("crossed");
-try {
-  const result = await provider.call(...);
-  await effect.complete(result, result.operationRef);
+if (claim.disposition === "RETURN_STORED_RESULT") return claim.result;
+if (claim.disposition === "EXECUTE") {
+  await client.recordBoundary(claim.handle, { boundary: "maybe_crossed" });
+  const result = await provider.call();
+  await client.completeEffect(claim.handle, { result });
   return result;
-} catch (error) {
-  await effect.fail(toSafeFailure(error));
-  throw error;
 }
+// Every other disposition means: do not call the provider.
 ```
 
 The wrapper can make the common one-effect case ergonomic, but it must require the

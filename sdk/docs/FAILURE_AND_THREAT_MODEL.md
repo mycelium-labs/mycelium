@@ -78,6 +78,21 @@ This document is **explicitly out of scope** for:
   `state_authority` features (documented in the catalog and SDK README; not
   part of the ledger core guarantee set below).
 
+### Language-neutral sidecar boundary
+
+The `v1alpha1` sidecar exposes this Python ledger core to TypeScript, Go, and
+other HTTP/JSON clients without moving the state machine into those languages.
+The same guarantees apply only when the client uses the complete claim,
+provider-boundary, and completion/failure lifecycle.
+
+The current profile trusts one local application on authenticated loopback. The
+host application still executes provider calls and can bypass the sidecar or
+report an event dishonestly. A timeout means the command may have changed
+state; it never proves that retrying the provider is safe. Remote binding,
+multi-tenancy, production authentication, hostile-client protection, and
+provider attestation are unsupported. See the
+[frozen protocol status](spec/V1ALPHA1_RELEASE_CHECKLIST.md).
+
 ---
 
 ## B. Threat / failure actors
