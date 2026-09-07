@@ -194,6 +194,9 @@ def _entry_row(entry: Any, now: float) -> dict[str, Any]:
     row["last_heartbeat_at"] = entry.last_heartbeat_at
     row["worker_dead_asserted_by"] = entry.worker_dead_asserted_by
     row["worker_dead_asserted_at"] = entry.worker_dead_asserted_at
+    from mycelium.onboarding import execution_report
+
+    row["onboarding_report"] = execution_report(entry, now=now)
     return row
 
 
@@ -471,5 +474,4 @@ def cmd_transitions_mark_dead(args: argparse.Namespace) -> int:
         f"asserted_by={entry.worker_dead_asserted_by}"
     )
     return 0
-
 

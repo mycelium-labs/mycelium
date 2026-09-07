@@ -16,6 +16,7 @@ _LAZY_IMPORTS = {
             "cmd_budget_release", "cmd_budget_status", "cmd_completion_mark",
             "cmd_completion_status", "cmd_config_docs", "cmd_config_example",
             "cmd_config_schema", "cmd_demo", "cmd_doctor", "cmd_init", "cmd_loops_release",
+            "cmd_coverage", "cmd_preview",
             "cmd_loops_status", "cmd_outcomes_dttr", "cmd_providers_verify",
             "cmd_providers_verify_report", "cmd_run", "cmd_scope_bind", "cmd_scope_status",
             "cmd_sidecar_serve", "cmd_skills_install", "cmd_verify",

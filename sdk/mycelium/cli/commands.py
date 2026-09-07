@@ -24,6 +24,7 @@ _ENV_SQLITE_PATH = "MYCELIUM_SQLITE_PATH"
 _ENV_OUTCOME_FILE = "MYCELIUM_OUTCOME_FILE"
 _ENV_ADAPTER_REPORT_SIGNING_KEY = "MYCELIUM_ADAPTER_REPORT_SIGNING_KEY"
 
+
 def _load_template(*, full: bool, minimal: bool) -> tuple[str, str]:
     if full:
         filename = _TEMPLATE_FULL
@@ -843,6 +844,61 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         stream=sys.stdout,
     )
     return exit_code_for_report(report, strict=bool(args.strict))
+
+
+def cmd_coverage(args: argparse.Namespace) -> int:
+    """Show configured protection coverage without importing application code."""
+    from mycelium.onboarding import coverage_report, load_preflight
+
+    try:
+        report = coverage_report(load_preflight(args.config))
+    except Exception as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0
+    print("Mycelium protection coverage")
+    for item in report["tools"]:
+        configured = ", ".join(item["configured_protections"]) or "none"
+        missing = ", ".join(m["protection"] for m in item["missing"]) or "none"
+        print(f"\n{item['tool']}  effect={item['effect']}  recovery={item['recovery_capability']}")
+        print(f"  configured: {configured}")
+        print(f"  missing: {missing}")
+        print(f"  reconciliation: {item['reconciliation']['support']}")
+        print(
+                f"  runtime integration: {item['runtime_integration']['status']} "
+                f"({item['runtime_integration']['reason']})"
+        )
+    return 0
+
+
+def cmd_preview(args: argparse.Namespace) -> int:
+    """Evaluate a proposed action using read-only validators."""
+    from mycelium.onboarding import load_preflight, preview
+
+    try:
+        raw = json.loads(args.args_file.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("args file must contain a JSON object")
+        report = preview(load_preflight(args.config), args.tool, raw)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print(f"Preview {report['tool']}: {report['decision']}")
+        print(f"  {report['action_summary']}")
+        for check in report["checks"]:
+            print(
+                f"  [{check['status']}] {check['name']}: {check['reason']} "
+                f"— {check['explanation']}"
+            )
+        for limitation in report["limitations"]:
+            print(f"  limitation: {limitation}")
+        print("  execution outcome: not_executed")
+    return 0 if report["decision"] in {"permitted_at_preview", "indeterminate"} else 1
 
 
 def cmd_verify(args: argparse.Namespace) -> int:

@@ -504,6 +504,7 @@ def _apply_action_ledger_tools(
             retry_permission=existing.retry_permission,
             side_effect_boundary=existing.side_effect_boundary,
             spendability=existing.spendability,
+            capability=existing.capability,
             provider_idempotency_key_param=existing.provider_idempotency_key_param,
             provider_idempotency_key_ttl=existing.provider_idempotency_key_ttl,
             propagate_effect_id_as_provider_key=existing.propagate_effect_id_as_provider_key,
@@ -518,6 +519,7 @@ def _apply_action_ledger_tools(
             entity_guard=existing.entity_guard,
             destructive_confirm=existing.destructive_confirm,
             use_time_currency=existing.use_time_currency,
+            contract=existing.contract,
         )
 
 
