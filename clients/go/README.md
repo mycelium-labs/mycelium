@@ -1,4 +1,10 @@
-# Experimental Go sidecar client
+# Experimental Go client for Mycelium
+
+This is the public Go module that lets a Go application talk to a locally
+running Mycelium sidecar. It is a helper library, not a Mycelium server and not
+a second implementation of the Mycelium engine.
+
+Module: [`github.com/mycelium-labs/mycelium/clients/go`](https://pkg.go.dev/github.com/mycelium-labs/mycelium/clients/go)
 
 This module is the second external-language interoperability experiment for
 Mycelium. The protocol remains language-neutral. Python and `ActionLedger` remain
@@ -25,6 +31,8 @@ Because the module lives in a repository subdirectory, its release tag is
 mycelium sidecar serve --config /absolute/path/sidecar.yaml
 ```
 
+See the [SDK sidecar setup](../../sdk/README.md#typescript-go-and-other-languages)
+for a minimal configuration, token-generation command, and port guidance.
 The token is supplied through the `Authorization` header only. The client rejects
 non-loopback URLs, credentials, query strings, fragments, and redirects. It does not
 use browser cookies or browser authentication.
@@ -34,7 +42,7 @@ use browser cookies or browser authentication.
 ```go
 ctx := context.Background()
 client, err := mycelium.NewClient(mycelium.ClientOptions{
-    BaseURL: "http://127.0.0.1:8080",
+    BaseURL: "http://127.0.0.1:8787",
     Token: os.Getenv("MYCELIUM_SIDECAR_TOKEN"),
     TenantID: "tenant-a", ApplicationID: "app-a",
 })

@@ -11,10 +11,10 @@ full lifecycle: validate inputs and authority before execution; control retries,
 concurrency, crashes, loops, budgets, context, and completion during the run;
 then establish outcomes, reconcile uncertainty, and retain evidence.
 
-Mycelium is **language-agnostic at the integration boundary**. The authoritative
-ledger, policy, fencing, and recovery engine remains Python. TypeScript, Go, and
-other runtimes can use that engine through the frozen development-only
-`v1alpha1` sidecar protocol instead of reimplementing its safety semantics.
+The engine is Python, but the doorway into it is language-neutral. Python
+applications import the runtime directly. TypeScript, Go, and any runtime that
+can send HTTP/JSON can use the same authoritative ledger, policy, fencing, and
+recovery engine through the development-only `v1alpha1` sidecar protocol.
 
 **Releases:** batch; calm over velocity — [release policy & pre-release checklist](docs/RELEASE.md).
 
@@ -176,17 +176,56 @@ mycelium demo --redis      # optional Cloud-style 2-worker Redis proof
 
 ### TypeScript, Go, and other languages
 
-Run the authoritative Python engine as a local sidecar:
+The sidecar is a small Mycelium server that runs beside a non-Python
+application. The application sends action details over HTTP/JSON; the sidecar
+decides whether the action may run and stores every transition in the Python
+engine.
+
+Install the Python engine, create an owner-only token, and save the development
+configuration using absolute paths:
 
 ```bash
-mycelium sidecar serve --config /absolute/path/to/sidecar.yaml
+pip install mycelium-runtime
+umask 077
+python -c 'import secrets; print(secrets.token_urlsafe(32))' > /absolute/path/sidecar.token
 ```
 
-Then use the experimental [TypeScript client](../clients/typescript/README.md),
-[Go client](../clients/go/README.md), or the authenticated
-[`v1alpha1` OpenAPI contract](docs/spec/README.md). All clients use the same
-identity, claim, lease, fence, boundary, and outcome lifecycle. They do not
-contain independent policy or recovery engines.
+```yaml
+# /absolute/path/sidecar.yaml
+kind: mycelium-sidecar
+protocol_version: "v1alpha1"
+identity_namespace: identity-v1
+tenant_id: tenant-a
+application_id: app-a
+bearer_token_file: /absolute/path/sidecar.token
+ledger: {type: file, path: /absolute/path/sidecar-ledger.json}
+outcome_storage: {type: file, path: /absolute/path/sidecar-outcomes.ndjson}
+server: {host: 127.0.0.1, port: 8787}
+```
+
+```bash
+mycelium sidecar serve --config /absolute/path/sidecar.yaml
+```
+
+Use a published experimental client:
+
+```bash
+npm install @mycelium-labs/sidecar-client@experimental
+go get github.com/mycelium-labs/mycelium/clients/go@v0.1.0
+```
+
+See the [TypeScript client](../clients/typescript/README.md), [Go
+client](../clients/go/README.md), or authenticated [`v1alpha1` OpenAPI
+contract](docs/spec/README.md). Java, Rust, C#, Ruby, and other runtimes can use
+the same contract without an official package.
+
+All clients use the same identity, claim, lease, fence, boundary, and outcome
+lifecycle. They are thin transport helpers and do not contain independent
+policy, ledger, or recovery engines.
+
+Set the client base URL to the configured sidecar host and port. The token goes
+only in the `Authorization` header. Calls made directly to a provider instead
+of through this lifecycle are not protected.
 
 The development profile accepts trusted local clients over loopback only. It
 does not yet provide remote hosting, multi-tenancy, production authentication,

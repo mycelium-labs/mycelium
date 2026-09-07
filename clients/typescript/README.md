@@ -1,4 +1,10 @@
-# Experimental Mycelium sidecar client
+# Experimental TypeScript client for Mycelium
+
+This is the public npm package that lets a Node.js or TypeScript application
+talk to a locally running Mycelium sidecar. It is a helper library, not a
+Mycelium server and not a second implementation of the Mycelium engine.
+
+Package: [`@mycelium-labs/sidecar-client`](https://www.npmjs.com/package/@mycelium-labs/sidecar-client)
 
 This package is the first external-language interoperability experiment for
 Mycelium. The protocol remains language-neutral and the Python sidecar remains the
@@ -19,6 +25,8 @@ Use the Python SDK command with an absolute configuration path:
 mycelium sidecar serve --config /absolute/path/sidecar.yaml
 ```
 
+See the [SDK sidecar setup](../../sdk/README.md#typescript-go-and-other-languages)
+for a minimal configuration, token-generation command, and port guidance.
 The configuration points to an owner-only token file. The client sends that token
 only in the `Authorization` header. It never puts the token in a URL or logs it.
 Browser use is unsupported because the development sidecar intentionally does not
@@ -30,7 +38,7 @@ provide permissive CORS or browser authentication.
 import { MyceliumClient, decimal } from "@mycelium-labs/sidecar-client";
 
 const client = new MyceliumClient({
-  baseUrl: "http://127.0.0.1:8080",
+  baseUrl: "http://127.0.0.1:8787",
   token: process.env.MYCELIUM_SIDECAR_TOKEN!,
   tenantId: "tenant-a",
   applicationId: "app-a",
@@ -81,7 +89,7 @@ route. A language-neutral request works without this package:
 
 ```sh
 curl -H "Authorization: Bearer $MYCELIUM_SIDECAR_TOKEN" \
-  http://127.0.0.1:8080/v1/capabilities
+  http://127.0.0.1:8787/v1/capabilities
 ```
 
 OpenAPI 3.1 describes the routes, bearer scheme, strict request bodies, per-operation

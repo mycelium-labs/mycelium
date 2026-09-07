@@ -22,6 +22,11 @@ keywords = [
   "duplicate-tool-execution",
   "agent-guardrails",
   "llm-agents",
+  "language-neutral",
+  "sidecar",
+  "openapi",
+  "typescript",
+  "golang",
   "python",
 ]
 readme = "README.md"

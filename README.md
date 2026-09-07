@@ -22,8 +22,9 @@ and preserve trustworthy outcomes.
 
 It is not a tracer or dashboard. It controls the action path itself.
 
-Python applications use the runtime directly. TypeScript, Go, and other
-runtimes connect to the same engine through the local sidecar.
+The engine is written in Python, but the doorway into it is language-neutral.
+Python applications use the runtime directly. TypeScript, Go, and any runtime
+that can send HTTP/JSON can use the same engine through a small local sidecar.
 
 The Python API follows semantic versioning. The `v1alpha1` sidecar protocol is
 for development and is not yet a stable production contract.
@@ -53,10 +54,31 @@ development sidecar protocol.
 
 ## Works with your stack
 
-Python applications can use YAML, decorators, or a manual API. TypeScript, Go,
-and other runtimes can connect to the same Python reliability engine through
-the local sidecar instead of reimplementing its safety rules.
+Python applications can use YAML, decorators, or a manual API. For other
+languages, the sidecar runs Mycelium as a small local server beside your
+application:
 
+```text
+TypeScript · Go · Java · Rust · any HTTP client
+                         ↓ HTTP/JSON
+                local Mycelium sidecar
+                         ↓
+             authoritative Python engine
+```
+
+The application asks the sidecar whether an action may run, reports when the
+provider call may have started, and records its result. The sidecar owns action
+identity, claims, leases, fencing, state transitions, and recovery decisions.
+Clients do not reimplement those safety rules.
+
+Published experimental clients:
+
+```bash
+npm install @mycelium-labs/sidecar-client@experimental
+go get github.com/mycelium-labs/mycelium/clients/go@v0.1.0
+```
+
+Every other language can use the same authenticated OpenAPI contract directly.
 The sidecar protocol is currently for trusted local development. See the
 [protocol overview](sdk/docs/spec/README.md), [TypeScript
 client](clients/typescript/README.md), and [Go client](clients/go/README.md).
@@ -103,10 +125,12 @@ For non-Python applications, run the local sidecar and use the TypeScript, Go,
 or OpenAPI client:
 
 ```bash
-mycelium sidecar serve --config /absolute/path/to/sidecar.yaml
+mycelium sidecar serve --config /absolute/path/sidecar.yaml
 ```
 
-Only calls routed through Mycelium are protected. See the
+See the [non-Python setup](sdk/README.md#typescript-go-and-other-languages) for
+the token and minimal sidecar configuration. Only calls routed through
+Mycelium are protected. See the
 [full SDK reference](sdk/README.md) for framework integrations, storage,
 configuration, and manual APIs.
 

@@ -13,6 +13,10 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
   evidence afterward. The public READMEs now use plain-language risk names;
   internal incident IDs stay out of onboarding copy. At-most-once execution
   remains a documented capability and default first-tool scaffold.
+- Explain the language-neutral integration consistently across the root README,
+  SDK guide, protocol overview, and client READMEs. The Python engine remains
+  authoritative; non-Python applications connect through the local sidecar.
+  Link the published TypeScript `0.1.0` npm package and Go `v0.1.0` module.
 
 ## 1.38.2 (2026-09-05)
 
@@ -28,8 +32,8 @@ deployment.
   identity, claims, fencing, leases, boundaries, completion, failure, and
   conservative recovery to the existing authoritative ledger.
 - Add experimental TypeScript and Go sidecar clients as repository packages.
-  They are not included in the Python distribution and are not independently
-  published by this release.
+  They are not included in the Python distribution; their `0.1.0` and `v0.1.0`
+  packages were published separately after this Python release.
 - Add first-class CrewAI runtime integration through scoped framework hooks.
   Configured tools now receive deterministic crew/run/task/agent dispatch
   identity without signature changes, and successful CrewAI terminals enforce
