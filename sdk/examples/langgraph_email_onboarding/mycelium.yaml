@@ -1,0 +1,29 @@
+version: 1
+profile: development
+action_ledger:
+  storage: file
+  path: /tmp/mycelium-email-onboarding-ledger.json
+  tools: [send_email]
+tools:
+  send_email:
+    side_effect_class: keyed_mutate
+    capability: queryable
+    provider_idempotency_key_param: idempotency_key
+    contract:
+      operations: [send]
+      required_args: [to, subject, body]
+      optional_args: [idempotency_key]
+      argument_types:
+        to: string
+        subject: string
+        body: string
+        idempotency_key: string
+entity_guard:
+  policy_version: onboarding-email-v1
+  tools:
+    send_email:
+      destinations:
+        - path: to
+          type: email
+          allow:
+            domains: [example.test]
