@@ -55,7 +55,7 @@ Issues = "https://github.com/mycelium-labs/mycelium/issues"
 
 [project.optional-dependencies]
 redis = ["redis>=5"]
-postgres = ["psycopg[binary,pool]>=3"]
+postgres = ["psycopg[binary,pool]>=3.3.5"]
 opentelemetry = ["opentelemetry-api>=1.20"]
 prometheus = ["prometheus-client>=0.17"]
 observability = ["opentelemetry-api>=1.20", "prometheus-client>=0.17"]
