@@ -77,6 +77,7 @@ this fingerprint under `v1alpha1`.
 | TypeScript client | Published as `@mycelium-labs/sidecar-client@0.1.0`; requires `v1alpha1` |
 | Go client | Published as module `v0.1.0`; requires `v1alpha1` |
 | Raw HTTP clients | May use the same authenticated OpenAPI contract |
+| Local conformance runner | Exercises raw HTTP, TypeScript, and Go against one temporary Python sidecar |
 
 TypeScript and Go are interoperability examples. They do not define the protocol
 and do not contain authoritative transition logic.
@@ -89,6 +90,8 @@ Before publishing any preview package or tag:
 - [x] Freeze `identity-v1`, `jcs-1`, `decimal-1`, and `url-1` for this revision.
 - [x] Align the Python sidecar, OpenAPI document, TypeScript client, and Go client.
 - [x] Preserve fail-closed handling for unknown safety-critical values.
+- [x] Run the same local sidecar lifecycle through raw HTTP, TypeScript, and Go
+  in CI.
 - [x] Approve the release coordinates: `mycelium-runtime==1.38.2`,
   `@mycelium-labs/sidecar-client@0.1.0`, and Go module `v0.1.0`.
 - [x] Publish `@mycelium-labs/sidecar-client@0.1.0` as a public npm preview on
@@ -127,13 +130,25 @@ Before publishing any preview package or tag:
   for this first package version; an authenticated removal attempt returned
   HTTP 400.
 
+## Validation recorded on 2026-09-07
+
+- The repeatable local suite passed against the Python sidecar, raw HTTP,
+  TypeScript client, and Go client.
+- All three paths matched the approved `identity-v1` effect ID and completed the
+  claim, provider-boundary, completion, and stored-result replay lifecycle.
+- Authentication and stale fences were rejected. TypeScript and Go also
+  rejected an unknown disposition and malformed reconciliation marker, and
+  classified an interrupted mutation as state- and provider-effect-uncertain.
+- The suite uses an operating-system-assigned loopback port, temporary file
+  storage, synthetic effects, and no external provider.
+
 ## Production gates
 
 The protocol freeze does not make the sidecar production-ready. Production
-support requires a separately approved effort covering repeatable conformance and
-failure validation, deployment topology, durable storage, monitoring,
-authentication appropriate to the deployment, reconciliation requirements, and
-operational recovery.
+support requires a separately approved effort covering broader failure,
+concurrency, crash, and deployment conformance; deployment topology; durable
+storage; monitoring; authentication appropriate to the deployment;
+reconciliation requirements; and operational recovery.
 
 Remote hosting, multi-tenancy, hostile-client protection, provider attestation,
 automatic legacy migration, and exactly-once claims remain outside `v1alpha1`.

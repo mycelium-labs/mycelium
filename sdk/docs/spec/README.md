@@ -79,6 +79,23 @@ A standalone export command is intentionally deferred because the served documen
 is the only authoritative copy and does not require sidecar startup for inspection
 of its Python source.
 
+## Executable conformance
+
+[`conformance/run.py`](../../../conformance/run.py) starts the real Python
+sidecar on an operating-system-assigned loopback port and runs the same
+synthetic lifecycle through raw HTTP, the TypeScript client, and the Go client.
+It checks the approved identity fixture, authentication, completion replay,
+stale fencing, unknown-value and malformed-reconciliation rejection, and
+conservative timeout handling.
+
+```bash
+python conformance/run.py
+```
+
+The command is also a dedicated CI job. It uses only temporary local files and
+never calls an external provider. Passing it proves compatibility with the
+trusted-local `v1alpha1` profile, not production deployment safety.
+
 ## Mapping to runtime code
 
 - `Claim` models `ActionLedger.claim_side_effecting()` +

@@ -1125,8 +1125,13 @@ that holds provider credentials and bypasses the sidecar.
 
 # 12. Conformance strategy
 
-A future language-neutral suite should have a versioned fixture corpus and a
-reference engine endpoint.
+The repository ships a baseline language-neutral suite with a versioned
+identity fixture and the Python sidecar as its reference engine. The local
+runner executes raw HTTP, TypeScript, and Go against one temporary sidecar and
+checks compatibility, identity, authentication, completion replay, stale
+fencing, unknown-value rejection, and timeout uncertainty.
+
+The broader conformance strategy builds on that baseline:
 
 * **Serialization conformance:** every client accepts valid examples, rejects
   malformed required fields, preserves unknown extension fields, and never emits
@@ -1145,12 +1150,14 @@ reference engine endpoint.
   storage topology, sidecar coverage evidence, version compatibility, and outcome
   durability. It cannot prove arbitrary bypass absence.
 
-Static fixtures cover serialization, canonicalization, state matrices, and error
-codes. A reference server is needed for concurrency, leases, CAS, and replay.
-Controlled crash/process tests are needed for provider-boundary ambiguity and
-recovery. Tests must distinguish a compliant client from a compliant engine; a
-client passing fixtures does not establish that it is safe to run an independent
-state machine.
+Static fixtures cover serialization, canonicalization, state matrices, and
+error codes. The local runner now covers one approved identity vector and core
+client lifecycle against the reference server. Expanding it across the full
+negative fixture corpus, concurrency, lease takeover, controlled process
+crashes, provider-boundary ambiguity, and recovery remains future work. Tests
+must distinguish a compliant client from a compliant engine; a client passing
+fixtures does not establish that it is safe to run an independent state
+machine.
 
 # 13. Roadmap and implementation status
 
@@ -1161,7 +1168,7 @@ state machine.
 | 2 | Complete | JSON Schema, OpenAPI, canonical fixtures, and error registry | Preserve fixture compatibility under `v1alpha1`. |
 | 3 | Development implementation complete | Local reference sidecar over authenticated loopback HTTP | Not a production deployment profile. |
 | 4 | Development implementation complete | Thin TypeScript transport client | Remains experimental and contains no local transition authority. |
-| 5 | Partial | Cross-language fixtures plus a thin Go client | A repeatable, packaged conformance kit remains open. |
+| 5 | Local development complete | Cross-language fixtures, a thin Go client, and a repeatable local conformance kit in CI | Expand the executable corpus for concurrency, process crashes, and every negative fixture. |
 | 6 | Later scope | Framework integrations and container sidecar | Requires bypass, authentication, secrets, observability, and upgrade design. |
 | 7 | Later scope | Independent engine experiments, only if justified | Requires formal compatibility proof and an operational reason to duplicate the engine. |
 

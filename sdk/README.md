@@ -223,6 +223,13 @@ All clients use the same identity, claim, lease, fence, boundary, and outcome
 lifecycle. They are thin transport helpers and do not contain independent
 policy, ledger, or recovery engines.
 
+The repository runs raw HTTP, TypeScript, and Go through the same synthetic
+sidecar lifecycle locally and in CI:
+
+```bash
+python conformance/run.py
+```
+
 Set the client base URL to the configured sidecar host and port. The token goes
 only in the `Authorization` header. Calls made directly to a provider instead
 of through this lifecycle are not protected.

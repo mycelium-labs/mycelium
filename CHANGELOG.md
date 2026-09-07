@@ -5,6 +5,14 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ## Unreleased
 
+### Added
+
+- Add a repeatable local `v1alpha1` conformance suite and dedicated CI job that
+  run raw HTTP, TypeScript, and Go against one temporary Python sidecar. The
+  suite covers approved identity, authentication, claim/complete/replay, stale
+  fences, unknown dispositions, malformed reconciliation replies, and
+  conservative timeout handling without calling an external provider.
+
 ### Changed
 
 - Reframe the README, SDK guide, package metadata, setup skill, and release
@@ -17,6 +25,10 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
   SDK guide, protocol overview, and client READMEs. The Python engine remains
   authoritative; non-Python applications connect through the local sidecar.
   Link the published TypeScript `0.1.0` npm package and Go `v0.1.0` module.
+- Correct the TypeScript source loopback-address validator so rebuilding the
+  client continues to accept explicit `127.x.x.x` sidecar addresses.
+- Make the TypeScript client reject reconciliation replies that omit the
+  authoritative engine marker, matching the Go client's fail-closed behavior.
 
 ## 1.38.2 (2026-09-05)
 
