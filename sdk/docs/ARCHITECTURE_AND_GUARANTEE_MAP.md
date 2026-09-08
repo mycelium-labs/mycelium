@@ -8,14 +8,14 @@ synthetic verification run proves an application's real provider integration.
 
 ## Source provenance and review baseline
 
-Validated against the repository at review base commit `01adf93` (Mycelium `1.38.2`).
+Validated against the repository at review base commit `2a3f57f` (Mycelium `1.38.2`).
 The machine-verifiable source manifest is tracked in [architecture_provenance.json](architecture_provenance.json).
 
 ### Provenance model and guarantees
 
 To eliminate the impossible Git self-reference problem (a tracked architecture document cannot contain the Git commit SHA that includes the document itself), Mycelium couples an **ancestor review base** with a **cryptographic source file manifest**:
 
-1. **Review Base Ancestry**: The recorded `review_base_commit` (`01adf93`) is verified to exist in the repository object graph and to be an ancestor of `HEAD`.
+1. **Review Base Ancestry**: The recorded `review_base_commit` (`2a3f57f`) is verified to exist in the repository object graph and to be an ancestor of `HEAD`.
 2. **Cryptographic Manifest**: [architecture_provenance.json](architecture_provenance.json) records the SHA-256 digests of all 15 canonical Python runtime modules and 27 regression test suites supporting the architecture trace below.
 
 **What this provenance statement guarantees:**

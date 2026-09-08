@@ -1154,6 +1154,7 @@ class SidecarService:
         self, ledger: ActionLedger, config: SidecarConfig, outcome: OutcomeEmitter | None = None
     ):
         self.ledger, self.config = ledger, config
+        self._claim_lock = threading.Lock()
         self.principal = Principal(
             config.tenant_id,
             config.application_id,
@@ -1229,6 +1230,14 @@ class SidecarService:
         )
 
     def claim(self, body: dict[str, Any]) -> dict[str, Any]:
+        # The development profile runs one sidecar process. Serialize its
+        # non-blocking claims so a losing request can observe the winner
+        # without entering ActionLedger's polling timeout path and mutating the
+        # active transition to UNKNOWN.
+        with self._claim_lock:
+            return self._claim_serialized(body)
+
+    def _claim_serialized(self, body: dict[str, Any]) -> dict[str, Any]:
         _, effect_id = self._identity(body)
         decision_raw = body.get("decision")
         if decision_raw is not None:
@@ -1238,6 +1247,42 @@ class SidecarService:
                 raise SidecarError("INVALID_REQUEST", "invalid decision evidence") from exc
         else:
             decision = None
+        existing = self.ledger.get(effect_id)
+        if existing is not None:
+            active = _projection(existing)
+            if existing.resolved_terminal_outcome().value == "IN_FLIGHT":
+                if active["effect_state"] == "INTENDED":
+                    if decision is None:
+                        disposition = "RECORD_DECISION"
+                    else:
+                        try:
+                            existing = self.ledger.record_decision(
+                                effect_id,
+                                decision.to_dict(),
+                                expected_owner=existing.owner,
+                                expected_fence=existing.fence,
+                            )
+                        except Exception as exc:
+                            raise SidecarError(
+                                "INVALID_TRANSITION",
+                                "decision was not authorized",
+                                status=409,
+                            ) from exc
+                        active = _projection(existing)
+                        disposition = "EXECUTE" if decision.allowed else "DENIED"
+                elif active["effect_state"] == "ATTEMPTING":
+                    disposition = "WAIT_FOR_OWNER"
+                else:
+                    disposition = None
+            else:
+                disposition = None
+            if disposition is not None:
+                self._emit(existing, "sidecar_claim")
+                return {
+                    "protocol_version": self.config.protocol_version,
+                    "disposition": disposition,
+                    **active,
+                }
         try:
             entry = self.ledger.claim_side_effecting(
                 effect_id,
@@ -1268,6 +1313,21 @@ class SidecarService:
         except SidecarError:
             raise
         except Exception as exc:
+            current = self.ledger.get(effect_id)
+            if current is not None:
+                blocked = _projection(current)
+                disposition = {
+                    "COMMITTED": "RETURN_STORED_RESULT",
+                    "UNKNOWN": "UNKNOWN",
+                    "ABORTED": "TERMINAL_ABORTED",
+                }.get(blocked["effect_state"])
+                if disposition is not None:
+                    self._emit(current, "sidecar_claim")
+                    return {
+                        "protocol_version": self.config.protocol_version,
+                        "disposition": disposition,
+                        **blocked,
+                    }
             code = (
                 "ACTIVE_OWNER"
                 if "in-flight" in str(exc).lower()
