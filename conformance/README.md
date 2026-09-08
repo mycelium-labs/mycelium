@@ -37,11 +37,20 @@ Every client checks:
 - fail-closed handling of a malformed reconciliation marker;
 - conservative uncertainty after a transport timeout.
 
-The raw HTTP path additionally checks the unauthenticated health endpoint. CI
-runs the same command, so local and hosted verification use one harness.
+The raw HTTP path additionally checks the unauthenticated health endpoint and
+the two-stage `RECORD_DECISION` → `EXECUTE` flow. CI runs the same command, so
+local and hosted verification use one harness.
+
+The failure scenarios launch TypeScript and Go as separate operating-system
+processes. They race for one effect, kill owners before and after the provider
+boundary, wait for leases to expire, reject late owner writes, and restart the
+sidecar over the same durable ledger. The trusted-local blind profile parks
+crashed irreversible actions instead of granting an unsafe automatic takeover.
 
 ## What it does not prove
 
 This suite validates the trusted-local profile only. It does not prove remote
 deployment, multi-tenancy, production authentication, provider truth,
-hostile-client protection, bypass prevention, or exactly-once execution.
+hostile-client protection, bypass prevention, or exactly-once execution. It
+also does not prove reconciler-backed takeover or coordination between multiple
+sidecar server processes.

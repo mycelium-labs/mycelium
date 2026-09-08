@@ -12,6 +12,10 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
   suite covers approved identity, authentication, claim/complete/replay, stale
   fences, unknown dispositions, malformed reconciliation replies, and
   conservative timeout handling without calling an external provider.
+- Expand sidecar conformance with separate TypeScript and Go processes that
+  contend for one effect, are killed before and after the provider boundary,
+  reject late owner writes, and verify stored-result replay after a sidecar
+  restart.
 
 ### Changed
 
@@ -29,6 +33,11 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
   client continues to accept explicit `127.x.x.x` sidecar addresses.
 - Make the TypeScript client reject reconciliation replies that omit the
   authoritative engine marker, matching the Go client's fail-closed behavior.
+- Make concurrent sidecar claims return `WAIT_FOR_OWNER` without timing out or
+  mutating the active transition. Expired crash outcomes now return their
+  frozen `UNKNOWN` or `TERMINAL_ABORTED` dispositions instead of a generic
+  transition error, while a decisionless claim can still advance through
+  `RECORD_DECISION` to `EXECUTE`.
 
 ## 1.38.2 (2026-09-05)
 

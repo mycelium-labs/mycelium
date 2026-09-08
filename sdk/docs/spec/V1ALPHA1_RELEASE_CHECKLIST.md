@@ -142,13 +142,24 @@ Before publishing any preview package or tag:
 - The suite uses an operating-system-assigned loopback port, temporary file
   storage, synthetic effects, and no external provider.
 
+## Validation recorded on 2026-09-08
+
+- TypeScript and Go processes contended for the same effect; exactly one
+  received `EXECUTE` and the peer received `WAIT_FOR_OWNER` without changing
+  the active transition.
+- Owners were killed before and after the provider boundary. After lease
+  expiry, the blind irreversible profile parked both effects instead of
+  authorizing an unsafe takeover, and late owner completions were rejected.
+- Restarting the Python sidecar over the same file ledger preserved the
+  committed result for both language clients.
+
 ## Production gates
 
 The protocol freeze does not make the sidecar production-ready. Production
-support requires a separately approved effort covering broader failure,
-concurrency, crash, and deployment conformance; deployment topology; durable
-storage; monitoring; authentication appropriate to the deployment;
-reconciliation requirements; and operational recovery.
+support requires a separately approved effort covering multiple sidecar
+processes, distributed storage, reconciler-backed takeover, broader deployment
+conformance, deployment topology, monitoring, authentication appropriate to the
+deployment, reconciliation requirements, and operational recovery.
 
 Remote hosting, multi-tenancy, hostile-client protection, provider attestation,
 automatic legacy migration, and exactly-once claims remain outside `v1alpha1`.

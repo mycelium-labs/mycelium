@@ -1129,7 +1129,8 @@ The repository ships a baseline language-neutral suite with a versioned
 identity fixture and the Python sidecar as its reference engine. The local
 runner executes raw HTTP, TypeScript, and Go against one temporary sidecar and
 checks compatibility, identity, authentication, completion replay, stale
-fencing, unknown-value rejection, and timeout uncertainty.
+fencing, unknown-value rejection, timeout uncertainty, cross-language
+contention, killed-client crash windows, and durable restart replay.
 
 The broader conformance strategy builds on that baseline:
 
@@ -1152,12 +1153,13 @@ The broader conformance strategy builds on that baseline:
 
 Static fixtures cover serialization, canonicalization, state matrices, and
 error codes. The local runner now covers one approved identity vector and core
-client lifecycle against the reference server. Expanding it across the full
-negative fixture corpus, concurrency, lease takeover, controlled process
-crashes, provider-boundary ambiguity, and recovery remains future work. Tests
-must distinguish a compliant client from a compliant engine; a client passing
-fixtures does not establish that it is safe to run an independent state
-machine.
+client lifecycle against the reference server, including real TypeScript and
+Go processes contending and being killed around the provider boundary.
+Expanding it across the full negative fixture corpus, multiple sidecar server
+processes, distributed storage, and reconciler-backed takeover remains future
+work. Tests must distinguish a compliant client from a compliant engine; a
+client passing fixtures does not establish that it is safe to run an
+independent state machine.
 
 # 13. Roadmap and implementation status
 
@@ -1168,7 +1170,7 @@ machine.
 | 2 | Complete | JSON Schema, OpenAPI, canonical fixtures, and error registry | Preserve fixture compatibility under `v1alpha1`. |
 | 3 | Development implementation complete | Local reference sidecar over authenticated loopback HTTP | Not a production deployment profile. |
 | 4 | Development implementation complete | Thin TypeScript transport client | Remains experimental and contains no local transition authority. |
-| 5 | Local development complete | Cross-language fixtures, a thin Go client, and a repeatable local conformance kit in CI | Expand the executable corpus for concurrency, process crashes, and every negative fixture. |
+| 5 | Local development complete | Cross-language fixtures, a thin Go client, and a repeatable local conformance kit in CI with contention, process-kill, and restart scenarios | Expand the executable corpus for multiple sidecars, distributed storage, reconciler-backed takeover, and every negative fixture. |
 | 6 | Later scope | Framework integrations and container sidecar | Requires bypass, authentication, secrets, observability, and upgrade design. |
 | 7 | Later scope | Independent engine experiments, only if justified | Requires formal compatibility proof and an operational reason to duplicate the engine. |
 

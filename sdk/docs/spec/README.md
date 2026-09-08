@@ -86,7 +86,9 @@ sidecar on an operating-system-assigned loopback port and runs the same
 synthetic lifecycle through raw HTTP, the TypeScript client, and the Go client.
 It checks the approved identity fixture, authentication, completion replay,
 stale fencing, unknown-value and malformed-reconciliation rejection, and
-conservative timeout handling.
+conservative timeout handling. Separate TypeScript and Go processes also race
+for one effect, are killed before and after the provider boundary, and verify
+fail-closed recovery plus durable replay after a sidecar restart.
 
 ```bash
 python conformance/run.py
