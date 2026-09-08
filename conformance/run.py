@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import json
 import os
+import selectors
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -106,6 +108,49 @@ def raw_http_checks(base_url: str, expected_effect_id: str) -> list[str]:
     )
     assert derived["effect_id"] == expected_effect_id
     checks.append("identity-fixture")
+
+    decision_candidate = identity("conformance-raw-two-stage-decision")
+    intended = require_status(
+        request(
+            base_url,
+            "POST",
+            "/v1/effects/claim",
+            body=decision_candidate,
+        ),
+        200,
+        "decisionless claim",
+    )
+    assert intended["disposition"] == "RECORD_DECISION"
+    decided = require_status(
+        request(
+            base_url,
+            "POST",
+            "/v1/effects/claim",
+            body={
+                **decision_candidate,
+                "decision": {"allowed": True, "verdicts": [], "denied_reasons": []},
+            },
+        ),
+        200,
+        "decision recording claim",
+    )
+    assert decided["disposition"] == "EXECUTE"
+    require_status(
+        request(
+            base_url,
+            "POST",
+            f"/v1/effects/{decided['effect_id']}/complete",
+            body={
+                **decision_candidate,
+                "owner_id": decided["owner_id"],
+                "fence": decided["fence"],
+                "result": {"decision": "recorded"},
+            },
+        ),
+        200,
+        "decision lifecycle completion",
+    )
+    checks.append("two-stage-decision")
 
     candidate = identity("conformance-raw-lifecycle")
     claim = require_status(
@@ -231,6 +276,286 @@ def run_client(
     return result
 
 
+def driver_environment(
+    base: dict[str, str],
+    request_id: str,
+    *,
+    lease_ttl: float,
+    hold_ms: int = 0,
+    boundary: str | None = None,
+    start_at_ms: int | None = None,
+) -> dict[str, str]:
+    environment = {
+        **base,
+        "MYCELIUM_CONFORMANCE_REQUEST_ID": request_id,
+        "MYCELIUM_CONFORMANCE_LEASE_TTL": str(lease_ttl),
+        "MYCELIUM_CONFORMANCE_HOLD_MS": str(hold_ms),
+    }
+    if boundary is not None:
+        environment["MYCELIUM_CONFORMANCE_BOUNDARY"] = boundary
+    if start_at_ms is not None:
+        environment["MYCELIUM_CONFORMANCE_START_AT_MS"] = str(start_at_ms)
+    return environment
+
+
+def start_crash_driver(
+    client: str,
+    environment: dict[str, str],
+    go_driver: Path,
+) -> subprocess.Popen[str]:
+    if client == "typescript":
+        command = ["node", "crash-conformance.mjs"]
+        cwd = ROOT / "clients/typescript"
+    elif client == "go":
+        command = [str(go_driver)]
+        cwd = ROOT / "clients/go"
+    else:
+        raise ValueError(f"unknown crash driver: {client}")
+    return subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+
+
+def read_crash_driver(
+    process: subprocess.Popen[str],
+    client: str,
+    *,
+    timeout: float = 10,
+) -> dict[str, Any]:
+    if process.stdout is None or process.stderr is None:
+        raise RuntimeError(f"{client} crash driver has no output pipes")
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ)
+    try:
+        if not selector.select(timeout):
+            raise RuntimeError(f"{client} crash driver did not become ready")
+        line = process.stdout.readline()
+    finally:
+        selector.close()
+    if not line:
+        stderr = process.stderr.read()
+        raise RuntimeError(
+            f"{client} crash driver exited before reporting a claim "
+            f"(status={process.poll()}):\n{stderr}"
+        )
+    try:
+        result = json.loads(line)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{client} crash driver returned invalid JSON: {line}") from exc
+    if result.get("client") != client:
+        raise RuntimeError(f"{client} crash driver returned the wrong label: {result}")
+    return result
+
+
+def stop_process(process: subprocess.Popen[str], *, crash: bool) -> None:
+    if process.poll() is not None:
+        return
+    if crash:
+        process.kill()
+    else:
+        process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def run_crash_driver(
+    client: str,
+    environment: dict[str, str],
+    go_driver: Path,
+) -> dict[str, Any]:
+    process = start_crash_driver(client, environment, go_driver)
+    try:
+        result = read_crash_driver(process, client)
+        status = process.wait(timeout=5)
+        if status:
+            stderr = process.stderr.read() if process.stderr is not None else ""
+            raise RuntimeError(f"{client} crash driver failed ({status}):\n{stderr}")
+        return result
+    finally:
+        stop_process(process, crash=False)
+
+
+def assert_old_owner_rejected(
+    base_url: str,
+    candidate: dict[str, Any],
+    owner: dict[str, Any],
+    *,
+    context: str,
+    expected_state: str,
+) -> None:
+    status, payload = request(
+        base_url,
+        "POST",
+        f"/v1/effects/{owner['effect_id']}/complete",
+        body={
+            **candidate,
+            "owner_id": owner["owner_id"],
+            "fence": owner["fence"],
+            "result": {"unsafe": True},
+        },
+    )
+    if status != 409:
+        raise AssertionError(f"{context}: old owner completion was not rejected: {status} {payload}")
+    if payload["error"]["code"] not in {"STALE_FENCE", "LEASE_LOST", "INVALID_TRANSITION"}:
+        raise AssertionError(f"{context}: unexpected rejection: {payload}")
+    inspected = require_status(
+        request(base_url, "GET", f"/v1/effects/{owner['effect_id']}"),
+        200,
+        f"{context} inspection",
+    )
+    assert inspected["effect_state"] == expected_state
+    assert inspected["result"] is None
+
+
+def crash_and_concurrency_checks(
+    base_url: str,
+    environment: dict[str, str],
+    go_driver: Path,
+) -> tuple[list[str], str]:
+    checks: list[str] = []
+    decision = {"allowed": True, "verdicts": [], "denied_reasons": []}
+
+    race_request_id = "conformance-cross-language-race"
+    start_at_ms = int(time.time() * 1000) + 500
+    race_environment = driver_environment(
+        environment,
+        race_request_id,
+        lease_ttl=5,
+        hold_ms=30_000,
+        start_at_ms=start_at_ms,
+    )
+    race_processes = {
+        client: start_crash_driver(client, race_environment, go_driver)
+        for client in ("typescript", "go")
+    }
+    try:
+        race_results = {
+            client: read_crash_driver(process, client)
+            for client, process in race_processes.items()
+        }
+        dispositions = sorted(result["disposition"] for result in race_results.values())
+        assert dispositions == ["EXECUTE", "WAIT_FOR_OWNER"], race_results
+        owner_client = next(
+            client
+            for client, result in race_results.items()
+            if result["disposition"] == "EXECUTE"
+        )
+        waiter_client = "go" if owner_client == "typescript" else "typescript"
+        waiter_status = race_processes[waiter_client].wait(timeout=5)
+        if waiter_status:
+            raise AssertionError(f"{waiter_client} waiter failed with {waiter_status}")
+        owner = race_results[owner_client]
+        candidate = identity(race_request_id)
+        completed = require_status(
+            request(
+                base_url,
+                "POST",
+                f"/v1/effects/{owner['effect_id']}/complete",
+                body={
+                    **candidate,
+                    "owner_id": owner["owner_id"],
+                    "fence": owner["fence"],
+                    "result": {"scenario": "cross-language-race"},
+                },
+            ),
+            200,
+            "concurrent owner completion",
+        )
+        assert completed["effect_state"] == "COMMITTED"
+        checks.append("cross-language-single-owner")
+    finally:
+        for process in race_processes.values():
+            stop_process(process, crash=False)
+
+    pre_request_id = "conformance-typescript-crash-before-boundary"
+    pre_candidate = identity(pre_request_id)
+    pre_owner_process = start_crash_driver(
+        "typescript",
+        driver_environment(
+            environment, pre_request_id, lease_ttl=1, hold_ms=30_000
+        ),
+        go_driver,
+    )
+    try:
+        pre_owner = read_crash_driver(pre_owner_process, "typescript")
+        assert pre_owner["disposition"] == "EXECUTE"
+        stop_process(pre_owner_process, crash=True)
+    finally:
+        stop_process(pre_owner_process, crash=True)
+    time.sleep(1.3)
+    pre_recovery = run_crash_driver(
+        "go",
+        driver_environment(environment, pre_request_id, lease_ttl=1),
+        go_driver,
+    )
+    assert pre_recovery["disposition"] == "TERMINAL_ABORTED", pre_recovery
+    assert_old_owner_rejected(
+        base_url,
+        pre_candidate,
+        pre_owner,
+        context="pre-boundary crash",
+        expected_state="ABORTED",
+    )
+    checks.append("pre-boundary-crash-parks")
+
+    post_request_id = "conformance-go-crash-after-boundary"
+    post_candidate = identity(post_request_id)
+    post_owner_process = start_crash_driver(
+        "go",
+        driver_environment(
+            environment,
+            post_request_id,
+            lease_ttl=1,
+            hold_ms=30_000,
+            boundary="maybe_crossed",
+        ),
+        go_driver,
+    )
+    try:
+        post_owner = read_crash_driver(post_owner_process, "go")
+        assert post_owner["disposition"] == "EXECUTE"
+        stop_process(post_owner_process, crash=True)
+    finally:
+        stop_process(post_owner_process, crash=True)
+    time.sleep(1.3)
+    post_recovery = run_crash_driver(
+        "typescript",
+        driver_environment(environment, post_request_id, lease_ttl=1),
+        go_driver,
+    )
+    assert post_recovery["disposition"] == "UNKNOWN", post_recovery
+    assert_old_owner_rejected(
+        base_url,
+        post_candidate,
+        post_owner,
+        context="post-boundary crash",
+        expected_state="UNKNOWN",
+    )
+    checks.append("post-boundary-crash-parks")
+
+    race_replay = require_status(
+        request(
+            base_url,
+            "POST",
+            "/v1/effects/claim",
+            body={**identity(race_request_id), "decision": decision},
+        ),
+        200,
+        "pre-restart stored result",
+    )
+    assert race_replay["disposition"] == "RETURN_STORED_RESULT"
+    return checks, race_request_id
+
+
 def main() -> int:
     for executable in ("node", "npm", "go"):
         if shutil.which(executable) is None:
@@ -265,6 +590,12 @@ def main() -> int:
             encoding="utf-8",
         )
         config = SidecarConfig.from_yaml(config_path)
+        go_driver = temp / "go-crash-conformance"
+        subprocess.run(
+            ["go", "build", "-o", str(go_driver), "./cmd/crash-conformance"],
+            cwd=ROOT / "clients/go",
+            check=True,
+        )
         server, thread = serve_in_thread(build_service(config))
         base_url = f"http://127.0.0.1:{server.server_port}"
         environment = {
@@ -295,10 +626,40 @@ def main() -> int:
                 environment=environment,
                 client="go",
             )
+            failure_checks, restart_request_id = crash_and_concurrency_checks(
+                base_url, environment, go_driver
+            )
         finally:
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+
+        restarted_server, restarted_thread = serve_in_thread(build_service(config))
+        restarted_environment = {
+            **environment,
+            "MYCELIUM_CONFORMANCE_URL": (
+                f"http://127.0.0.1:{restarted_server.server_port}"
+            ),
+        }
+        try:
+            restart_results = [
+                run_crash_driver(
+                    client,
+                    driver_environment(
+                        restarted_environment, restart_request_id, lease_ttl=1
+                    ),
+                    go_driver,
+                )
+                for client in ("typescript", "go")
+            ]
+            for result in restart_results:
+                assert result["disposition"] == "RETURN_STORED_RESULT", result
+                assert result["result"] == {"scenario": "cross-language-race"}, result
+            failure_checks.append("sidecar-restart-stored-result")
+        finally:
+            restarted_server.shutdown()
+            restarted_server.server_close()
+            restarted_thread.join(timeout=5)
 
     for result in (ts_result, go_result):
         if result.get("effect_id") != expected_effect_id:
@@ -313,6 +674,7 @@ def main() -> int:
                     "raw-http": raw_checks,
                     "typescript": ts_result["checks"],
                     "go": go_result["checks"],
+                    "cross-language-failures": failure_checks,
                 },
                 "effect_id": expected_effect_id,
             },
