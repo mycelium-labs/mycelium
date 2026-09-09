@@ -35,6 +35,11 @@ fill/merge YAML, wire the real tool boundary, add tests, and run Doctor/Verify.
 It remains fail-closed for secrets, business identity, and provider authority
 that cannot be safely inferred.
 
+For an unchanged sequential function whose child effects are already ledgered,
+the setup skill can add one outer `@composite(...)` decorator. See
+[durable composite recovery](docs/COMPOSITE_RECOVERY.md) for the supported API,
+stable operation-ID rule, manifest diagnostics, and fail-closed limitations.
+
 ### Example: duplicate execution after redispatch
 
 **LangGraph Cloud redispatches a long tool call while the first is still running.** Both complete. You pay twice. Side effects run twice. See [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417).
@@ -234,10 +239,47 @@ Set the client base URL to the configured sidecar host and port. The token goes
 only in the `Authorization` header. Calls made directly to a provider instead
 of through this lifecycle are not protected.
 
-The development profile accepts trusted local clients over loopback only. It
-does not yet provide remote hosting, multi-tenancy, production authentication,
-hostile-client protection, or provider attestation. Calls that bypass the
-sidecar remain unprotected.
+Any HTTP client can use the same endpoint. For example, after starting the
+Compose profile, a raw identity request is:
+
+```bash
+curl --fail http://127.0.0.1:8787/v1/identities/derive \
+  -H 'Authorization: Bearer YOUR_TOKEN' -H 'Content-Type: application/json' \
+  -d '{"tenant_id":"example-tenant","application_id":"example-app","business_request_id":"req-1","canonicalization_version":"jcs-1","destination":null,"execution_scope":{},"identity_version":"1","input":{"synthetic":true},"tool_contract_version":"1","tool_id":"synthetic"}'
+```
+
+Point the TypeScript transport at `http://127.0.0.1:8787` and the Go client at
+that URL, or use `http://127.0.0.1:8788` for the second Compose sidecar. Both
+clients remain thin HTTP adapters; the PostgreSQL ledger decides ownership.
+
+The development profile accepts trusted local clients over loopback only. For
+multiple machines or containers, select `profile: shared`, use PostgreSQL for
+both `ledger` and `outcome_storage`, and bind the sidecar to an explicit
+address. Authentication remains bearer-token based; credentials are scoped to
+the tenant and application in each sidecar configuration, and overlapping
+`bearer_token_files` support rotation. Put TLS at the sidecar's trusted reverse
+proxy, because this server does not terminate TLS. Never put a token in a URL.
+
+The shared profile has verified cross-process PostgreSQL claim arbitration and
+fencing, but it does not provide provider attestation, exactly-once provider
+execution, IAM, or protection for calls that bypass the sidecar. Treat the
+`v1alpha1` protocol as a compatibility protocol until it is promoted.
+
+Supported shared deployment files are [Dockerfile.sidecar](../Dockerfile.sidecar),
+[docker-compose.sidecar.yml](../docker-compose.sidecar.yml), and
+[deploy/sidecar.shared.yaml](../deploy/sidecar.shared.yaml). Start them with:
+
+```bash
+docker compose -f docker-compose.sidecar.yml up --build
+```
+
+Replace the example database password and bearer token with secrets supplied by
+your deployment system. `/health` reports process health; `/ready` returns 200
+only after PostgreSQL connectivity and schema initialization succeed. Startup
+fails when PostgreSQL is configured but unavailable; it never falls back to a
+local ledger. Back up PostgreSQL before upgrades, keep schema ownership with the
+deployment account, and shut down with SIGTERM so active leases remain in the
+ledger for conservative recovery.
 
 ## Quickstart: stale context & broken transcripts (opt-in)
 

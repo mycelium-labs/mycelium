@@ -7,6 +7,20 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Added
 
+- Add durable straight-line composite recovery with a pinned manifest, parent
+  lease/fence control record, stable child identities, replayed child results,
+  fail-closed drift/authority diagnostics, and distributable setup guidance.
+
+- Add an explicitly selected shared sidecar profile backed by PostgreSQL, with
+  bounded pooled connections, startup validation, unauthenticated health and
+  readiness probes, overlapping token files, and Docker Compose deployment
+  examples. PostgreSQL arbitration reuses the authoritative ActionLedger and
+  does not claim exactly-once provider execution.
+- Add `conformance/run_postgres.py` for a Docker-backed two-sidecar synthetic
+  claim race. The local file-backed conformance command remains unchanged.
+
+### Added
+
 - Add a repeatable local `v1alpha1` conformance suite and dedicated CI job that
   run raw HTTP, TypeScript, and Go against one temporary Python sidecar. The
   suite covers approved identity, authentication, claim/complete/replay, stale

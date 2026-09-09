@@ -79,7 +79,8 @@ go get github.com/mycelium-labs/mycelium/clients/go@v0.1.0
 ```
 
 Every other language can use the same authenticated OpenAPI contract directly.
-The sidecar protocol is currently for trusted local development. See the
+The sidecar supports a trusted loopback development profile and an explicitly
+selected shared PostgreSQL profile for multiple sidecars. See the
 [protocol overview](sdk/docs/spec/README.md), [TypeScript
 client](clients/typescript/README.md), [Go client](clients/go/README.md), and
 [local cross-language conformance suite](conformance/README.md).

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	neturl "net/url"
 	"reflect"
@@ -37,12 +36,11 @@ type ClientOptions struct {
 
 func NewClient(options ClientOptions) (*Client, error) {
 	u, err := neturl.Parse(options.BaseURL)
-	if err != nil || u.Scheme != "http" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return nil, errors.New("base URL must be credential-free HTTP without query or fragment")
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return nil, errors.New("base URL must be credential-free HTTP(S) without query or fragment")
 	}
-	ip := net.ParseIP(u.Hostname())
-	if ip == nil || !(ip.IsLoopback() && (ip.To4() != nil || ip.String() == "::1")) {
-		return nil, errors.New("base URL must use an explicit loopback IP")
+	if u.Hostname() == "" || strings.Contains(u.Hostname(), "%") {
+		return nil, errors.New("base URL must use a valid host")
 	}
 	if options.Token == "" {
 		return nil, errors.New("token must not be empty")

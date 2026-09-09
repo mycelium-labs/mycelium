@@ -13,17 +13,11 @@ const MAX_RESPONSE_BYTES = 1024 * 1024;
 function validLoopbackBase(value: string): string {
   let url: URL;
   try { url = new URL(value); } catch { throw new Error("baseUrl must be a valid URL"); }
-  if (url.protocol !== "http:" || url.username || url.password || url.search || url.hash) {
-    throw new Error("baseUrl must be credential-free HTTP without query or fragment");
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password || url.search || url.hash) {
+    throw new Error("baseUrl must be credential-free HTTP(S) without query or fragment");
   }
   const host = url.hostname.replace(/^\[|\]$/g, "");
-  const octets = host.split(".");
-  const ipv4Loopback = octets.length === 4
-    && octets[0] === "127"
-    && octets.slice(1).every(
-      (part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255
-    );
-  if (!ipv4Loopback && host !== "::1") throw new Error("baseUrl must use an explicit loopback address");
+  if (!host || host.includes("/") || host.includes("%")) throw new Error("baseUrl must use a valid host");
   return url.toString().replace(/\/$/, "");
 }
 
