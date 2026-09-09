@@ -114,6 +114,19 @@ class PostgresOutcomeStorage(OutcomeStorage):
             raise self._wrap_error(exc, action="schema ensure") from exc
         self._schema_ready = True
 
+    def validate(self) -> None:
+        """Initialize the schema and prove the configured database is usable."""
+        try:
+            self._ensure_schema()
+            with self._psycopg.connect(self._dsn, connect_timeout=5) as conn:
+                conn.execute("SELECT 1").fetchone()
+        except Exception as exc:
+            detail = redact_secrets(str(exc))
+            raise RuntimeError(
+                "Postgres outcome storage is not ready: "
+                f"{type(exc).__name__}: {detail}"
+            ) from None
+
     def append(self, row: OutcomeRow) -> None:
         if not row.event_id:
             raise ValueError(

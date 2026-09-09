@@ -27,6 +27,7 @@ from mycelium.action_ledger import ActionLedger
 from mycelium.decision import Decision
 from mycelium.ledger_storage import FileLedgerStorage
 from mycelium.outcome_emit import FileOutcomeStorage, OutcomeEmitter
+from mycelium.storage import PostgresLedgerStorage, PostgresOutcomeStorage
 from mycelium.transition import (
     RetryPermission,
     SideEffectBoundary,
@@ -1007,20 +1008,35 @@ class SidecarConfig:
     tenant_id: str
     application_id: str
     token: str
-    ledger_path: Path
-    outcome_path: Path
+    ledger_path: Path | None = None
+    outcome_path: Path | None = None
     protocol_version: str = PROTOCOL_VERSION
     identity_namespace: str = "identity-v1"
     body_limit: int = MAX_BODY_BYTES
     legacy_inspection: bool = False
+    profile: str = "development"
+    ledger_type: str = "file"
+    ledger_dsn: str | None = None
+    ledger_table: str = "mycelium_action_ledger"
+    outcome_type: str = "file"
+    outcome_dsn: str | None = None
+    outcome_table: str = "mycelium_outcomes"
+    bearer_tokens: tuple[str, ...] = ()
+    db_connect_timeout: float = 5.0
+    db_pool_timeout: float = 5.0
+    db_pool_min_size: int = 1
+    db_pool_max_size: int = 10
+    request_timeout: float = 10.0
 
     def __post_init__(self) -> None:
         try:
             address = ipaddress.ip_address(self.host)
         except ValueError as exc:
             raise ValueError("sidecar host must be a literal loopback address") from exc
-        if not address.is_loopback:
-            raise ValueError("sidecar host must resolve exclusively to loopback")
+        if self.profile not in {"development", "shared"}:
+            raise ValueError("sidecar profile must be development or shared")
+        if self.profile == "development" and not address.is_loopback:
+            raise ValueError("development sidecar host must resolve exclusively to loopback")
         if not self.tenant_id or not self.application_id:
             raise ValueError("tenant_id and application_id are required")
         if self.protocol_version != PROTOCOL_VERSION:
@@ -1031,12 +1047,25 @@ class SidecarConfig:
             raise ValueError("port must be between 0 and 65535")
         if not 1 <= self.body_limit <= 16 * MAX_BODY_BYTES:
             raise ValueError("body_limit is outside the development limit")
-        try:
-            self.token.encode("ascii")
-        except UnicodeEncodeError as exc:
-            raise ValueError("token must be ASCII") from exc
-        if not re.fullmatch(r"(?:[A-Za-z0-9_-]{43}|[0-9a-fA-F]{64})", self.token):
-            raise ValueError("token must be 43 base64url or 64 hexadecimal characters")
+        tokens = self.bearer_tokens or (self.token,)
+        if not tokens or any(
+            not isinstance(value, str)
+            or not re.fullmatch(r"(?:[A-Za-z0-9_-]{43}|[0-9a-fA-F]{64})", value)
+            for value in tokens
+        ):
+            raise ValueError("tokens must be 43 base64url or 64 hexadecimal characters")
+        object.__setattr__(self, "bearer_tokens", tuple(tokens))
+        if self.ledger_type == "postgres":
+            if not self.ledger_dsn or self.profile != "shared":
+                raise ValueError("shared Postgres ledger requires a database URL")
+        elif self.ledger_type != "file" or self.ledger_path is None:
+            raise ValueError("ledger must be file with an absolute path or postgres with a URL")
+        if self.profile == "shared" and self.outcome_type != "postgres":
+            raise ValueError("shared profile requires Postgres outcome storage")
+        if self.outcome_type == "postgres" and not self.outcome_dsn:
+            raise ValueError("Postgres outcome storage requires a database URL")
+        if self.request_timeout <= 0 or self.request_timeout > 120:
+            raise ValueError("request_timeout must be between 0 and 120 seconds")
 
     @classmethod
     def from_yaml(cls, path: str | os.PathLike[str]) -> SidecarConfig:
@@ -1051,40 +1080,68 @@ class SidecarConfig:
             raise ValueError("invalid sidecar configuration") from exc
         if not isinstance(data, dict) or data.get("kind") != "mycelium-sidecar":
             raise ValueError("sidecar config kind must be mycelium-sidecar")
-        token_file = data.get("bearer_token_file")
-        if not isinstance(token_file, str) or not Path(token_file).is_absolute():
-            raise ValueError("bearer_token_file must be an absolute path")
+        token_files = data.get("bearer_token_files", [data.get("bearer_token_file")])
+        if not isinstance(token_files, list) or not token_files or any(
+            not isinstance(item, str) or not Path(item).is_absolute() for item in token_files
+        ):
+            raise ValueError("bearer_token_files must contain absolute paths")
         ledger = data.get("ledger")
         outcome = data.get("outcome_storage")
         if (
             not isinstance(ledger, dict)
-            or ledger.get("type") != "file"
-            or not isinstance(ledger.get("path"), str)
+            or ledger.get("type") not in {"file", "postgres"}
         ):
             raise ValueError("a file ledger path is required for the prototype")
         if (
             not isinstance(outcome, dict)
-            or outcome.get("type") != "file"
-            or not isinstance(outcome.get("path"), str)
+            or outcome.get("type") not in {"file", "postgres"}
         ):
             raise ValueError("a file outcome path is required for the prototype")
-        if not Path(ledger["path"]).is_absolute() or not Path(outcome["path"]).is_absolute():
-            raise ValueError("ledger and outcome paths must be absolute")
+        if ledger.get("type") == "file" and (
+            not isinstance(ledger.get("path"), str) or not Path(ledger["path"]).is_absolute()
+        ):
+            raise ValueError("file ledger path must be absolute")
+        if outcome.get("type") == "file" and (
+            not isinstance(outcome.get("path"), str) or not Path(outcome["path"]).is_absolute()
+        ):
+            raise ValueError("file outcome path must be absolute")
         values = data.get("server", {})
         if not isinstance(values, dict):
             raise ValueError("server configuration must be an object")
+        database = data.get("database", {})
+        if not isinstance(database, dict):
+            raise ValueError("database configuration must be an object")
+        database_url = ledger.get("url") or ledger.get("dsn") or os.environ.get(
+            ledger.get("url_env", "")
+        )
+        outcome_url = outcome.get("url") or outcome.get("dsn") or os.environ.get(
+            outcome.get("url_env", "")
+        )
         return cls(
             host=values.get("host", "127.0.0.1"),
             port=int(values.get("port", 0)),
             tenant_id=data.get("tenant_id", ""),
             application_id=data.get("application_id", ""),
-            token=_read_token_file(token_file),
-            ledger_path=Path(ledger["path"]),
-            outcome_path=Path(outcome["path"]),
+            token=_read_token_file(token_files[0]),
+            ledger_path=Path(ledger["path"]) if ledger.get("path") else None,
+            outcome_path=Path(outcome["path"]) if outcome.get("path") else None,
             protocol_version=data.get("protocol_version", PROTOCOL_VERSION),
             identity_namespace=data.get("identity_namespace", ""),
             body_limit=int(data.get("request_body_limit", MAX_BODY_BYTES)),
             legacy_inspection=bool(data.get("legacy_inspection", False)),
+            profile=str(data.get("profile", "development")),
+            ledger_type=str(ledger["type"]),
+            ledger_dsn=database_url,
+            ledger_table=str(ledger.get("table", "mycelium_action_ledger")),
+            outcome_type=str(outcome["type"]),
+            outcome_dsn=outcome_url,
+            outcome_table=str(outcome.get("table", "mycelium_outcomes")),
+            bearer_tokens=tuple(_read_token_file(item) for item in token_files),
+            db_connect_timeout=float(database.get("connect_timeout", 5.0)),
+            db_pool_timeout=float(database.get("pool_timeout", 5.0)),
+            db_pool_min_size=int(database.get("pool_min_size", 1)),
+            db_pool_max_size=int(database.get("pool_max_size", 10)),
+            request_timeout=float(values.get("request_timeout", 10.0)),
         )
 
 
@@ -1154,7 +1211,7 @@ class SidecarService:
         self, ledger: ActionLedger, config: SidecarConfig, outcome: OutcomeEmitter | None = None
     ):
         self.ledger, self.config = ledger, config
-        self._claim_lock = threading.Lock()
+        self._claim_lock = threading.Lock() if config.profile == "development" else None
         self.principal = Principal(
             config.tenant_id,
             config.application_id,
@@ -1188,6 +1245,12 @@ class SidecarService:
 
     def health(self) -> dict[str, Any]:
         return {"status": "ok", "protocol_version": self.config.protocol_version}
+
+    def ready(self) -> dict[str, Any]:
+        validator = getattr(self.ledger._storage, "validate", None)
+        if validator is not None:
+            validator()
+        return {"status": "ready", "protocol_version": self.config.protocol_version}
 
     def capabilities(self) -> dict[str, Any]:
         return {
@@ -1234,6 +1297,8 @@ class SidecarService:
         # non-blocking claims so a losing request can observe the winner
         # without entering ActionLedger's polling timeout path and mutating the
         # active transition to UNKNOWN.
+        if self._claim_lock is None:
+            return self._claim_serialized(body)
         with self._claim_lock:
             return self._claim_serialized(body)
 
@@ -1284,21 +1349,59 @@ class SidecarService:
                     **active,
                 }
         try:
-            entry = self.ledger.claim_side_effecting(
-                effect_id,
-                str(body["tool_id"]),
-                (),
-                {
-                    "canonical_input": body["input"],
-                    "business_request_id": body["business_request_id"],
-                    "tenant_id": self.config.tenant_id,
-                    "application_id": self.config.application_id,
-                },
-                self._binding(body),
-                lease_ttl=body.get("lease_ttl"),
-                poll_timeout=0,
-                _effect_id=effect_id,
-            )
+            tool = str(body["tool_id"])
+            claim_kwargs = {
+                "canonical_input": body["input"],
+                "business_request_id": body["business_request_id"],
+                "tenant_id": self.config.tenant_id,
+                "application_id": self.config.application_id,
+            }
+            binding = self._binding(body)
+            if self.config.profile == "shared" and existing is None:
+                # The first shared-sidecar race must observe the storage CAS
+                # directly. ActionLedger's normal non-blocking poll path parks
+                # a loser as UNKNOWN when poll_timeout=0, which is conservative
+                # for a caller but wrong for this protocol's WAIT_FOR_OWNER
+                # disposition. The authoritative claim and all later mutations
+                # still use ActionLedger's storage boundary and state model.
+                candidate = self.ledger._new_inflight_entry(
+                    effect_id,
+                    tool,
+                    (),
+                    claim_kwargs,
+                    binding=binding,
+                    _effect_id=effect_id,
+                )
+                outcome, peer = self.ledger._try_claim_inflight(
+                    candidate,
+                    lease_ttl=body.get("lease_ttl") or 3600.0,
+                )
+                if outcome == "in_flight":
+                    current = peer or self.ledger.get(effect_id)
+                    if current is None:
+                        raise SidecarError(
+                            "INTERNAL_PROTOCOL_ERROR", "shared claim result disappeared", status=500
+                        )
+                    self._emit(current, "sidecar_claim")
+                    return {
+                        "protocol_version": self.config.protocol_version,
+                        "disposition": "WAIT_FOR_OWNER",
+                        **_projection(current),
+                    }
+                entry = peer if outcome == "completed" and peer is not None else (
+                    self.ledger.get(effect_id) or candidate
+                )
+            else:
+                entry = self.ledger.claim_side_effecting(
+                    effect_id,
+                    tool,
+                    (),
+                    claim_kwargs,
+                    binding,
+                    lease_ttl=body.get("lease_ttl"),
+                    poll_timeout=0,
+                    _effect_id=effect_id,
+                )
             if (
                 decision is not None
                 and entry.decision is None
@@ -1466,7 +1569,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
     def setup(self) -> None:
         super().setup()
-        self.connection.settimeout(10.0)
+        self.connection.settimeout(self._service().config.request_timeout)
 
     def _service(self) -> SidecarService:
         return self.server.service  # type: ignore[attr-defined]
@@ -1477,7 +1580,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         header = self.headers.get("Authorization", "")
         if not header.startswith("Bearer "):
             raise SidecarError("AUTHENTICATION_REQUIRED", "bearer token required", status=401)
-        if not hmac.compare_digest(header[7:], self._service().config.token):
+        supplied = header[7:]
+        if not supplied or not any(
+            hmac.compare_digest(supplied, token)
+            for token in self._service().config.bearer_tokens
+        ):
             raise SidecarError("AUTHENTICATION_INVALID", "invalid bearer token", status=401)
 
     def _reply(self, payload: dict[str, Any], status: int = 200) -> None:
@@ -1542,9 +1649,15 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             path = urllib.parse.urlsplit(self.path).path
             if len(path.encode()) > MAX_PATH_BYTES:
                 raise SidecarError("INVALID_REQUEST", "path is too long")
-            self._auth(path != "/health")
+            self._auth(path not in {"/health", "/ready"})
             if path == "/health":
                 self._reply(self._service().health())
+                return
+            if path == "/ready":
+                try:
+                    self._reply(self._service().ready())
+                except Exception:
+                    self._reply({"status": "not_ready", "protocol_version": PROTOCOL_VERSION}, 503)
                 return
             if path == "/v1/capabilities":
                 self._reply(self._service().capabilities())
@@ -1652,12 +1765,36 @@ class SidecarServer(http.server.ThreadingHTTPServer):
         super().__init__(address, _Handler)
         self.service = service
 
+    def server_close(self) -> None:
+        super().server_close()
+        service = getattr(self, "service", None)
+        close = getattr(service.ledger._storage, "close", None) if service else None
+        if close is not None:
+            close()
+
 
 def build_service(config: SidecarConfig) -> SidecarService:
-    ledger = ActionLedger(
-        storage=FileLedgerStorage(config.ledger_path), unclassified_policy="strict"
-    )
-    outcome = OutcomeEmitter(config.application_id, FileOutcomeStorage(config.outcome_path))
+    if config.ledger_type == "postgres":
+        storage = PostgresLedgerStorage(
+            config.ledger_dsn or "",
+            table=config.ledger_table,
+            pool_min_size=config.db_pool_min_size,
+            pool_max_size=config.db_pool_max_size,
+            connect_timeout=config.db_connect_timeout,
+            pool_timeout=config.db_pool_timeout,
+        )
+        storage.validate()
+    else:
+        storage = FileLedgerStorage(config.ledger_path)  # type: ignore[arg-type]
+    ledger = ActionLedger(storage=storage, unclassified_policy="strict")
+    if config.outcome_type == "postgres":
+        outcome_storage = PostgresOutcomeStorage(
+            config.outcome_dsn or config.ledger_dsn or "", table=config.outcome_table
+        )
+        outcome_storage.validate()
+    else:
+        outcome_storage = FileOutcomeStorage(config.outcome_path)  # type: ignore[arg-type]
+    outcome = OutcomeEmitter(config.application_id, outcome_storage)
     return SidecarService(ledger, config, outcome)
 
 
@@ -1665,7 +1802,7 @@ def serve_config(config: SidecarConfig) -> None:
     server = SidecarServer(build_service(config))
     print(
         f"Mycelium sidecar listening on http://{config.host}:{server.server_port} "
-        "(development-only)",
+        f"({config.profile})",
         flush=True,
     )
     try:

@@ -9,7 +9,12 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any, TypeVar
 
-from mycelium.storage._helpers import ClaimOutcome, claim_inflight_outcome, with_lease
+from mycelium.storage._helpers import (
+    ClaimOutcome,
+    claim_inflight_outcome,
+    redact_secrets,
+    with_lease,
+)
 from mycelium.storage.transition_query import TransitionPage, decode_cursor, encode_cursor
 
 E = TypeVar("E")
@@ -55,6 +60,8 @@ class PostgresEntryStorage:
         pool_min_size: int = 1,
         pool_max_size: int = 10,
         retention_seconds: float | None = None,
+        connect_timeout: float = 5.0,
+        pool_timeout: float = 5.0,
     ) -> None:
         psycopg, sql = _require_psycopg()
         self._psycopg = psycopg
@@ -67,6 +74,10 @@ class PostgresEntryStorage:
         self._pool_min_size = pool_min_size
         self._pool_max_size = pool_max_size
         self.retention_seconds = retention_seconds
+        if connect_timeout <= 0 or pool_timeout <= 0:
+            raise ValueError("Postgres timeouts must be positive")
+        self._connect_timeout = float(connect_timeout)
+        self._pool_timeout = float(pool_timeout)
         self._pool: Any | None = None
         self._schema_ready = False
 
@@ -83,6 +94,8 @@ class PostgresEntryStorage:
                 self._dsn,
                 min_size=self._pool_min_size,
                 max_size=self._pool_max_size,
+                timeout=self._pool_timeout,
+                kwargs={"connect_timeout": self._connect_timeout},
                 open=True,
             )
         return self._pool.connection()
@@ -90,6 +103,18 @@ class PostgresEntryStorage:
     def close(self) -> None:
         if self._pool is not None:
             self._pool.close()
+
+    def validate(self) -> None:
+        try:
+            self._ensure_schema()
+            with self._connection() as conn:
+                conn.execute("SELECT 1").fetchone()
+        except Exception as exc:
+            detail = redact_secrets(str(exc))
+            raise RuntimeError(
+                "Postgres ledger storage is not ready: "
+                f"{type(exc).__name__}: {detail}"
+            ) from None
 
     def _table_id(self) -> Any:
         return self._sql.Identifier(self._table)
@@ -416,6 +441,8 @@ class PostgresLedgerStorage:
         pool_min_size: int = 1,
         pool_max_size: int = 10,
         retention_seconds: float | None = None,
+        connect_timeout: float = 5.0,
+        pool_timeout: float = 5.0,
     ) -> None:
         from mycelium.ledger_model import LedgerEntry
 
@@ -426,6 +453,8 @@ class PostgresLedgerStorage:
             pool_min_size=pool_min_size,
             pool_max_size=pool_max_size,
             retention_seconds=retention_seconds,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
         )
         self.retention_seconds = retention_seconds
 
@@ -454,6 +483,9 @@ class PostgresLedgerStorage:
 
     def close(self) -> None:
         self._inner.close()
+
+    def validate(self) -> None:
+        self._inner.validate()
 
     def resolve_request_id(self, effect_id: str) -> str | None:
         return self._inner.resolve_request_id(effect_id)
