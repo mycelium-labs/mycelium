@@ -17,8 +17,20 @@ Requirements:
 
 ```bash
 python -m pip install -e ./sdk
-python conformance/run.py
+sdk/.venv/bin/python conformance/run.py
 ```
+
+The shared PostgreSQL profile has a separate Docker-backed smoke/conformance
+command. It starts one disposable PostgreSQL container and two independent
+sidecar processes, then races claims through both HTTP endpoints:
+
+```bash
+sdk/.venv/bin/python conformance/run_postgres.py
+```
+
+The command requires Docker, the repository's supported `sdk/.venv`, and the
+`mycelium-runtime[postgres]` extra. It uses synthetic effects only. The full
+local suite remains the compatibility check for the file-backed profile.
 
 The runner installs the pinned TypeScript development dependency when needed,
 builds that client, starts an authenticated sidecar on an operating-system

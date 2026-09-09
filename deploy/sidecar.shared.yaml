@@ -1,0 +1,24 @@
+kind: mycelium-sidecar
+profile: shared
+protocol_version: "v1alpha1"
+identity_namespace: identity-v1
+tenant_id: example-tenant
+application_id: example-app
+bearer_token_file: /tmp/token
+ledger:
+  type: postgres
+  url_env: MYCELIUM_DATABASE_URL
+  table: mycelium_action_ledger
+outcome_storage:
+  type: postgres
+  url_env: MYCELIUM_DATABASE_URL
+  table: mycelium_outcomes
+database:
+  connect_timeout: 5
+  pool_timeout: 5
+  pool_min_size: 1
+  pool_max_size: 10
+server:
+  host: 0.0.0.0
+  port: 8787
+  request_timeout: 10

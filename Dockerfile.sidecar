@@ -1,0 +1,7 @@
+FROM python:3.12-slim
+WORKDIR /opt/mycelium
+COPY sdk /opt/mycelium/sdk
+RUN pip install --no-cache-dir '/opt/mycelium/sdk[postgres]'
+USER nobody
+EXPOSE 8787
+ENTRYPOINT ["mycelium", "sidecar", "serve", "--config", "/etc/mycelium/sidecar.yaml"]
