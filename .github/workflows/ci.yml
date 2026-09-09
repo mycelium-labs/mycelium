@@ -64,6 +64,9 @@ jobs:
       - name: Verify architecture map source provenance
         run: python .github/scripts/check-architecture-provenance.py --strict
 
+      - name: Verify guarantee-to-test map
+        run: python .github/scripts/check-guarantee-map.py
+
   package:
     runs-on: ubuntu-latest
     steps:
