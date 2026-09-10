@@ -92,19 +92,27 @@ def mark_maybe_crossed() -> None:
     (use phase) before the boundary advances. Expired authority or a
     stale/changed fact hard-blocks and never marks ``maybe_crossed``.
     """
+    from mycelium.composite import get_active_composite
     from mycelium.use_time_currency import enforce_use_boundary
 
     active = _active_transition_var.get()
     enforce_use_boundary(kwargs=active.call_kwargs if active is not None else {})
+    composite = get_active_composite()
+    if composite is not None:
+        composite.validate_boundary()
     _advance_active_boundary(SideEffectBoundary.MAYBE_CROSSED)
 
 
 async def mark_maybe_crossed_async() -> None:
     """Asynchronously validate and mark the active transition as ``maybe_crossed``."""
+    from mycelium.composite import get_active_composite
     from mycelium.use_time_currency import enforce_use_boundary_async
 
     active = _active_transition_var.get()
     await enforce_use_boundary_async(kwargs=active.call_kwargs if active is not None else {})
+    composite = get_active_composite()
+    if composite is not None:
+        composite.validate_boundary()
     _advance_active_boundary(SideEffectBoundary.MAYBE_CROSSED)
 
 

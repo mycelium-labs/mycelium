@@ -1371,6 +1371,7 @@ class ActionLedger(LedgerRecoveryMixin):
         lease_ttl: float | None = None,
         poll_interval: float | None = None,
         poll_timeout: float | None = None,
+        _effect_id: str | None = None,
     ) -> LedgerEntry:
         """Async variant of :meth:`claim_side_effecting`."""
         self._warn_if_volatile_side_effect_storage(tool, binding)
@@ -1378,7 +1379,7 @@ class ActionLedger(LedgerRecoveryMixin):
         interval = self._poll_interval if poll_interval is None else poll_interval
         timeout = self._poll_timeout if poll_timeout is None else poll_timeout
         poll_deadline = time.time() + timeout if timeout is not None else None
-        effect_id = derive_effect_id_for_call(tool, args, kwargs, binding)
+        effect_id = _effect_id or derive_effect_id_for_call(tool, args, kwargs, binding)
 
         while True:
             claim_kwargs = _claim_kwargs(dict(kwargs), _drop_ledger_keys(dict(kwargs)))
@@ -2168,9 +2169,14 @@ class ActionLedger(LedgerRecoveryMixin):
 
 
 
-def _mark_ledgered(wrapper: Callable[..., Any], ledger: ActionLedger) -> None:
+def _mark_ledgered(
+    wrapper: Callable[..., Any],
+    ledger: ActionLedger,
+    transition_binding: ToolTransitionBinding | None,
+) -> None:
     wrapper._mycelium_ledger = True  # type: ignore[attr-defined]
     wrapper._mycelium_ledger_instance = ledger  # type: ignore[attr-defined]
+    wrapper._mycelium_transition_binding = transition_binding  # type: ignore[attr-defined]
 
 
 def ledger(
@@ -2240,7 +2246,7 @@ def ledger(
                 transition_binding,
             )
 
-        _mark_ledgered(wrapper, action_ledger)
+        _mark_ledgered(wrapper, action_ledger, transition_binding)
         return wrapper
 
     return decorator
@@ -2313,7 +2319,7 @@ def ledger_sync(
                 transition_binding,
             )
 
-        _mark_ledgered(wrapper, action_ledger)
+        _mark_ledgered(wrapper, action_ledger, transition_binding)
         return wrapper
 
     return decorator

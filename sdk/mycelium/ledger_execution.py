@@ -89,6 +89,7 @@ def _claim_for_transition(
     args: tuple[Any, ...],
     clean_kwargs: dict[str, Any],
     transition_binding: ToolTransitionBinding | None,
+    composite_effect_id: str | None = None,
 ) -> LedgerEntry:
     if _is_read_only_binding(transition_binding):
         return ledger.claim_read_only(request_id, tool_name, args, clean_kwargs)
@@ -99,6 +100,7 @@ def _claim_for_transition(
             args,
             clean_kwargs,
             transition_binding,
+            _effect_id=composite_effect_id,
         )
     return ledger.claim(request_id, tool_name, args, clean_kwargs)
 
@@ -110,6 +112,7 @@ async def _claim_for_transition_async(
     args: tuple[Any, ...],
     clean_kwargs: dict[str, Any],
     transition_binding: ToolTransitionBinding | None,
+    composite_effect_id: str | None = None,
 ) -> LedgerEntry:
     if _is_read_only_binding(transition_binding):
         return await ledger.claim_read_only_async(request_id, tool_name, args, clean_kwargs)
@@ -120,6 +123,7 @@ async def _claim_for_transition_async(
             args,
             clean_kwargs,
             transition_binding,
+            _effect_id=composite_effect_id,
         )
     return ledger.claim(request_id, tool_name, args, clean_kwargs)
 
@@ -379,6 +383,14 @@ def _run_ledgered(
     audit_emitter: AuditReceiptEmitter | None = None,
     transition_binding: ToolTransitionBinding | None = None,
 ) -> R:
+    from mycelium.composite import get_active_composite
+
+    composite = get_active_composite()
+    composite_child = (
+        composite.prepare_child(tool_name, args, kwargs, transition_binding)
+        if composite is not None and transition_binding is not None
+        else None
+    )
     identity_kwargs = _identity_lookup_kwargs(func, args, kwargs)
     request_id = ledger.derive_request_id(
         tool_name,
@@ -398,6 +410,7 @@ def _run_ledgered(
             args,
             claim_kwargs,
             transition_binding,
+            composite_child.effect_id if composite_child is not None else None,
         )
     except LedgerHardBlockError:
         try:
@@ -431,6 +444,8 @@ def _run_ledgered(
         raise
     request_id = existing.request_id
     if existing.is_terminal_completed():
+        if composite is not None and composite_child is not None:
+            composite.resolve_child(composite_child.step_id)
         ledger._emit_outcome(
             request_id=request_id,
             tool=tool_name,
@@ -636,7 +651,11 @@ def _run_ledgered(
             owner=owner,
             fence=fence,
         ):
+            if composite is not None:
+                composite.validate_boundary()
             result = func(*exec_args, **exec_kwargs)
+            if composite is not None and composite_child is not None:
+                composite.validate_result(result, step_id=composite_child.step_id)
     except (AuthorityExpiredError, UseTimeCurrencyError) as blocked:
         try:
             _record_failure(
@@ -739,6 +758,8 @@ def _run_ledgered(
         expected_owner=owner,
         expected_fence=fence,
     )
+    if complete_ok and composite is not None and composite_child is not None:
+        composite.resolve_child(composite_child.step_id)
     ledger._emit_outcome(
         request_id=request_id,
         tool=tool_name,
@@ -762,6 +783,14 @@ async def _run_ledgered_async(
     audit_emitter: AuditReceiptEmitter | None = None,
     transition_binding: ToolTransitionBinding | None = None,
 ) -> R:
+    from mycelium.composite import get_active_composite
+
+    composite = get_active_composite()
+    composite_child = (
+        composite.prepare_child(tool_name, args, kwargs, transition_binding)
+        if composite is not None and transition_binding is not None
+        else None
+    )
     identity_kwargs = _identity_lookup_kwargs(func, args, kwargs)
     request_id = ledger.derive_request_id(
         tool_name,
@@ -781,6 +810,7 @@ async def _run_ledgered_async(
             args,
             claim_kwargs,
             transition_binding,
+            composite_child.effect_id if composite_child is not None else None,
         )
     except LedgerHardBlockError:
         try:
@@ -814,6 +844,8 @@ async def _run_ledgered_async(
         raise
     request_id = existing.request_id
     if existing.is_terminal_completed():
+        if composite is not None and composite_child is not None:
+            composite.resolve_child(composite_child.step_id)
         ledger._emit_outcome(
             request_id=request_id,
             tool=tool_name,
@@ -1019,7 +1051,11 @@ async def _run_ledgered_async(
             owner=owner,
             fence=fence,
         ):
+            if composite is not None:
+                composite.validate_boundary()
             result = await func(*exec_args, **exec_kwargs)
+            if composite is not None and composite_child is not None:
+                composite.validate_result(result, step_id=composite_child.step_id)
     except (AuthorityExpiredError, UseTimeCurrencyError) as blocked:
         try:
             _record_failure(
@@ -1122,6 +1158,8 @@ async def _run_ledgered_async(
         expected_owner=owner,
         expected_fence=fence,
     )
+    if complete_ok and composite is not None and composite_child is not None:
+        composite.resolve_child(composite_child.step_id)
     ledger._emit_outcome(
         request_id=request_id,
         tool=tool_name,
