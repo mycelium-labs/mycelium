@@ -209,3 +209,46 @@ feature as enabled when only a template section or placeholder exists.
 
 Do not describe the setup as complete if YAML exists but the runtime boundary is
 unwired, tests fail, or a consequential tool lacks trustworthy identity.
+
+## Composite recovery
+
+Use composite recovery only for sequential functions whose consequential calls
+already pass through the actual Mycelium `ledger`/`ledger_sync` wrappers. Keep
+the original function body unchanged and do not claim a decorator discovers
+hidden provider calls.
+
+```python
+from mycelium import composite
+
+@composite(
+    storage=ledger_storage,
+    operation_id_from=lambda _args, kwargs: kwargs["job_id"],
+)
+def publish_change(job_id: str):
+    commit = create_commit(idempotency_key=f"{job_id}:commit")
+    pushed = push_branch(idempotency_key=f"{job_id}:push")
+    return update_tracking_record(
+        idempotency_key=f"{job_id}:tracking", pushed=pushed
+    )
+```
+
+Verify child wrappers and bindings first. Use `register_composite_boundary` for
+aliases or bound callables that static inspection cannot resolve. A genuinely
+local deterministic helper can use `register_composite_helper`; unresolved
+calls are rejected rather than silently omitted. Configure a
+durable SQLite or file backend, derive the operation ID from the host request
+or job, and preserve it across retries. Inspect
+`function._mycelium_composite_manifest` and resolve diagnostics before any
+live provider call. Never use a fresh random ID per retry or in-memory storage
+as restart evidence.
+
+Parent leases renew automatically while the body runs and fail closed if
+renewal is lost. The supported syntax is deliberately narrow: assignments,
+expression statements, and one final return with each supported call at a
+statement boundary. Conditional/short-circuit expressions, comprehensions,
+generators, nested calls, early returns, loops, nested definitions, nested
+composites, and opaque consequential boundaries are rejected before effects.
+Completed children replay serialized results; admission alone cannot mark a
+parent complete, and ambiguous children still reconcile or hard-block.
+Provider idempotency or a truthful reconciliation adapter remains necessary
+when a request may have crossed the provider boundary.
