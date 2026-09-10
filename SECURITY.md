@@ -28,11 +28,17 @@ the `v1alpha1` HTTP/JSON sidecar protocol. These clients are transport helpers;
 they do not independently enforce policy, fencing, state transitions, or
 recovery.
 
-The current sidecar profile is experimental and restricted to trusted local
-clients over authenticated loopback HTTP. It is not approved for remote
-binding, multi-tenant hosting, hostile clients, or production authentication.
+The sidecar remains experimental and self-hosted. Its development profile is
+restricted to trusted local clients over authenticated loopback HTTP. Its
+explicit shared profile coordinates multiple sidecars through PostgreSQL and
+may bind beyond loopback, but operators must keep it on a private network,
+terminate TLS at a trusted reverse proxy, and manage its bearer-token files as
+secrets. Each sidecar configuration is scoped to one tenant and application;
+this is not a public multi-tenant IAM system or a hostile-client boundary.
+
 The host application still executes provider calls, can bypass the sidecar, and
 must report provider-boundary events truthfully. See the
+[self-hosting guide](sdk/docs/SELF_HOSTING.md) and
 [protocol status and production gates](sdk/docs/spec/V1ALPHA1_RELEASE_CHECKLIST.md)
 before evaluating a sidecar-related security claim.
 

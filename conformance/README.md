@@ -61,8 +61,10 @@ crashed irreversible actions instead of granting an unsafe automatic takeover.
 
 ## What it does not prove
 
-This suite validates the trusted-local profile only. It does not prove remote
-deployment, multi-tenancy, production authentication, provider truth,
-hostile-client protection, bypass prevention, or exactly-once execution. It
-also does not prove reconciler-backed takeover or coordination between multiple
-sidecar server processes.
+The local command validates the trusted-loopback profile. The PostgreSQL command
+additionally validates claim coordination between two sidecar server processes.
+Neither proves internet-facing deployment, multi-tenancy, production
+authentication, provider truth, hostile-client protection, bypass prevention,
+or exactly-once execution. The PostgreSQL smoke path is not an exhaustive
+database-failover, network-partition, rolling-upgrade, or reconciler-backed
+takeover test.

@@ -4,16 +4,16 @@ Mycelium's engine is written in Python. This protocol gives every other
 language the same doorway into it.
 
 A TypeScript, Go, Java, Rust, or other application sends ordinary HTTP/JSON to
-a local Mycelium sidecar. The sidecar derives action identity, decides whether
-execution may proceed, and records state transitions in the authoritative
-Python engine. Language clients stay small: they format requests and parse
+a self-hosted Mycelium sidecar. The sidecar derives action identity, decides
+whether execution may proceed, and records state transitions in the
+authoritative Python engine. Language clients stay small: they format requests and parse
 responses instead of duplicating the ledger, policy, fencing, or recovery state
 machine.
 
 ```text
 application in any language
           ↓ HTTP/JSON Transition Envelope
-local Python sidecar
+self-hosted Python sidecar
           ↓
 authoritative Mycelium engine and ledger
 ```
@@ -25,8 +25,11 @@ Published experimental clients:
 - Other languages: use the same authenticated OpenAPI contract directly.
 
 This is language-neutral interoperability, not a separate Mycelium engine in
-every language. The current `v1alpha1` profile is for trusted local development,
-not remote or multi-tenant production deployment.
+every language. `v1alpha1` provides a trusted-loopback development profile and
+an explicitly selected shared PostgreSQL profile. Both are self-hosted and
+experimental; neither is a public multi-tenant service or production IAM
+boundary. Follow the [self-hosting guide](../SELF_HOSTING.md) to run either
+profile.
 
 ## Language-neutral protocol design
 
@@ -50,11 +53,10 @@ executable conformance layer; this file is the compact formal sketch.
 
 ## OpenAPI contract
 
-The development sidecar serves the frozen `v1alpha1` machine-readable OpenAPI
-3.1 contract at
+The sidecar serves the frozen `v1alpha1` machine-readable OpenAPI 3.1 contract at
 `GET /v1/openapi.json`. It is generated directly from `mycelium.sidecar` so the
 served document remains the single transport description. `/health` is the only
-unauthenticated route; every other route uses the local bearer scheme.
+unauthenticated route; every other route uses the bearer scheme.
 
 The served OpenAPI document is authoritative for implemented HTTP routes and
 operation-specific payloads. The companion JSON Schema describes the broader
@@ -64,7 +66,7 @@ forms; its command names must not be interpreted as additional sidecar routes.
 The implementation remains authoritative for runtime trust. Generated types do
 not grant ownership, validate a fence, authorize a provider call, or resolve an
 unknown outcome. Clients must fail closed on unknown safety-critical enum values.
-The contract is intentionally development-only and language-neutral:
+The contract is intentionally experimental and language-neutral:
 
 ```text
 TypeScript   Go   Java   Rust   Raw HTTP client
@@ -91,12 +93,16 @@ for one effect, are killed before and after the provider boundary, and verify
 fail-closed recovery plus durable replay after a sidecar restart.
 
 ```bash
-python conformance/run.py
+sdk/.venv/bin/python conformance/run.py
+sdk/.venv/bin/python conformance/run_postgres.py
 ```
 
-The command is also a dedicated CI job. It uses only temporary local files and
-never calls an external provider. Passing it proves compatibility with the
-trusted-local `v1alpha1` profile, not production deployment safety.
+The first command is the trusted-local compatibility check. The second starts
+disposable PostgreSQL and two independent sidecars, then checks cross-sidecar
+claim arbitration and client compatibility. The commands are also exercised in
+CI, use synthetic effects, and never call an external provider. Passing them
+does not prove internet-facing deployment safety, production IAM, or provider
+truth.
 
 ## Mapping to runtime code
 

@@ -33,6 +33,11 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Changed
 
+- Consolidate language-neutral setup into one self-hosting guide covering the
+  trusted local profile, shared PostgreSQL deployment, client connection,
+  verification, security boundaries, and troubleshooting. Docker Compose now
+  requires generated credentials through environment variables instead of
+  shipping reusable placeholder values.
 - Reframe the README, SDK guide, package metadata, setup skill, and release
   guidance around full-lifecycle tool-action reliability: validation and
   authority before execution, runtime control, and outcome resolution and

@@ -1,8 +1,10 @@
 # Transition Envelope identity decisions
 
-**Status:** RFC frozen as the development-only `v1alpha1` protocol contract.
-These decisions specify the `identity-v1` wire contract. Production deployment
-remains out of scope.
+**Status:** RFC frozen as the experimental `v1alpha1` protocol contract. These
+decisions specify the `identity-v1` wire contract. D17 records the original
+trusted-loopback profile boundary; the later shared PostgreSQL profile reuses
+the same frozen wire semantics for self-hosted coordination. Public
+multi-tenant production deployment remains out of scope.
 
 ## D1. Authoritative effect-ID derivation
 

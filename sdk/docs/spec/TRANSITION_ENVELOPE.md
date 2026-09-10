@@ -2,9 +2,11 @@
 
 ## Status and scope
 
-**Status:** frozen as the development-only `v1alpha1` protocol contract. This is
-not a production-ready wire contract or deployment profile. The freeze makes
-this revision immutable; it does not promote it to beta or stable status.
+**Status:** frozen as the experimental `v1alpha1` protocol contract. The
+wire revision supports a trusted-loopback development profile and a shared
+PostgreSQL profile, but it is not a production-ready public service contract.
+The freeze makes this revision immutable; it does not promote it to beta or
+stable status.
 
 This document defines a language-neutral protocol boundary for an application that
 needs to make one externally observable effect safe across retries, redispatch,
@@ -860,19 +862,21 @@ sidecar optimization.
 | Shared internal service | mTLS, tenant identity, authorization, quotas, request replay protection. | Network failures and queueing; horizontally scalable engine. | Central durable storage and migrations owned by service. | Best for many applications; larger operational trust boundary. |
 | Remote multi-tenant service | Strong tenant auth, mTLS, scoped tokens, isolation, encryption, audit. | Highest latency and availability complexity; fail closed on uncertain command outcome. | Service owns storage, retention, backup, migrations, and tenant namespaces. | Later scope; requires service-level product and security work. |
 
-### Development-only prototype
+### Implemented self-hosted profiles
 
 The reference adapter is `sdk/mycelium/sidecar.py` and is intentionally one
-transport module, not a second ledger. It uses `FileLedgerStorage` and the existing
-`ActionLedger` claim, decision, lease, boundary, completion, failure, and effect
-lookup methods. The adapter derives identity-v1 before calling the engine and uses
-an internal effect-ID handoff so the engine stores the same derived identity without
-changing legacy wrapper derivation.
+transport module, not a second ledger. The development profile uses
+`FileLedgerStorage`; the shared profile uses PostgreSQL for ledger and outcome
+storage. Both call the existing `ActionLedger` claim, decision, lease, boundary,
+completion, failure, and effect lookup methods. The adapter derives identity-v1
+before calling the engine and uses an internal effect-ID handoff so the engine
+stores the same derived identity without changing legacy wrapper derivation.
 
-Configure it with an absolute YAML file containing `kind: mycelium-sidecar`, a
-loopback literal host, one tenant and application, an owner-only bearer-token file containing exactly 43 base64url characters or 64
-hexadecimal characters,
-absolute file-ledger and outcome paths, `identity-v1`, and a request-body limit.
+Configure the development profile with an absolute YAML file containing
+`kind: mycelium-sidecar`, a loopback literal host, one tenant and application,
+an owner-only bearer-token file containing exactly 43 base64url characters or
+64 hexadecimal characters, absolute file-ledger and outcome paths,
+`identity-v1`, and a request-body limit.
 Start it with `mycelium sidecar serve --config /absolute/path/sidecar.yaml`.
 The token is sent only as `Authorization: Bearer ...`; it is never a command-line
 value. `/health` is the only unauthenticated endpoint. Authenticated endpoints are
@@ -883,9 +887,12 @@ A claim must carry the existing engine's validated decision evidence before it
 returns `EXECUTE`; the HTTP layer does not evaluate policy. Reconciliation invokes
 the engine's configured reconciler and fails closed when unavailable.
 
-This prototype has no provider adapter, automatic legacy migration, remote binding,
+The shared profile permits explicit non-loopback binding and coordinates
+multiple sidecars through PostgreSQL. It must remain on a private network with
+TLS terminated by a trusted reverse proxy. It is not a public multi-tenant IAM
+service. Neither profile has a provider adapter, automatic legacy migration,
 operator reauthorization endpoint, hostile-client protection, or exactly-once
-claim. It is suitable for a non-Python client using ordinary HTTP and JSON.
+claim.
 
 Minimal configuration shape:
 
@@ -901,6 +908,9 @@ outcome_storage: {type: file, path: /absolute/path/sidecar-outcomes.ndjson}
 server: {host: 127.0.0.1, port: 8787}
 ```
 
+The complete development and shared PostgreSQL procedures are in the
+[self-hosting guide](../SELF_HOSTING.md).
+
 A language-neutral client sends `Authorization: Bearer TOKEN` and JSON, for
 example `curl -H 'Authorization: Bearer TOKEN' http://127.0.0.1:8787/v1/capabilities`.
 It must retain the returned owner and fence, report `boundary` immediately before
@@ -908,9 +918,9 @@ the provider call, then report `complete` or `fail` using the same fence.
 
 ### Transport decision
 
-The first implementation should use **localhost HTTP with JSON and an OpenAPI
-3.1 description**, with the engine also available as a supervised local
-subprocess. This is a deliberate refinement of the earlier Unix-socket-first
+The implementation uses **HTTP with JSON and an OpenAPI 3.1 description**, with
+the engine also available as a supervised local subprocess. This is a deliberate
+refinement of the earlier Unix-socket-first
 proposal. HTTP wins for the first cross-language experiment because TypeScript,
 Go, Java, Rust, and local debugging tools have mature clients; JSON examples are
 inspectable; polling and health endpoints are straightforward; and the same
@@ -923,10 +933,10 @@ transport after the JSON semantics stabilize, but premature protobuf-first desig
 would obscure the reviewable contract. Remote HTTP is a deployment profile, not a
 separate semantic protocol.
 
-Local clients must authenticate even on localhost, using a sidecar-issued local
-session token, peer credentials where available, or mTLS in container/remote
-profiles. A bearer token must be scoped to application/tenant and capability; it
-must not be treated as proof that the caller is an operator or reconciler.
+Clients must authenticate even on localhost. The current bearer token is scoped
+by the tenant and application configured for that sidecar; it must not be
+treated as proof that the caller is an operator or reconciler. Shared deployments
+must add TLS at a trusted reverse proxy.
 Transport timeouts mean only that the reply was not observed. They never imply
 provider failure or permission to retry execution. Commands with a `message_id`
 may be safely retried at the transport layer only when the operation's protocol
@@ -1255,16 +1265,16 @@ Python names.
 | Decimal and URL profiles | Approved | decimal-1, url-1 rules and fixtures | Other schemes/types require new profiles |
 | Schema and secrets | Approved | JSON Schema, rejection codes, redaction rules | Aggregate size and secret scanning are engine duties |
 | Policy changes | Approved | Immutable denial and explicit reconsideration operation | First prototype may return unsupported |
-| Authentication and tenant binding | Approved | Loopback token principal, fixed tenant/application | Development-only, not human auth |
+| Authentication and tenant binding | Approved | Bearer-token principal, fixed tenant/application | Not human auth or public multi-tenant IAM |
 | Legacy compatibility | Approved | Separate namespace, read-only inspection, audited immutable alias | No automatic or active/unknown migration |
 | Hostile-client model | Approved boundary | Correct/fallible guarantees matrix | Bypass and forged provider reports unsupported |
 | Provider attestation | Approved optional | Extensible attestation evidence | Required only for stronger hostile deployments |
-| Sidecar readiness | Frozen as v1alpha1 for development only | D17 scope and restrictions | Not production-ready |
+| Sidecar readiness | Frozen as experimental v1alpha1 | Trusted-loopback and shared PostgreSQL profiles | Not a production-ready public service |
 
 ## Recommendation
 
-Use the frozen `v1alpha1` contract for development-only sidecar and client
-experiments within the approved scope.
+Use the frozen `v1alpha1` contract for self-hosted sidecar and client
+experiments within the approved profile boundaries.
 The architecture is viable if the engine remains authoritative and provider-boundary
 truth is treated as an explicit host responsibility. The largest later-scope risk
 is not serialization; it is the trust gap created when an application can bypass
@@ -1273,7 +1283,7 @@ the sidecar or report provider events dishonestly.
 ---
 
 **Maturity labels used here:** current = implemented in the Python engine or
-development sidecar; proposed = design beyond the implemented `v1alpha1`
+sidecar; proposed = design beyond the implemented `v1alpha1`
 profile; assumption = required external condition; unresolved = needs an
 explicit design or deployment decision; later scope = intentionally excluded
 from the first interoperability release.
