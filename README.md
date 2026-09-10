@@ -131,8 +131,9 @@ mycelium sidecar serve --config /absolute/path/sidecar.yaml
 ```
 
 See the [non-Python setup](sdk/README.md#typescript-go-and-other-languages) for
-the token and minimal sidecar configuration. Only calls routed through
-Mycelium are protected. See the
+the protocol reference, or follow the
+[self-hosting guide](sdk/docs/SELF_HOSTING.md) for complete local and shared
+PostgreSQL setup. Only calls routed through Mycelium are protected. See the
 [full SDK reference](sdk/README.md) for framework integrations, storage,
 configuration, and manual APIs.
 
@@ -143,6 +144,7 @@ configuration, and manual APIs.
 - **Sandbox demo:** [mycelium-labs/mycelium-labs.github.io/sandbox](https://github.com/mycelium-labs/mycelium-labs.github.io/tree/main/sandbox)
 - **Full API reference:** [sdk/README.md](sdk/README.md)
 - **Language-neutral protocol:** [sdk/docs/spec/README.md](sdk/docs/spec/README.md)
+- **Self-host the sidecar:** [local and shared PostgreSQL setup](sdk/docs/SELF_HOSTING.md)
 - **Experimental clients:** [TypeScript](clients/typescript/README.md) · [Go](clients/go/README.md)
 - **Doctor vs Verify:** `mycelium doctor` inspects configuration; `mycelium verify` runs synthetic failure scenarios. Neither proves a real provider is correct.
 - **Release policy & checklist:** [sdk/docs/RELEASE.md](sdk/docs/RELEASE.md) (batch; calm over velocity)

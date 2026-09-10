@@ -1,8 +1,8 @@
 # Experimental TypeScript client for Mycelium
 
 This is the public npm package that lets a Node.js or TypeScript application
-talk to a locally running Mycelium sidecar. It is a helper library, not a
-Mycelium server and not a second implementation of the Mycelium engine.
+talk to a self-hosted Mycelium sidecar. It is a helper library, not a Mycelium
+server and not a second implementation of the Mycelium engine.
 
 Package: [`@mycelium-labs/sidecar-client`](https://www.npmjs.com/package/@mycelium-labs/sidecar-client)
 
@@ -25,8 +25,8 @@ Use the Python SDK command with an absolute configuration path:
 mycelium sidecar serve --config /absolute/path/sidecar.yaml
 ```
 
-See the [SDK sidecar setup](../../sdk/README.md#typescript-go-and-other-languages)
-for a minimal configuration, token-generation command, and port guidance.
+Follow the [self-hosting guide](../../sdk/docs/SELF_HOSTING.md) for complete
+local and shared PostgreSQL setup.
 The configuration points to an owner-only token file. The client sends that token
 only in the `Authorization` header. It never puts the token in a URL or logs it.
 Browser use is unsupported because the development sidecar intentionally does not
@@ -78,7 +78,7 @@ do next. Direct provider calls outside this lifecycle bypass the protection.
 
 The client preserves `UNKNOWN`, denial, terminal, and wait dispositions. Unknown
 future dispositions fail closed. Reconciliation, provider attestation, operator
-authorization, hostile clients, remote hosting, multi-tenancy, and production auth
+authorization, hostile clients, public multi-tenant hosting, and production IAM
 remain outside this experiment.
 
 ## Protocol examples and OpenAPI

@@ -24,6 +24,7 @@ keywords = [
   "llm-agents",
   "language-neutral",
   "sidecar",
+  "self-hosted",
   "openapi",
   "typescript",
   "golang",
@@ -50,6 +51,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/mycelium-labs/mycelium"
+Documentation = "https://github.com/mycelium-labs/mycelium/blob/main/sdk/docs/SELF_HOSTING.md"
 Repository = "https://github.com/mycelium-labs/mycelium"
 Issues = "https://github.com/mycelium-labs/mycelium/issues"
 

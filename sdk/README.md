@@ -14,7 +14,9 @@ then establish outcomes, reconcile uncertainty, and retain evidence.
 The engine is Python, but the doorway into it is language-neutral. Python
 applications import the runtime directly. TypeScript, Go, and any runtime that
 can send HTTP/JSON can use the same authoritative ledger, policy, fencing, and
-recovery engine through the development-only `v1alpha1` sidecar protocol.
+recovery engine through the experimental self-hosted `v1alpha1` sidecar
+protocol. Run it on loopback for one trusted application, or use the shared
+PostgreSQL profile to coordinate multiple sidecars.
 
 **Releases:** batch; calm over velocity — [release policy & pre-release checklist](docs/RELEASE.md).
 
@@ -181,76 +183,86 @@ mycelium demo --redis      # optional Cloud-style 2-worker Redis proof
 
 ### TypeScript, Go, and other languages
 
-The sidecar is a small Mycelium server that runs beside a non-Python
-application. The application sends action details over HTTP/JSON; the sidecar
-decides whether the action may run and stores every transition in the Python
-engine.
+Mycelium is self-hosted. The sidecar is a small server that gives a non-Python
+application access to the authoritative Python engine over HTTP/JSON. No
+Mycelium cloud account or hosted endpoint is required.
 
-Install the Python engine, create an owner-only token, and save the development
-configuration using absolute paths:
+For one trusted local application, install the engine and create an owner-only
+token:
 
 ```bash
 pip install mycelium-runtime
+export MYCELIUM_DIR="$HOME/.mycelium/sidecar"
+mkdir -p "$MYCELIUM_DIR"
 umask 077
-python -c 'import secrets; print(secrets.token_urlsafe(32))' > /absolute/path/sidecar.token
+openssl rand -hex 32 > "$MYCELIUM_DIR/token"
 ```
 
 ```yaml
-# /absolute/path/sidecar.yaml
+# $HOME/.mycelium/sidecar/sidecar.yaml
 kind: mycelium-sidecar
+profile: development
 protocol_version: "v1alpha1"
 identity_namespace: identity-v1
-tenant_id: tenant-a
-application_id: app-a
-bearer_token_file: /absolute/path/sidecar.token
-ledger: {type: file, path: /absolute/path/sidecar-ledger.json}
-outcome_storage: {type: file, path: /absolute/path/sidecar-outcomes.ndjson}
+tenant_id: local
+application_id: my-app
+bearer_token_file: /absolute/path/to/.mycelium/sidecar/token
+ledger: {type: file, path: /absolute/path/to/.mycelium/sidecar/ledger.json}
+outcome_storage: {type: file, path: /absolute/path/to/.mycelium/sidecar/outcomes.ndjson}
 server: {host: 127.0.0.1, port: 8787}
 ```
 
+Replace the three paths with their absolute values, then start the sidecar:
+
 ```bash
-mycelium sidecar serve --config /absolute/path/sidecar.yaml
+mycelium sidecar serve --config "${MYCELIUM_DIR}/sidecar.yaml"
 ```
 
-Use a published experimental client:
+Check it from another terminal:
 
 ```bash
+export MYCELIUM_SIDECAR_TOKEN="$(cat "$HOME/.mycelium/sidecar/token")"
+curl --fail http://127.0.0.1:8787/health
+curl --fail http://127.0.0.1:8787/v1/capabilities \
+  -H "Authorization: Bearer $MYCELIUM_SIDECAR_TOKEN"
+```
+
+Install an optional client helper:
+
+```bash
+# TypeScript / Node.js
 npm install @mycelium-labs/sidecar-client@experimental
+
+# Go
 go get github.com/mycelium-labs/mycelium/clients/go@v0.1.0
 ```
 
-See the [TypeScript client](../clients/typescript/README.md), [Go
-client](../clients/go/README.md), or authenticated [`v1alpha1` OpenAPI
-contract](docs/spec/README.md). Java, Rust, C#, Ruby, and other runtimes can use
-the same contract without an official package.
+Java, Rust, C#, Ruby, and other runtimes can use the authenticated OpenAPI
+contract at `GET /v1/openapi.json` without an official package. The complete
+[self-hosting guide](https://github.com/mycelium-labs/mycelium/blob/main/sdk/docs/SELF_HOSTING.md)
+covers local setup, the
+[TypeScript client](https://github.com/mycelium-labs/mycelium/tree/main/clients/typescript),
+the [Go client](https://github.com/mycelium-labs/mycelium/tree/main/clients/go),
+raw HTTP, security boundaries, and troubleshooting.
 
 All clients use the same identity, claim, lease, fence, boundary, and outcome
 lifecycle. They are thin transport helpers and do not contain independent
 policy, ledger, or recovery engines.
 
-The repository runs raw HTTP, TypeScript, and Go through the same synthetic
-sidecar lifecycle locally and in CI:
+For multiple sidecars, clone the repository and start the shared PostgreSQL
+example:
 
 ```bash
-python conformance/run.py
+git clone https://github.com/mycelium-labs/mycelium.git
+cd mycelium
+export MYCELIUM_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+export MYCELIUM_SIDECAR_TOKEN="$(openssl rand -hex 32)"
+docker compose -f docker-compose.sidecar.yml up --build
 ```
 
-Set the client base URL to the configured sidecar host and port. The token goes
-only in the `Authorization` header. Calls made directly to a provider instead
-of through this lifecycle are not protected.
-
-Any HTTP client can use the same endpoint. For example, after starting the
-Compose profile, a raw identity request is:
-
-```bash
-curl --fail http://127.0.0.1:8787/v1/identities/derive \
-  -H 'Authorization: Bearer YOUR_TOKEN' -H 'Content-Type: application/json' \
-  -d '{"tenant_id":"example-tenant","application_id":"example-app","business_request_id":"req-1","canonicalization_version":"jcs-1","destination":null,"execution_scope":{},"identity_version":"1","input":{"synthetic":true},"tool_contract_version":"1","tool_id":"synthetic"}'
-```
-
-Point the TypeScript transport at `http://127.0.0.1:8787` and the Go client at
-that URL, or use `http://127.0.0.1:8788` for the second Compose sidecar. Both
-clients remain thin HTTP adapters; the PostgreSQL ledger decides ownership.
+The example exposes sidecars at `http://127.0.0.1:8787` and
+`http://127.0.0.1:8788`. Both use one PostgreSQL ledger, so the database—not a
+process-local lock—decides ownership.
 
 The development profile accepts trusted local clients over loopback only. For
 multiple machines or containers, select `profile: shared`, use PostgreSQL for
@@ -265,21 +277,10 @@ fencing, but it does not provide provider attestation, exactly-once provider
 execution, IAM, or protection for calls that bypass the sidecar. Treat the
 `v1alpha1` protocol as a compatibility protocol until it is promoted.
 
-Supported shared deployment files are [Dockerfile.sidecar](../Dockerfile.sidecar),
-[docker-compose.sidecar.yml](../docker-compose.sidecar.yml), and
-[deploy/sidecar.shared.yaml](../deploy/sidecar.shared.yaml). Start them with:
-
-```bash
-docker compose -f docker-compose.sidecar.yml up --build
-```
-
-Replace the example database password and bearer token with secrets supplied by
-your deployment system. `/health` reports process health; `/ready` returns 200
-only after PostgreSQL connectivity and schema initialization succeed. Startup
-fails when PostgreSQL is configured but unavailable; it never falls back to a
-local ledger. Back up PostgreSQL before upgrades, keep schema ownership with the
-deployment account, and shut down with SIGTERM so active leases remain in the
-ledger for conservative recovery.
+The repository runs raw HTTP, TypeScript, and Go conformance locally and in CI.
+`/health` reports process health; `/ready` returns 200 only after storage is
+ready. The sidecar never falls back to local storage when configured
+PostgreSQL is unavailable.
 
 ## Quickstart: stale context & broken transcripts (opt-in)
 

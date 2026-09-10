@@ -1,8 +1,8 @@
 # Experimental Go client for Mycelium
 
-This is the public Go module that lets a Go application talk to a locally
-running Mycelium sidecar. It is a helper library, not a Mycelium server and not
-a second implementation of the Mycelium engine.
+This is the public Go module that lets a Go application talk to a self-hosted
+Mycelium sidecar. It is a helper library, not a Mycelium server and not a
+second implementation of the Mycelium engine.
 
 Module: [`github.com/mycelium-labs/mycelium/clients/go`](https://pkg.go.dev/github.com/mycelium-labs/mycelium/clients/go)
 
@@ -16,7 +16,7 @@ The client requires the frozen development protocol `v1alpha1`. Version
 
 - Go 1.22 or newer
 - Standard library only
-- A running development-only Python sidecar
+- A running local or shared-profile Python sidecar
 
 Install the module with:
 
@@ -31,11 +31,12 @@ Because the module lives in a repository subdirectory, its release tag is
 mycelium sidecar serve --config /absolute/path/sidecar.yaml
 ```
 
-See the [SDK sidecar setup](../../sdk/README.md#typescript-go-and-other-languages)
-for a minimal configuration, token-generation command, and port guidance.
-The token is supplied through the `Authorization` header only. The client rejects
-non-loopback URLs, credentials, query strings, fragments, and redirects. It does not
-use browser cookies or browser authentication.
+Follow the [self-hosting guide](../../sdk/docs/SELF_HOSTING.md) for complete
+local and shared PostgreSQL setup. The token is supplied through the
+`Authorization` header only. The client accepts credential-free HTTP(S) endpoints
+without query strings or fragments and rejects redirects. Use HTTPS through a
+trusted reverse proxy for remote connections. It does not use browser cookies or
+browser authentication.
 
 ## Client lifecycle
 
@@ -107,5 +108,6 @@ Go client          TypeScript client          Raw HTTP client
 
 OpenAPI is served at `GET /v1/openapi.json`. It is the protocol contract, not a Go
 or TypeScript model hierarchy. Generated types do not grant trust or ownership.
-Browser, remote, multi-tenant, production-authentication, hostile-client, provider
-attestation, reconciliation authority, and exactly-once guarantees remain unsupported.
+Browser, public multi-tenant hosting, production IAM, hostile-client protection,
+provider attestation, reconciliation authority, and exactly-once guarantees remain
+unsupported.
