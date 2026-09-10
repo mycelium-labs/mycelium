@@ -56,7 +56,8 @@ executable conformance layer; this file is the compact formal sketch.
 The sidecar serves the frozen `v1alpha1` machine-readable OpenAPI 3.1 contract at
 `GET /v1/openapi.json`. It is generated directly from `mycelium.sidecar` so the
 served document remains the single transport description. `/health` is the only
-unauthenticated route; every other route uses the bearer scheme.
+unauthenticated process probe, and `/ready` is the unauthenticated storage probe;
+every `/v1` route uses the bearer scheme.
 
 The served OpenAPI document is authoritative for implemented HTTP routes and
 operation-specific payloads. The companion JSON Schema describes the broader

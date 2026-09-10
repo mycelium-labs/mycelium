@@ -879,7 +879,7 @@ an owner-only bearer-token file containing exactly 43 base64url characters or
 `identity-v1`, and a request-body limit.
 Start it with `mycelium sidecar serve --config /absolute/path/sidecar.yaml`.
 The token is sent only as `Authorization: Bearer ...`; it is never a command-line
-value. `/health` is the only unauthenticated endpoint. Authenticated endpoints are
+value. `/health` and `/ready` are unauthenticated probe endpoints. Authenticated endpoints are
 `/v1/capabilities`, `/v1/openapi.json`, `/v1/identities/derive`,
 `/v1/effects/claim`, `/v1/effects/{effect_id}`, and the fenced action endpoints
 `renew`, `boundary`, `provider-reference`, `reconcile`, `complete`, and `fail`.

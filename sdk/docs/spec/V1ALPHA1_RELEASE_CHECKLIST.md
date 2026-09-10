@@ -27,7 +27,7 @@ an unsupported safety-critical version or enum value.
 
 `v1alpha1` freezes:
 
-- the twelve documented HTTP routes and their operation IDs;
+- the eleven versioned `/v1` protocol routes and their operation IDs;
 - loopback bearer authentication and fixed tenant/application binding;
 - operation-specific request and response shapes;
 - the seven claim dispositions;
@@ -38,25 +38,32 @@ an unsupported safety-critical version or enum value.
 - the identity, canonicalization, decimal, and URL profiles;
 - the rule that the Python engine remains authoritative.
 
+`/health` and `/ready` are unversioned, read-only operational probes. They are
+documented in the served OpenAPI file for deployability, but they are outside
+the frozen `/v1` transition protocol: they cannot authorize execution, mutate
+an effect, or change identity semantics.
+
 The OpenAPI document returned by `openapi_document()` and served at
 `GET /v1/openapi.json` is the machine-readable transport contract. The Transition
 Envelope specification and decision log define rules that OpenAPI cannot express,
 including fencing, recovery authority, and fail-closed behavior.
 
-For the freeze commit, compact UTF-8 JSON with recursively sorted object keys and
-no insignificant whitespace is 48,255 bytes and has this SHA-256 fingerprint:
+For the `1.38.3` release candidate, compact UTF-8 JSON with recursively sorted
+object keys and no insignificant whitespace is 50,178 bytes and has this
+SHA-256 fingerprint:
 
 ```text
-2bc2db4101b1231a8c02c7e79c116b68d2fdce1c171714cbfc8e3c5df81a73c7
+0e39b05bb3ff672609c74ef8d5666e0ce734aa116f234a02642428a86a5b06e4
 ```
 
-The fingerprint is an audit aid, not the protocol version. Any intentional
-wire-visible change must select a new protocol revision rather than merely update
+The whole-document fingerprint is an audit aid, not the protocol version; it
+also covers the unversioned probes. Any intentional wire-visible change to a
+`/v1` operation must select a new protocol revision rather than merely update
 this fingerprint under `v1alpha1`.
 
 ## Compatibility rules
 
-- The contents of `v1alpha1` are immutable.
+- The versioned `/v1` contents of `v1alpha1` are immutable.
 - A wire-visible breaking change requires a new revision such as `v1alpha2`.
 - Changing identity fields or hashing requires a new identity namespace.
 - Changing canonicalization semantics requires a new canonicalization profile.
@@ -64,6 +71,8 @@ this fingerprint under `v1alpha1`.
   closed.
 - Non-critical extensions may be ignored only where `v1alpha1` explicitly allows
   them.
+- Unversioned operational probes may be added or documented without a protocol
+  revision only when they remain read-only and non-authorizing.
 - An extension cannot silently become identity-bearing or authorize execution.
 - Existing `v1alpha1` records remain labeled with their original protocol,
   identity, and canonicalization versions.
@@ -73,9 +82,9 @@ this fingerprint under `v1alpha1`.
 
 | Implementation | Status |
 |---|---|
-| Python development sidecar | Published in `mycelium-runtime==1.38.2`; implements and advertises `v1alpha1` |
-| TypeScript client | Published as `@mycelium-labs/sidecar-client@0.1.0`; requires `v1alpha1` |
-| Go client | Published as module `v0.1.0`; requires `v1alpha1` |
+| Python development sidecar | Prepared as `mycelium-runtime==1.38.3`; implements and advertises `v1alpha1` |
+| TypeScript client | Package `0.1.1` prepared; `0.1.0` is currently published and requires `v1alpha1` |
+| Go client | HEAD prepared for tag `clients/go/v0.1.1`; `v0.1.0` is currently published and requires `v1alpha1` |
 | Raw HTTP clients | May use the same authenticated OpenAPI contract |
 | Local conformance runner | Exercises raw HTTP, TypeScript, and Go against one temporary Python sidecar |
 

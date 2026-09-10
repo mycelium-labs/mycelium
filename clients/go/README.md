@@ -10,7 +10,9 @@ This module is the second external-language interoperability experiment for
 Mycelium. The protocol remains language-neutral. Python and `ActionLedger` remain
 authoritative for identity, policy, claims, fencing, state transitions, and recovery.
 The client requires the frozen development protocol `v1alpha1`. Version
-`v0.1.0` is published as the first experimental Go module release.
+`v0.1.0` is published as the first experimental Go module release. Repository
+HEAD is prepared for `v0.1.1`; it is not published until the
+`clients/go/v0.1.1` tag is explicitly created.
 
 ## Requirements and startup
 

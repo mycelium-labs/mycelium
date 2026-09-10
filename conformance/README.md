@@ -30,7 +30,9 @@ sdk/.venv/bin/python conformance/run_postgres.py
 
 The command requires Docker, the repository's supported `sdk/.venv`, and the
 `mycelium-runtime[postgres]` extra. It uses synthetic effects only. The full
-local suite remains the compatibility check for the file-backed profile.
+local suite remains the compatibility check for the file-backed profile. CI
+runs this PostgreSQL harness and separately boots the checked-in Docker Compose
+deployment, requiring both sidecars to pass `/ready`.
 
 The runner installs the pinned TypeScript development dependency when needed,
 builds that client, starts an authenticated sidecar on an operating-system

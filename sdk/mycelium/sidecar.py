@@ -215,6 +215,15 @@ def openapi_document() -> dict[str, Any]:
             "required": ["status", "protocol_version"],
             "properties": {"status": {"const": "ok"}, "protocol_version": ref("ProtocolVersion")},
         },
+        "ReadyReply": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["status", "protocol_version"],
+            "properties": {
+                "status": {"type": "string", "enum": ["ready", "not_ready"]},
+                "protocol_version": ref("ProtocolVersion"),
+            },
+        },
         "CapabilitiesReply": {
             "type": "object",
             "required": [
@@ -523,6 +532,11 @@ def openapi_document() -> dict[str, Any]:
             }
         }
 
+    ready_responses = response("ReadyReply", "Storage readiness")
+    ready_responses["503"] = {
+        "description": "Configured storage is unavailable or not initialized",
+        "content": {"application/json": {"schema": ref("ReadyReply")}},
+    }
     paths = {
         "/health": {
             "get": {
@@ -530,6 +544,14 @@ def openapi_document() -> dict[str, Any]:
                 "summary": "Get process health",
                 "security": [],
                 "responses": response("HealthReply", "Health"),
+            }
+        },
+        "/ready": {
+            "get": {
+                "operationId": "getReadiness",
+                "summary": "Check configured storage readiness",
+                "security": [],
+                "responses": ready_responses,
             }
         },
         "/v1/openapi.json": {
@@ -610,6 +632,10 @@ def openapi_document() -> dict[str, Any]:
         {"$type": "url", "profile": "url-1", "value": "https://example.com/resource"}
     ]
     schemas["HealthReply"]["examples"] = [{"status": "ok", "protocol_version": PROTOCOL_VERSION}]
+    schemas["ReadyReply"]["examples"] = [
+        {"status": "ready", "protocol_version": PROTOCOL_VERSION},
+        {"status": "not_ready", "protocol_version": PROTOCOL_VERSION},
+    ]
     schemas["CapabilitiesReply"]["examples"] = [
         {
             "protocol_version": PROTOCOL_VERSION,
@@ -769,7 +795,7 @@ def openapi_document() -> dict[str, Any]:
         "x-protocol-status": "frozen-development-alpha",
         "x-authentication": (
             "All /v1 routes require Authorization: Bearer. "
-            "/health is the only unauthenticated route."
+            "/health and /ready are unauthenticated probe routes."
         ),
         "x-error-http-status": {
             "400": "Malformed or invalid request",
@@ -1055,6 +1081,8 @@ class SidecarConfig:
         ):
             raise ValueError("tokens must be 43 base64url or 64 hexadecimal characters")
         object.__setattr__(self, "bearer_tokens", tuple(tokens))
+        if self.profile == "shared" and self.ledger_type != "postgres":
+            raise ValueError("shared profile requires Postgres ledger storage")
         if self.ledger_type == "postgres":
             if not self.ledger_dsn or self.profile != "shared":
                 raise ValueError("shared Postgres ledger requires a database URL")

@@ -26,8 +26,9 @@ builds a manifest before execution, then stores it with a digest in a durable
 composite-control record. That record owns the logical operation ID,
 definition, lease, monotonically increasing parent fence, lifecycle, and child
 bindings. The child identity extends the existing transition preimage with
-the composite namespace, pinned definition, and stable source call-site step
-ID; it does not replace scope, dispatch, tool, arguments, destination,
+the composite namespace, pinned definition, and a semantic call-site step ID
+that is independent of the checkout or deployment path; it does not replace
+scope, dispatch, tool, arguments, destination,
 side-effect, agent, policy, or identity-schema fields.
 
 On replay the unchanged function runs from the beginning. A completed child
@@ -65,7 +66,9 @@ blocks recovery rather than minting fresh child identities.
 
 SQLite, file, and in-process storage provide the composite-control capability
 in this initial implementation. Other backends fail explicitly when composite
-mode is requested. In-memory storage is useful for unit tests only.
+mode is requested. In-memory storage is useful for unit tests only. This API is
+Python-runtime-only: it is not exposed by the language-neutral sidecar, and the
+shared PostgreSQL sidecar profile does not provide composite orchestration.
 
 ## Decision record
 

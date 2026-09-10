@@ -140,8 +140,7 @@ Both endpoints use the same token, `example-tenant`, and `example-app`. Test
 either endpoint:
 
 ```bash
-curl --fail http://127.0.0.1:8787/ready \
-  -H "Authorization: Bearer $MYCELIUM_SIDECAR_TOKEN"
+curl --fail http://127.0.0.1:8787/ready
 curl --fail http://127.0.0.1:8788/v1/capabilities \
   -H "Authorization: Bearer $MYCELIUM_SIDECAR_TOKEN"
 ```

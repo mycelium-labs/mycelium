@@ -3,7 +3,7 @@
 Release policy: **batch; calm over velocity.** Prefer one coherent cut over many
 small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEASE.md).
 
-## Unreleased
+## 1.38.3 (2026-09-10)
 
 ### Added
 
@@ -48,6 +48,8 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
   SDK guide, protocol overview, and client READMEs. The Python engine remains
   authoritative; non-Python applications connect through the local sidecar.
   Link the published TypeScript `0.1.0` npm package and Go `v0.1.0` module.
+- Prepare the TypeScript client as `0.1.1` and the Go client for a separate
+  `clients/go/v0.1.1` tag. Neither client is published by the Python release.
 - Correct the TypeScript source loopback-address validator so rebuilding the
   client continues to accept explicit `127.x.x.x` sidecar addresses.
 - Make the TypeScript client reject reconciliation replies that omit the
@@ -57,6 +59,22 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
   frozen `UNKNOWN` or `TERMINAL_ABORTED` dispositions instead of a generic
   transition error, while a decisionless claim can still advance through
   `RECORD_DECISION` to `EXECUTE`.
+
+### Fixed
+
+- Make composite parent fencing decisive when a renewal thread is delayed:
+  nominal lease expiry can renew only while the persisted owner and fence still
+  match, and an actual reclaim still blocks stale admission, boundaries,
+  resolution, and completion. A renewal failure blocks the next child without
+  racing an already admitted child.
+- Derive composite manifest step identities from semantic call information
+  instead of an absolute source-file path, so the same code keeps its manifest
+  across checkout and deployment locations.
+- Reject shared-sidecar configurations unless both ledger and outcome storage
+  use PostgreSQL, and publish the existing unauthenticated `/ready` probe in
+  OpenAPI and the protocol documentation.
+- Exercise two-sidecar PostgreSQL arbitration, the Docker Compose deployment,
+  and installed-distribution sidecar/composite entrypoints in CI.
 
 ## 1.38.2 (2026-09-05)
 

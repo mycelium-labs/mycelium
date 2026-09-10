@@ -131,7 +131,8 @@ durable storage, and a stable host-owned operation ID. See the
 syntax and the fail-closed behavior for opaque calls, definition drift,
 ambiguous child outcomes, and lost parent authority. The decorator does not
 discover hidden direct provider calls or make arbitrary Python control flow
-recoverable.
+recoverable. It is a Python-runtime feature backed by local file or SQLite
+composite-control storage, not an endpoint in the language-neutral sidecar.
 
 For non-Python applications, run the local sidecar and use the TypeScript, Go,
 or OpenAPI client:

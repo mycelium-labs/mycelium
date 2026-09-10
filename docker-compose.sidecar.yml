@@ -17,7 +17,8 @@ services:
     environment:
       MYCELIUM_DATABASE_URL: postgresql://mycelium:${MYCELIUM_POSTGRES_PASSWORD}@postgres:5432/mycelium
       MYCELIUM_TOKEN: ${MYCELIUM_SIDECAR_TOKEN:?set MYCELIUM_SIDECAR_TOKEN}
-    command: ["sh", "-c", "umask 077; printf '%s\\n' \"$$MYCELIUM_TOKEN\" > /tmp/token; exec mycelium sidecar serve --config /etc/mycelium/sidecar.yaml"]
+    entrypoint: ["sh", "-c"]
+    command: ["umask 077; printf '%s\\n' \"$$MYCELIUM_TOKEN\" > /tmp/token; exec mycelium sidecar serve --config /etc/mycelium/sidecar.yaml"]
     volumes: ["./deploy/sidecar.shared.yaml:/etc/mycelium/sidecar.yaml:ro"]
     ports: ["8787:8787"]
     depends_on: {postgres: {condition: service_healthy}}
@@ -26,7 +27,8 @@ services:
     environment:
       MYCELIUM_DATABASE_URL: postgresql://mycelium:${MYCELIUM_POSTGRES_PASSWORD}@postgres:5432/mycelium
       MYCELIUM_TOKEN: ${MYCELIUM_SIDECAR_TOKEN:?set MYCELIUM_SIDECAR_TOKEN}
-    command: ["sh", "-c", "umask 077; printf '%s\\n' \"$$MYCELIUM_TOKEN\" > /tmp/token; exec mycelium sidecar serve --config /etc/mycelium/sidecar.yaml"]
+    entrypoint: ["sh", "-c"]
+    command: ["umask 077; printf '%s\\n' \"$$MYCELIUM_TOKEN\" > /tmp/token; exec mycelium sidecar serve --config /etc/mycelium/sidecar.yaml"]
     volumes: ["./deploy/sidecar.shared.yaml:/etc/mycelium/sidecar.yaml:ro"]
     ports: ["8788:8787"]
     depends_on: {postgres: {condition: service_healthy}}

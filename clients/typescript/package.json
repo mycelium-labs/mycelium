@@ -1,6 +1,6 @@
 {
   "name": "@mycelium-labs/sidecar-client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Experimental TypeScript client for Mycelium's language-neutral development sidecar",
   "keywords": ["ai-agents", "agent-reliability", "sidecar", "openapi", "typescript"],
   "type": "module",

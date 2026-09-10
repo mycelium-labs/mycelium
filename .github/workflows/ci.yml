@@ -184,6 +184,64 @@ jobs:
       - name: TypeScript build artifacts are current
         run: git diff --exit-code -- clients/typescript/dist
 
+  shared-sidecar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: clients/typescript/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.22.x"
+          cache-dependency-path: clients/go/go.mod
+
+      - name: Install PostgreSQL reference engine
+        run: |
+          python -m venv sdk/.venv
+          sdk/.venv/bin/pip install -e "./sdk[postgres]"
+
+      - name: Build TypeScript conformance client
+        working-directory: clients/typescript
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run two-sidecar PostgreSQL conformance
+        run: sdk/.venv/bin/python conformance/run_postgres.py
+
+      - name: Verify Docker Compose deployment
+        env:
+          MYCELIUM_POSTGRES_PASSWORD: ci-postgres-password
+          MYCELIUM_SIDECAR_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        run: |
+          set -euo pipefail
+          trap 'docker compose -f docker-compose.sidecar.yml down --volumes' EXIT
+          docker compose -f docker-compose.sidecar.yml config --quiet
+          docker compose -f docker-compose.sidecar.yml up --build --detach
+          for port in 8787 8788; do
+            ready=0
+            for _ in $(seq 1 60); do
+              if curl --fail --silent "http://127.0.0.1:${port}/ready" >/dev/null; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            test "$ready" -eq 1
+          done
+
   compatibility:
     runs-on: ubuntu-latest
     strategy:

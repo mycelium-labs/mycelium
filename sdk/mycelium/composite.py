@@ -312,13 +312,22 @@ def _build_manifest(func: Callable[..., Any], definition: str | None) -> Composi
             raise CompositeUnsupportedError(
                 f"call at line {node.lineno} is not a supported consequential Mycelium boundary"
             )
-        source_id = f"{inspect.getsourcefile(inspect.unwrap(func)) or '<unknown>'}:{node.lineno}:{getattr(node, 'col_offset', 0)}:{ordinal}"
+        binding_digest = _binding_digest(binding)
+        source = ast.dump(node, annotate_fields=True, include_attributes=False)
+        step_identity = canonical_json(
+            {
+                "composite": _callable_name(func),
+                "ordinal": ordinal,
+                "child": _callable_name(child),
+                "binding_digest": binding_digest,
+            }
+        )
         steps.append(
             CompositeStep(
-                step_id=hashlib.sha256(source_id.encode()).hexdigest()[:24],
+                step_id=hashlib.sha256(step_identity.encode()).hexdigest()[:24],
                 tool=child.__name__,
-                source=source_id,
-                binding_digest=_binding_digest(binding),
+                source=source,
+                binding_digest=binding_digest,
             )
         )
     if not steps:
@@ -415,19 +424,30 @@ class _ControlStore:
         return self._mutate(mutate)
 
     def renew(self, key: str, owner: str, fence: int, lease_ttl: float) -> None:
-        now = time.time()
         def mutate(data: dict[str, Any]) -> None:
             rec = data[key]
-            if rec.get("owner") != owner or int(rec.get("fence", -1)) != fence or (rec.get("lease_until") or 0) <= now:
+            # Expiry makes the record reclaimable; acquire() is the atomic act
+            # that changes authority. If no contender has advanced the fence,
+            # a delayed owner may safely refresh while holding this store lock.
+            if rec.get("owner") != owner or int(rec.get("fence", -1)) != fence:
                 raise CompositeAuthorityError(f"lost parent authority for {key!r}")
-            rec["lease_until"] = now + lease_ttl if lease_ttl > 0 else None
+            rec["lease_until"] = time.time() + lease_ttl if lease_ttl > 0 else None
         self._mutate(mutate)
 
-    def admit(self, key: str, owner: str, fence: int, step: CompositeStep, binding: dict[str, Any]) -> None:
+    def admit(
+        self,
+        key: str,
+        owner: str,
+        fence: int,
+        step: CompositeStep,
+        binding: dict[str, Any],
+        lease_ttl: float,
+    ) -> None:
         def mutate(data: dict[str, Any]) -> None:
             rec = data[key]
-            if rec.get("owner") != owner or int(rec.get("fence", -1)) != fence or (rec.get("lease_until") or 0) <= time.time():
+            if rec.get("owner") != owner or int(rec.get("fence", -1)) != fence:
                 raise CompositeAuthorityError(f"lost parent authority before admitting {step.step_id}")
+            rec["lease_until"] = time.time() + lease_ttl
             expected = rec["manifest"]["steps"]
             index = next((i for i, item in enumerate(expected) if item["step_id"] == step.step_id), None)
             next_step = int(rec.get("next_step", 0))
@@ -454,7 +474,7 @@ class _ControlStore:
         """Record child resolution separately from admission under the parent fence."""
         def mutate(data: dict[str, Any]) -> None:
             rec = data[key]
-            if rec.get("owner") != owner or int(rec.get("fence", -1)) != fence or (rec.get("lease_until") or 0) <= time.time():
+            if rec.get("owner") != owner or int(rec.get("fence", -1)) != fence:
                 raise CompositeAuthorityError(f"lost parent authority while resolving {step.step_id}")
             child = rec["children"].get(step.step_id)
             if child is None:
@@ -464,17 +484,13 @@ class _ControlStore:
             child["outcome"] = "COMPLETED"
         self._mutate(mutate)
 
-    def boundary(self, key: str, owner: str, fence: int) -> None:
-        now = time.time()
-        def read(data: dict[str, Any]) -> None:
+    def boundary(self, key: str, owner: str, fence: int, lease_ttl: float) -> None:
+        def mutate(data: dict[str, Any]) -> None:
             rec = data[key]
-            if rec.get("owner") != owner or int(rec.get("fence", -1)) != fence or (rec.get("lease_until") or 0) <= now:
-                raise CompositeAuthorityError("parent authority expired at the external-effect boundary")
-        if self._memory is not None:
-            read(self._memory)
-        else:
-            assert self._lock is not None
-            self._lock.read_modify_write_no_save(read)
+            if rec.get("owner") != owner or int(rec.get("fence", -1)) != fence:
+                raise CompositeAuthorityError("parent authority was reclaimed before the external-effect boundary")
+            rec["lease_until"] = time.time() + lease_ttl
+        self._mutate(mutate)
 
     def finish(
         self,
@@ -490,7 +506,6 @@ class _ControlStore:
             if (
                 rec.get("owner") != owner
                 or int(rec.get("fence", -1)) != fence
-                or (rec.get("lease_until") or 0) <= time.time()
             ):
                 raise CompositeAuthorityError("stale worker cannot complete composite")
             if observed_step_ids != expected_step_ids:
@@ -563,7 +578,11 @@ class CompositeInvocation(AbstractContextManager["CompositeInvocation"]):
         self._renewal_error: CompositeAuthorityError | None = None
 
     def _start_renewal(self) -> None:
-        if self.lease_ttl <= 0:
+        if (
+            self.lease_ttl <= 0
+            or self._renew_thread is not None
+            or self._renew_stop.is_set()
+        ):
             return
         try:
             self.renew()
@@ -605,7 +624,6 @@ class CompositeInvocation(AbstractContextManager["CompositeInvocation"]):
         if get_active_composite() is not None:
             raise CompositeUnsupportedError("nested composites are not supported")
         self._token = _active_composite.set(self)
-        self._start_renewal()
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
@@ -630,6 +648,8 @@ class CompositeInvocation(AbstractContextManager["CompositeInvocation"]):
         return False
 
     def prepare_child(self, tool: str, args: tuple[Any, ...], kwargs: dict[str, Any], binding: ToolTransitionBinding) -> _PreparedChild:
+        if self._renewal_error is not None:
+            raise self._renewal_error
         self.validate_boundary()
         if self.cursor >= len(self.manifest.steps):
             raise CompositeDefinitionDriftError("composite executed more child calls than its manifest")
@@ -650,9 +670,19 @@ class CompositeInvocation(AbstractContextManager["CompositeInvocation"]):
             "args_fingerprint": hashlib.sha256(canonical_json({"args": args, "kwargs": kwargs}).encode()).hexdigest(),
             "destination": list(destination_fingerprint(get_active_entity_decision())),
         }
-        self.store.admit(self.key, self.owner, self.fence, step, binding_record)
+        self.store.admit(
+            self.key,
+            self.owner,
+            self.fence,
+            step,
+            binding_record,
+            self.lease_ttl,
+        )
         self.cursor += 1
         self.observed_steps.append(step.step_id)
+        # Start after the first durable admission so a background-renewal
+        # failure cannot race and reject that same child before its boundary.
+        self._start_renewal()
         return _PreparedChild(step.step_id, effect_id)
 
     def resolve_child(self, step_id: str) -> None:
@@ -663,9 +693,7 @@ class CompositeInvocation(AbstractContextManager["CompositeInvocation"]):
         self.resolved_steps.add(step_id)
 
     def validate_boundary(self) -> None:
-        if self._renewal_error is not None:
-            raise self._renewal_error
-        self.store.boundary(self.key, self.owner, self.fence)
+        self.store.boundary(self.key, self.owner, self.fence, self.lease_ttl)
 
     def renew(self) -> None:
         """Renew the parent lease while the unchanged body is running."""

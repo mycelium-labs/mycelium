@@ -84,8 +84,8 @@ remain outside this experiment.
 ## Protocol examples and OpenAPI
 
 The sidecar exposes authenticated capabilities and OpenAPI at
-`GET /v1/capabilities` and `GET /v1/openapi.json`; `/health` is the only unauthenticated
-route. A language-neutral request works without this package:
+`GET /v1/capabilities` and `GET /v1/openapi.json`; `/health` and `/ready` are
+unauthenticated probe routes. A language-neutral request works without this package:
 
 ```sh
 curl -H "Authorization: Bearer $MYCELIUM_SIDECAR_TOKEN" \

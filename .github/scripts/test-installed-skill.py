@@ -83,6 +83,25 @@ def main() -> None:
         )
         env = os.environ.copy()
         env["PYTHONPATH"] = str(offline)
+        _run([str(executable), "sidecar", "serve", "--help"], cwd=project, env=env, expected=0)
+        installed_api = _run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from mycelium import composite; "
+                    "from mycelium.sidecar import SidecarConfig, openapi_document; "
+                    "assert callable(composite); "
+                    "assert SidecarConfig; "
+                    "assert openapi_document()['paths']['/ready']['get']['security'] == []"
+                ),
+            ],
+            cwd=project,
+            env=env,
+            expected=0,
+        )
+        if installed_api.stdout or installed_api.stderr:
+            raise SystemExit("installed API smoke check produced unexpected output")
         command = [str(executable), "skills", "install", "--target", str(catalog)]
 
         installed = _run(command, cwd=project, env=env, expected=0)
@@ -112,7 +131,9 @@ def main() -> None:
         if _files(destination) != canonical:
             raise SystemExit("force install did not restore the exact canonical skill")
 
-    print("installed distribution passed offline, byte, conflict, and force checks")
+    print(
+        "installed distribution passed sidecar, composite, offline, byte, conflict, and force checks"
+    )
 
 
 if __name__ == "__main__":

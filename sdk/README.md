@@ -48,7 +48,11 @@ Composite recovery is an opt-in wrapper for a bounded first version of
 multi-effect functions. Configure the child `ledger`/`ledger_sync` boundaries,
 choose durable `FileLedgerStorage` or `SqliteLedgerStorage`, and derive
 `operation_id_from` from the host request or job identity before adding the
-outer decorator:
+outer decorator.
+
+This decorator is a Python-runtime feature. It is not available through the
+language-neutral sidecar, and its parent-control records are not stored in the
+shared PostgreSQL sidecar profile.
 
 ```python
 from mycelium import composite
