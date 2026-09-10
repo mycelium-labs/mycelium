@@ -28,7 +28,7 @@ from mycelium import (
     side_effect,
     side_effect_async,
 )
-from mycelium.composite import CompositeInvocation, _ControlStore
+from mycelium.composite import CompositeInvocation, _ControlStore, get_active_composite
 
 
 def _binding() -> ToolTransitionBinding:
@@ -371,12 +371,16 @@ def test_parent_lease_renews_during_long_child(tmp_path) -> None:
 def test_renewal_failure_blocks_the_next_child(tmp_path, monkeypatch) -> None:
     storage = SqliteLedgerStorage(tmp_path / "ledger.sqlite")
     pause_started = threading.Event()
+    initial_renewals_done = threading.Event()
     renewal_failed = threading.Event()
     release_pause = threading.Event()
     calls: list[str] = []
 
     @ledger_sync(storage=storage, transition_binding=_binding())
     def first(idempotency_key: str) -> str:
+        # Exercise multiple renewal ticks before reaching the pause. The old
+        # tick-count injection failed here instead of between the two children.
+        assert initial_renewals_done.wait(timeout=5)
         with side_effect():
             calls.append("first")
         return "first"
@@ -389,23 +393,33 @@ def test_renewal_failure_blocks_the_next_child(tmp_path, monkeypatch) -> None:
 
     def pause() -> None:
         pause_started.set()
-        release_pause.wait(timeout=2)
+        assert release_pause.wait(timeout=5)
+        active = get_active_composite()
+        assert active is not None
+        # The injected exception must be recorded by the renewal loop before
+        # execution advances to the next child boundary.
+        assert active._renew_stop.wait(timeout=5)
 
     register_composite_helper(pause)
     original_renew = _ControlStore.renew
-    renewals = 0
+    successful_renewals = 0
 
-    def fail_after_initial_renew(self, key, owner, fence, lease_ttl):
-        nonlocal renewals
-        renewals += 1
-        if renewals >= 2:
+    def fail_after_first_child(self, key, owner, fence, lease_ttl):
+        nonlocal successful_renewals
+        # A renewal tick can precede the first child on a busy runner. Keep
+        # renewing normally until the composite reaches the intended boundary.
+        if pause_started.is_set():
             renewal_failed.set()
             raise CompositeAuthorityError("controlled renewal failure")
-        return original_renew(self, key, owner, fence, lease_ttl)
+        result = original_renew(self, key, owner, fence, lease_ttl)
+        successful_renewals += 1
+        if successful_renewals >= 3:
+            initial_renewals_done.set()
+        return result
 
-    monkeypatch.setattr(_ControlStore, "renew", fail_after_initial_renew)
+    monkeypatch.setattr(_ControlStore, "renew", fail_after_first_child)
 
-    @composite(storage, lease_ttl=0.2, renewal_interval=0.01)
+    @composite(storage, lease_ttl=10, renewal_interval=0.01)
     def publish(operation_id: str) -> str:
         first(idempotency_key="first")
         pause()
@@ -421,10 +435,12 @@ def test_renewal_failure_blocks_the_next_child(tmp_path, monkeypatch) -> None:
 
     worker = threading.Thread(target=run)
     worker.start()
-    assert pause_started.wait(timeout=2)
-    assert renewal_failed.wait(timeout=2)
-    release_pause.set()
-    worker.join(timeout=2)
+    try:
+        assert pause_started.wait(timeout=5), errors
+        assert renewal_failed.wait(timeout=5), errors
+    finally:
+        release_pause.set()
+        worker.join(timeout=5)
     assert not worker.is_alive()
     assert any(isinstance(error, CompositeAuthorityError) for error in errors)
     assert calls == ["first"]
