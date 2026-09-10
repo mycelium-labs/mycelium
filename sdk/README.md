@@ -42,6 +42,54 @@ the setup skill can add one outer `@composite(...)` decorator. See
 [durable composite recovery](docs/COMPOSITE_RECOVERY.md) for the supported API,
 stable operation-ID rule, manifest diagnostics, and fail-closed limitations.
 
+### Durable composite recovery
+
+Composite recovery is an opt-in wrapper for a bounded first version of
+multi-effect functions. Configure the child `ledger`/`ledger_sync` boundaries,
+choose durable `FileLedgerStorage` or `SqliteLedgerStorage`, and derive
+`operation_id_from` from the host request or job identity before adding the
+outer decorator:
+
+```python
+from mycelium import composite
+
+@composite(
+    storage=ledger_storage,
+    operation_id_from=lambda _args, kwargs: kwargs["job_id"],
+)
+def publish_change(job_id: str):
+    commit = create_commit(idempotency_key=f"{job_id}:commit")
+    push_branch(idempotency_key=f"{job_id}:push")
+    update_tracking_record(idempotency_key=f"{job_id}:tracking", commit=commit)
+```
+
+The decorator builds and pins a manifest before the body runs. During replay it
+runs the original body from the beginning; completed children return their
+stored results and only previously unattempted children may execute. Parent
+leases, fencing, current replay order, child completion evidence, and provider
+ambiguity are checked fail-closed. The same logical operation ID must be used
+for every retry; a new ID is a new invocation.
+
+This is not automatic protection for arbitrary function bodies. The supported
+syntax is straight-line assignments, expression statements, and one final
+return, with supported consequential calls at statement boundaries. Unknown
+or opaque calls, conditional and short-circuit expressions, loops,
+comprehensions, generators, nested calls, early returns, nested definitions,
+dynamic dispatch, and nested composites are rejected before effects. Register a
+local deterministic helper explicitly with `register_composite_helper`; that
+trusts the helper for replay but does not ledger or protect its external work.
+Use `register_composite_boundary` only with the actual callable returned by
+`ledger`/`ledger_sync`—a registry name alone does not intercept a provider.
+
+Use a provider idempotency key or a truthful read-only reconciler for effects
+that can be ambiguous after the provider request starts. A local fence check
+cannot cancel an already-sent request or eliminate every check-to-send race.
+SQLite and file ledgers store composite-control records in a durable sidecar
+next to the configured ledger data; in-memory storage is suitable for unit
+tests, not restart durability. The setup skill can inspect the generated
+manifest and diagnostics, but it must not execute live consequential calls to
+validate setup.
+
 ### Example: duplicate execution after redispatch
 
 **LangGraph Cloud redispatches a long tool call while the first is still running.** Both complete. You pay twice. Side effects run twice. See [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417).

@@ -123,6 +123,16 @@ Then ask your coding agent: **“Set up Mycelium in this project.”** The bundl
 tools, updates the configuration, wires the runtime boundary, and runs Doctor
 and Verify.
 
+For an unchanged sequential function whose consequential calls are already
+ledgered, ask the same skill to make it recoverable with Mycelium. It can add
+one outer composite decorator after verifying the actual callable boundaries,
+durable storage, and a stable host-owned operation ID. See the
+[composite recovery guide](sdk/docs/COMPOSITE_RECOVERY.md) for the supported
+syntax and the fail-closed behavior for opaque calls, definition drift,
+ambiguous child outcomes, and lost parent authority. The decorator does not
+discover hidden direct provider calls or make arbitrary Python control flow
+recoverable.
+
 For non-Python applications, run the local sidecar and use the TypeScript, Go,
 or OpenAPI client:
 
@@ -143,6 +153,7 @@ configuration, and manual APIs.
 - **Try in 5 minutes:** https://mycelium-labs.github.io/try.html
 - **Sandbox demo:** [mycelium-labs/mycelium-labs.github.io/sandbox](https://github.com/mycelium-labs/mycelium-labs.github.io/tree/main/sandbox)
 - **Full API reference:** [sdk/README.md](sdk/README.md)
+- **Durable composite recovery:** [supported API and limits](sdk/docs/COMPOSITE_RECOVERY.md)
 - **Language-neutral protocol:** [sdk/docs/spec/README.md](sdk/docs/spec/README.md)
 - **Self-host the sidecar:** [local and shared PostgreSQL setup](sdk/docs/SELF_HOSTING.md)
 - **Experimental clients:** [TypeScript](clients/typescript/README.md) · [Go](clients/go/README.md)

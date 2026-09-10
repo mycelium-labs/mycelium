@@ -377,9 +377,13 @@ than the code makes.
   a conservative `non_idempotent_mutate` binding that hard-blocks instead.
   `profile: production` defaults an omitted policy to `strict`; explicit
   `warn` remains a compatibility choice.
-- **Temporal-style workflows.** Mycelium guards individual tool calls (and
-  task ledger entries); it does not re-run a multi-step workflow graph with
-  orchestrator recovery semantics.
+- **Temporal-style workflows.** Mycelium does not re-run an arbitrary
+  multi-step workflow graph with orchestrator recovery semantics. The bounded
+  `@composite` protocol is a narrower exception: it replays an unchanged,
+  straight-line function only when every consequential call is an intercepted
+  ledger boundary, the manifest is supported, and the parent control record
+  remains authoritative. See [durable composite recovery](COMPOSITE_RECOVERY.md)
+  for its syntax restrictions and provider-ambiguity limits.
 - **The optional guard surface.** `@protect` / `HistoryGuard` /
   `MessageValidator` / `@bounded` / `Session` / `loop_guard` / `completion` /
   `scope_guard` / `state_authority` / `secret_args` are documented elsewhere
