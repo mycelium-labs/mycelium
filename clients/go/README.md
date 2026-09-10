@@ -10,9 +10,8 @@ This module is the second external-language interoperability experiment for
 Mycelium. The protocol remains language-neutral. Python and `ActionLedger` remain
 authoritative for identity, policy, claims, fencing, state transitions, and recovery.
 The client requires the frozen development protocol `v1alpha1`. Version
-`v0.1.0` is published as the first experimental Go module release. Repository
-HEAD is prepared for `v0.1.1`; it is not published until the
-`clients/go/v0.1.1` tag is explicitly created.
+`v0.1.0` was the first experimental Go module release; `v0.1.1` is the current
+published version.
 
 ## Requirements and startup
 
@@ -23,11 +22,11 @@ HEAD is prepared for `v0.1.1`; it is not published until the
 Install the module with:
 
 ```sh
-go get github.com/mycelium-labs/mycelium/clients/go@v0.1.0
+go get github.com/mycelium-labs/mycelium/clients/go@v0.1.1
 ```
 
 Because the module lives in a repository subdirectory, its release tag is
-`clients/go/v0.1.0` even though Go users install module version `v0.1.0`.
+`clients/go/v0.1.1` even though Go users install module version `v0.1.1`.
 
 ```sh
 mycelium sidecar serve --config /absolute/path/sidecar.yaml

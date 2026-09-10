@@ -107,7 +107,7 @@ authority, or secret is missing, classify it as deferred and keep it fail closed
 4. Add the appropriate integration dependencies. Python projects install
    `mycelium-runtime` and relevant extras. TypeScript projects use
    `@mycelium-labs/sidecar-client@experimental`; Go projects use
-   `github.com/mycelium-labs/mycelium/clients/go@v0.1.0`. Non-Python paths also
+   `github.com/mycelium-labs/mycelium/clients/go@v0.1.1`. Non-Python paths also
    need the Python sidecar as a separately managed local process. Preserve
    existing version policy. Do not bump the application's version.
 5. For in-process Python, create or merge `mycelium.yaml`. For a non-Python

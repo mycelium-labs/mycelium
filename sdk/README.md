@@ -286,7 +286,7 @@ Install an optional client helper:
 npm install @mycelium-labs/sidecar-client@experimental
 
 # Go
-go get github.com/mycelium-labs/mycelium/clients/go@v0.1.0
+go get github.com/mycelium-labs/mycelium/clients/go@v0.1.1
 ```
 
 Java, Rust, C#, Ruby, and other runtimes can use the authenticated OpenAPI

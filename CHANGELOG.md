@@ -19,8 +19,6 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 - Add `conformance/run_postgres.py` for a Docker-backed two-sidecar synthetic
   claim race. The local file-backed conformance command remains unchanged.
 
-### Added
-
 - Add a repeatable local `v1alpha1` conformance suite and dedicated CI job that
   run raw HTTP, TypeScript, and Go against one temporary Python sidecar. The
   suite covers approved identity, authentication, claim/complete/replay, stale
@@ -47,8 +45,8 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 - Explain the language-neutral integration consistently across the root README,
   SDK guide, protocol overview, and client READMEs. The Python engine remains
   authoritative; non-Python applications connect through the local sidecar.
-  Link the published TypeScript `0.1.0` npm package and Go `v0.1.0` module.
-- Prepare the TypeScript client as `0.1.1` and the Go client for a separate
+  Link the published TypeScript `0.1.1` npm package and Go `v0.1.1` module.
+- Release the TypeScript client as `0.1.1` and the Go client under the separate
   `clients/go/v0.1.1` tag. Neither client is published by the Python release.
 - Correct the TypeScript source loopback-address validator so rebuilding the
   client continues to accept explicit `127.x.x.x` sidecar addresses.

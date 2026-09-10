@@ -976,7 +976,7 @@ responsibilities are:
 It must not implement state transitions, authoritative hashes, claim arbitration,
 reconciliation authorization, or operator rules.
 
-Shipped `0.1.0` API:
+Shipped `0.1.x` API (current package: `0.1.1`):
 
 ```ts
 import { MyceliumClient } from "@mycelium-labs/sidecar-client";

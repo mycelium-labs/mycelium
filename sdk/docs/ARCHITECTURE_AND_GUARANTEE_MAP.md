@@ -8,7 +8,7 @@ synthetic verification run proves an application's real provider integration.
 
 ## Source provenance and review baseline
 
-Validated against the repository at review base commit `2a3f57f` (Mycelium `1.38.2`).
+Validated against the repository at review base commit `733d52d` (Mycelium `1.38.2`).
 The machine-verifiable source manifest is tracked in [architecture_provenance.json](architecture_provenance.json).
 
 ### Provenance model and guarantees

@@ -75,7 +75,7 @@ Published experimental clients:
 
 ```bash
 npm install @mycelium-labs/sidecar-client@experimental
-go get github.com/mycelium-labs/mycelium/clients/go@v0.1.0
+go get github.com/mycelium-labs/mycelium/clients/go@v0.1.1
 ```
 
 Every other language can use the same authenticated OpenAPI contract directly.

@@ -92,7 +92,7 @@ Follow the [TypeScript lifecycle example](../../clients/typescript/README.md#use
 For Go:
 
 ```bash
-go get github.com/mycelium-labs/mycelium/clients/go@v0.1.0
+go get github.com/mycelium-labs/mycelium/clients/go@v0.1.1
 ```
 
 Follow the [Go lifecycle example](../../clients/go/README.md#client-lifecycle).

@@ -20,8 +20,8 @@ authoritative Mycelium engine and ledger
 
 Published experimental clients:
 
-- TypeScript: [`@mycelium-labs/sidecar-client@0.1.0`](../../../clients/typescript/README.md)
-- Go: [`github.com/mycelium-labs/mycelium/clients/go@v0.1.0`](../../../clients/go/README.md)
+- TypeScript: [`@mycelium-labs/sidecar-client@0.1.1`](../../../clients/typescript/README.md)
+- Go: [`github.com/mycelium-labs/mycelium/clients/go@v0.1.1`](../../../clients/go/README.md)
 - Other languages: use the same authenticated OpenAPI contract directly.
 
 This is language-neutral interoperability, not a separate Mycelium engine in

@@ -82,9 +82,9 @@ this fingerprint under `v1alpha1`.
 
 | Implementation | Status |
 |---|---|
-| Python development sidecar | Prepared as `mycelium-runtime==1.38.3`; implements and advertises `v1alpha1` |
-| TypeScript client | Package `0.1.1` prepared; `0.1.0` is currently published and requires `v1alpha1` |
-| Go client | HEAD prepared for tag `clients/go/v0.1.1`; `v0.1.0` is currently published and requires `v1alpha1` |
+| Python development sidecar | Published as `mycelium-runtime==1.38.3`; implements and advertises `v1alpha1` |
+| TypeScript client | Package `0.1.1` is published on the `experimental` tag and requires `v1alpha1` |
+| Go client | Module `v0.1.1` is published from tag `clients/go/v0.1.1` and requires `v1alpha1` |
 | Raw HTTP clients | May use the same authenticated OpenAPI contract |
 | Local conformance runner | Exercises raw HTTP, TypeScript, and Go against one temporary Python sidecar |
 
@@ -162,6 +162,21 @@ Before publishing any preview package or tag:
 - Restarting the Python sidecar over the same file ledger preserved the
   committed result for both language clients.
 
+## Validation and publication recorded on 2026-09-10
+
+- Python `1.38.3` passed the full CI release gate, including Python 3.10, 3.11,
+  and 3.13 compatibility, installed-wheel checks, cross-language conformance,
+  two-sidecar PostgreSQL arbitration, and a Docker Compose boot/readiness check.
+- `mycelium-runtime==1.38.3` was published to PyPI through trusted publishing.
+  GitHub release `v1.38.3` points to the CI-verified release commit and includes
+  the generated CycloneDX SBOM.
+- TypeScript `0.1.1` was published publicly to npm on the `experimental`
+  distribution tag and verified through the public registry. The pre-existing
+  `latest` tag remains on `0.1.0`. Because the interactive publish ran outside a
+  supported CI provider, npm provenance generation was disabled for this upload.
+- Go module `v0.1.1` was published from tag `clients/go/v0.1.1` and confirmed
+  through the public Go module proxy.
+
 ## Production gates
 
 The protocol freeze does not make the sidecar production-ready. Production
@@ -177,7 +192,8 @@ They are not required merely to experiment with the local trusted-client profile
 ## Release decision
 
 The Python reference engine and development sidecar are published in
-`mycelium-runtime==1.38.2`, the experimental TypeScript transport client is
-published as `@mycelium-labs/sidecar-client@0.1.0`, and the experimental Go
-transport client is published as module `v0.1.0`. The frozen protocol remains
-development-only, and publication does not expand its production guarantees.
+`mycelium-runtime==1.38.3`, the experimental TypeScript transport client is
+published as `@mycelium-labs/sidecar-client@0.1.1` on the `experimental` tag,
+and the experimental Go transport client is published as module `v0.1.1`. The
+frozen protocol remains development-only, and publication does not expand its
+production guarantees.
