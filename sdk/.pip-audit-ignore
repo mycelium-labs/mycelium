@@ -1,0 +1,12 @@
+# Format: <VULN_ID> # reason: <rationale> (review: YYYY-MM-DD)
+#
+# Pip-Audit Vulnerability Ignore Policy (Issue #146)
+# =================================================
+# Any ignored advisory must include a specific justification (reason)
+# and a time-bounded review date (review: YYYY-MM-DD).
+#
+# Broad skips or silencing of vulnerabilities without justification are strictly forbidden.
+# Lines starting with '#' and empty lines are ignored by the parser.
+#
+# Example:
+# GHSA-xxxx-xxxx-xxxx # reason: Upstream patch pending; vulnerability not reachable via public API (review: 2026-10-01)
