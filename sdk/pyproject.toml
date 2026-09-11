@@ -71,6 +71,7 @@ dev = [
     "hypothesis",
     "langgraph>=1.2.9",
     "cyclonedx-bom>=7.3.1",
+    "pip-audit>=2.7.3",
 ]
 langgraph = [
     "langgraph>=1.2.9",
@@ -130,6 +131,7 @@ exclude = [
   "scripts/",
   "api-snapshot.json",
   "uv.lock",
+  ".pip-audit-ignore",
   "**/__pycache__/",
   "**/*.pyc",
 ]

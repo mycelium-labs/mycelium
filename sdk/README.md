@@ -2972,4 +2972,16 @@ pytest tests/ -v
 pytest --cov=mycelium --cov-report=term-missing
 ruff check mycelium tests
 bandit -c pyproject.toml -r mycelium
+pip-audit --desc on
 ```
+
+Before opening a pull request touching dependencies, audit the resolved
+environment for known vulnerabilities from `sdk/` (install with all release extras):
+
+```bash
+pip install -e ".[dev,redis,postgres,observability]"
+pip-audit --desc on
+```
+
+Exceptions must be specific, justified, and time-bounded adhering to the policy in
+[`.pip-audit-ignore`](.pip-audit-ignore) and [`CONTRIBUTING.md`](../CONTRIBUTING.md).
