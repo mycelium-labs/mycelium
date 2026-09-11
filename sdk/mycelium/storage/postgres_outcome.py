@@ -107,6 +107,10 @@ class PostgresOutcomeStorage(OutcomeStorage):
         ]
         try:
             with self._psycopg.connect(self._dsn) as conn:
+                conn.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    (f"mycelium:schema:outcome:{self._table}",),
+                )
                 for statement in statements:
                     conn.execute(statement)
                 conn.commit()

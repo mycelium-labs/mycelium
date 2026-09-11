@@ -152,6 +152,10 @@ class PostgresEntryStorage:
             "WHERE payload->>'finished_at' IS NOT NULL"
         ).format(self._index_id("finished_idx"), self._table_id())
         with self._connection() as conn:
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                (f"mycelium:schema:ledger:{self._table}",),
+            )
             conn.execute(query)
             conn.execute(effect_index)
             conn.execute(outcome_time_index)
