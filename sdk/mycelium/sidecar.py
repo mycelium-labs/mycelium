@@ -1058,7 +1058,7 @@ class SidecarConfig:
         try:
             address = ipaddress.ip_address(self.host)
         except ValueError as exc:
-            raise ValueError("sidecar host must be a literal loopback address") from exc
+            raise ValueError("sidecar host must be a literal IP address") from exc
         if self.profile not in {"development", "shared"}:
             raise ValueError("sidecar profile must be development or shared")
         if self.profile == "development" and not address.is_loopback:
