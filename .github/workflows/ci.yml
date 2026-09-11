@@ -227,7 +227,7 @@ jobs:
           MYCELIUM_SIDECAR_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         run: |
           set -euo pipefail
-          trap 'docker compose -f docker-compose.sidecar.yml down --volumes' EXIT
+          trap 'docker compose -f docker-compose.sidecar.yml logs --no-color || true; docker compose -f docker-compose.sidecar.yml down --volumes' EXIT
           docker compose -f docker-compose.sidecar.yml config --quiet
           docker compose -f docker-compose.sidecar.yml up --build --detach
           for port in 8787 8788; do
