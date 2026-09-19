@@ -44,6 +44,7 @@ from mycelium.ledger_migrations import (
 from mycelium.operator_auth import (
     OperatorAuthorizer,
     OperatorReleaseRequest,
+    SignedOperatorReleaseCapabilityAuthorizer,
     StaticTokenOperatorAuthorizer,
 )
 from mycelium.reconcile import Reconciler, ReconcileResult, ReconcileStatus
@@ -149,6 +150,7 @@ __all__ = [
     "NamespacedAtomicStorage",
     "OperatorAuthorizer",
     "OperatorReleaseRequest",
+    "SignedOperatorReleaseCapabilityAuthorizer",
     "PostgresAtomicStateBackend",
     "PostgresLedgerStorage",
     "PostgresTaskLedgerStorage",

@@ -276,13 +276,9 @@ def test_release_is_one_shot(storage) -> None:
             terminal_outcome=TerminalOutcome.BLOCKED.value,
         )
     )
-    ledger_inst.release(
-        "req-one-shot", verified="not_executed", by="ops", reason="verified"
-    )
+    ledger_inst.release("req-one-shot", verified="not_executed", by="ops", reason="verified")
     with pytest.raises(LedgerAlreadyResolvedError):
-        ledger_inst.release(
-            "req-one-shot", verified="not_executed", by="ops", reason="again"
-        )
+        ledger_inst.release("req-one-shot", verified="not_executed", by="ops", reason="again")
     with pytest.raises(LedgerAlreadyResolvedError):
         ledger_inst.release(
             "req-one-shot", verified="completed", result={}, by="ops", reason="again"
@@ -304,9 +300,7 @@ def test_release_refused_while_lease_held_allowed_once_expired(storage) -> None:
         )
     )
     with pytest.raises(LedgerReleaseRefusedError, match="lease"):
-        ledger_inst.release(
-            "req-held", verified="not_executed", by="ops", reason="verified"
-        )
+        ledger_inst.release("req-held", verified="not_executed", by="ops", reason="verified")
 
     # Once the lease expires the transition is EXPIRED and releasable.
     current = storage.get("req-held")
@@ -552,14 +546,13 @@ def test_list_transitions_filters(storage) -> None:
         "old-inflight",
     }
 
-    assert [
-        e.request_id
-        for e in ledger_inst.list_transitions(stuck=True, tool="charge")
-    ] == ["stuck-blocked", "stuck-unknown"]
+    assert [e.request_id for e in ledger_inst.list_transitions(stuck=True, tool="charge")] == [
+        "stuck-blocked",
+        "stuck-unknown",
+    ]
 
     assert [
-        e.request_id
-        for e in ledger_inst.list_transitions(outcome=TerminalOutcome.BLOCKED)
+        e.request_id for e in ledger_inst.list_transitions(outcome=TerminalOutcome.BLOCKED)
     ] == ["stuck-blocked"]
 
     # A larger in-flight threshold hides the old in-flight entry again.
@@ -571,9 +564,7 @@ def test_release_emits_audit_receipt_when_emitter_configured() -> None:
     from mycelium import AuditReceiptEmitter, InMemoryAuditReceiptStorage, verify_receipt
 
     receipt_storage = InMemoryAuditReceiptStorage()
-    emitter = AuditReceiptEmitter(
-        agent_id="demo", signing_key="test-key", storage=receipt_storage
-    )
+    emitter = AuditReceiptEmitter(agent_id="demo", signing_key="test-key", storage=receipt_storage)
     storage = InMemoryLedgerStorage()
     ledger_inst = ActionLedger(storage=storage, audit_emitter=emitter)
     storage.set(
@@ -701,6 +692,182 @@ def test_operator_authorizer_exception_fails_closed() -> None:
     assert storage.get("req-auth-error").operator_resolution is None
 
 
+def _signed_release_fixture(tmp_path: Path, *, clock=None):
+    from mycelium import (
+        InMemoryAtomicStateBackend,
+        OperatorReleaseRequest,
+        SignedOperatorReleaseCapabilityAuthorizer,
+    )
+
+    backend = InMemoryAtomicStateBackend()
+    authorizer = SignedOperatorReleaseCapabilityAuthorizer(
+        {"primary": "secret"},
+        issuer="mycelium",
+        audience="ops-api",
+        nonce_backend=backend,
+        clock=clock or time.time,
+    )
+    request = OperatorReleaseRequest(
+        "alice", "req-cap", "charge", "not_executed", "effect-cap", "tenant-a", "policy-1"
+    )
+    token = authorizer.mint_capability(request, key_id="primary", expires_at=time.time() + 60)
+    return authorizer, request, token, backend
+
+
+def test_signed_capability_release_binds_authoritative_entry_and_is_one_shot(
+    tmp_path: Path,
+) -> None:
+
+    storage = InMemoryLedgerStorage()
+    storage.set(
+        LedgerEntry(
+            request_id="req-cap",
+            tool="charge",
+            args=[],
+            kwargs={},
+            status="failed",
+            terminal_outcome=TerminalOutcome.BLOCKED.value,
+            effect_id="effect-cap",
+            tenant_id="tenant-a",
+            policy_version="policy-1",
+        )
+    )
+    authorizer, request, token, backend = _signed_release_fixture(tmp_path)
+    ledger_inst = ActionLedger(storage=storage, operator_authorizer=authorizer)
+    entry = ledger_inst.release(
+        "req-cap",
+        verified="not_executed",
+        by="alice",
+        reason="provider confirmed no charge",
+        credential=token,
+    )
+    assert entry.operator_resolution == "not_executed"
+    assert not authorizer.authorize_release(request, credential=token)
+    assert backend.get("operator_release_capability_nonce", request.request_id) is None
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("operator_id", "mallory"),
+        ("request_id", "other"),
+        ("effect_id", "other-effect"),
+        ("tool", "refund"),
+        ("tenant", "tenant-b"),
+        ("verified", "completed"),
+        ("policy_version", "policy-2"),
+    ],
+)
+def test_signed_capability_rejects_every_scope_mismatch(
+    field: str, value: str, tmp_path: Path
+) -> None:
+    from dataclasses import replace
+
+    authorizer, request, token, _ = _signed_release_fixture(tmp_path)
+    assert not authorizer.authorize_release(replace(request, **{field: value}), credential=token)
+
+
+def test_signed_capability_rejects_time_signature_identity_format_and_use_mutations(
+    tmp_path: Path,
+) -> None:
+    import base64
+    import hashlib
+    import hmac
+
+    from mycelium import (
+        InMemoryAtomicStateBackend,
+        OperatorReleaseRequest,
+        SignedOperatorReleaseCapabilityAuthorizer,
+    )
+
+    now = [100.0]
+    backend = InMemoryAtomicStateBackend()
+    auth = SignedOperatorReleaseCapabilityAuthorizer(
+        {"k": "secret"}, issuer="iss", audience="aud", nonce_backend=backend, clock=lambda: now[0]
+    )
+    request = OperatorReleaseRequest("op", "req", "tool", "not_executed", "eff", "ten", "pol")
+    token = auth.mint_capability(request, key_id="k", expires_at=110, not_before=105)
+    assert not auth.authorize_release(request, credential=token)
+    now[0] = 106
+    assert auth.authorize_release(request, credential=token)
+    assert not auth.authorize_release(request, credential=token)
+    for malformed in (None, "", "mcap1.bad", "mcap1.bad.bad", "other.x.y"):
+        assert not auth.authorize_release(request, credential=malformed)
+
+    parts = token.split(".")
+    claims = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4)))
+    for key, value in (
+        ("alg", "none"),
+        ("max_uses", 2),
+        ("token_version", 2),
+        ("schema_version", 2),
+        ("iss", "other"),
+        ("aud", "other"),
+        ("kid", "missing"),
+    ):
+        claims[key] = value
+        encoded = (
+            base64.urlsafe_b64encode(
+                json.dumps(claims, sort_keys=True, separators=(",", ":")).encode()
+            )
+            .decode()
+            .rstrip("=")
+        )
+        signature = hmac.new(b"secret", f"mcap1.{encoded}".encode(), hashlib.sha256).hexdigest()
+        tampered = f"mcap1.{encoded}.{signature}"
+        assert not auth.authorize_release(request, credential=tampered)
+        claims[key] = {
+            "alg": "HS256",
+            "max_uses": 1,
+            "token_version": 1,
+            "schema_version": 1,
+            "iss": "iss",
+            "aud": "aud",
+            "kid": "k",
+        }[key]
+
+
+def test_signed_capability_nonce_is_durable_and_concurrently_single_use(tmp_path: Path) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from mycelium import (
+        FileAtomicStateBackend,
+        OperatorReleaseRequest,
+        SignedOperatorReleaseCapabilityAuthorizer,
+    )
+
+    path = tmp_path / "capability-nonces.json"
+    request = OperatorReleaseRequest("op", "req", "tool", "not_executed", "eff", "ten", "pol")
+    first = SignedOperatorReleaseCapabilityAuthorizer(
+        {"k": "secret"},
+        issuer="iss",
+        audience="aud",
+        nonce_backend=FileAtomicStateBackend(path),
+    )
+    token = first.mint_capability(request, key_id="k", expires_at=time.time() + 60)
+    checkers = [
+        SignedOperatorReleaseCapabilityAuthorizer(
+            {"k": "secret"},
+            issuer="iss",
+            audience="aud",
+            nonce_backend=FileAtomicStateBackend(path),
+        )
+        for _ in range(8)
+    ]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(
+            pool.map(lambda checker: checker.authorize_release(request, credential=token), checkers)
+        )
+    assert sum(results) == 1
+    restarted = SignedOperatorReleaseCapabilityAuthorizer(
+        {"k": "secret"},
+        issuer="iss",
+        audience="aud",
+        nonce_backend=FileAtomicStateBackend(path),
+    )
+    assert not restarted.authorize_release(request, credential=token)
+
+
 def test_postgres_release_not_executed_round_trip() -> None:
     from backend_gates import require_postgres_dsn_or_skip
 
@@ -720,9 +887,7 @@ def test_postgres_release_not_executed_round_trip() -> None:
         )
     )
     ledger_inst = ActionLedger(storage=storage)
-    entry = ledger_inst.release(
-        request_id, verified="not_executed", by="ops", reason="verified"
-    )
+    entry = ledger_inst.release(request_id, verified="not_executed", by="ops", reason="verified")
     assert entry.operator_resolution == "not_executed"
     reloaded = storage.get(request_id)
     assert reloaded is not None
@@ -734,9 +899,7 @@ def _seed_file_ledger(path: Path) -> str:
     storage = FileLedgerStorage(path)
     ledger_inst = ActionLedger(storage=storage)
     claimed = ledger_inst.claim("req-cli", "send_payment", (), {"amount": 10})
-    ledger_inst.attach_external_operation_ref(
-        "req-cli", "pi_cli_1", expected_fence=claimed.fence
-    )
+    ledger_inst.attach_external_operation_ref("req-cli", "pi_cli_1", expected_fence=claimed.fence)
     ledger_inst.mark_blocked(
         "req-cli", error="stale lease; maybe crossed", expected_fence=claimed.fence
     )
@@ -746,9 +909,7 @@ def _seed_file_ledger(path: Path) -> str:
 def _seed_sqlite_ledger(path: Path) -> str:
     storage = SqliteLedgerStorage(path)
     ledger_inst = ActionLedger(storage=storage)
-    claimed = ledger_inst.claim(
-        "req-cli-sqlite", "send_payment", (), {"amount": 10}
-    )
+    claimed = ledger_inst.claim("req-cli-sqlite", "send_payment", (), {"amount": 10})
     ledger_inst.attach_external_operation_ref(
         "req-cli-sqlite", "pi_cli_sqlite", expected_fence=claimed.fence
     )

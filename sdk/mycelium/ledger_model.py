@@ -247,9 +247,7 @@ def _read_ledger_entry_schema_version(data: Mapping[str, Any]) -> int:
     if isinstance(raw, bool):
         raise LedgerSchemaVersionError("ledger schema_version must be an integer >= 1")
     if not isinstance(raw, (int, str)):
-        raise LedgerSchemaVersionError(
-            f"ledger schema_version must be an integer, got {raw!r}"
-        )
+        raise LedgerSchemaVersionError(f"ledger schema_version must be an integer, got {raw!r}")
     try:
         version = int(raw)
     except (TypeError, ValueError) as exc:
@@ -257,9 +255,7 @@ def _read_ledger_entry_schema_version(data: Mapping[str, Any]) -> int:
             f"ledger schema_version must be an integer, got {raw!r}"
         ) from exc
     if version < 1:
-        raise LedgerSchemaVersionError(
-            f"ledger schema_version must be >= 1, got {version}"
-        )
+        raise LedgerSchemaVersionError(f"ledger schema_version must be >= 1, got {version}")
     if version > LEDGER_ENTRY_SCHEMA_VERSION:
         raise LedgerSchemaVersionError(
             f"ledger schema {version} is newer than this runtime supports "
@@ -348,6 +344,9 @@ class LedgerEntry:
     # ``request_id`` remains the physical row key for backward compatibility.
     # Unclassified claim() rows still fall back to request_id.
     effect_id: str | None = None
+    # Trusted release-scope metadata. Added without changing older row shape.
+    tenant_id: str | None = None
+    policy_version: str | None = None
     # Audit trail of host-supplied request ids that resolved onto this
     # canonical effect row via effect_id dedupe (includes request_id itself).
     request_id_aliases: tuple[str, ...] = ()
@@ -443,6 +442,8 @@ class LedgerEntry:
             "effect_phase": self.effect_phase,
             "effect_protocol_required": self.effect_protocol_required,
             "effect_id": self.effect_id,
+            "tenant_id": self.tenant_id,
+            "policy_version": self.policy_version,
             "request_id_aliases": list(self.request_id_aliases),
             "schema_version": self.schema_version,
             "parent_request_id": self.parent_request_id,
@@ -502,6 +503,10 @@ class LedgerEntry:
             # request_id, which is exactly what it would equal for the
             # (default) derived-request_id path anyway.
             effect_id=str(data.get("effect_id") or request_id),
+            tenant_id=(str(data["tenant_id"]) if data.get("tenant_id") is not None else None),
+            policy_version=(
+                str(data["policy_version"]) if data.get("policy_version") is not None else None
+            ),
             request_id_aliases=tuple(
                 str(item)
                 for item in (data.get("request_id_aliases") or (request_id,))

@@ -42,9 +42,11 @@ demos of the `Reconciler` contract, not a separate product promise.
 
 This document is **explicitly out of scope** for:
 
-- **LLM hallucination, prompt injection, or "is the operator *allowed* to
-  release this?"** — see [release authority](../README.md#operator-runbook-your-agent-hard-blocked)
-  for the honesty model (`--by` is an audit stamp, not authentication).
+- **LLM hallucination or prompt injection.** Signed scoped release capabilities
+  add host-issued release authentication, but do not make an agent/tool input
+  an issuer. Static tokens remain a compatibility option; an unconfigured
+  authorizer still has the legacy honesty model (`--by` is an audit stamp).
+  Built-in two-person approval is not implemented yet.
 - **Spend / time budget enforcement** *unless* optional `budget:` is
   configured — the ledger does not meter tokens or USD. With `budget:`,
   host-declared `max_duration` / `max_steps` / `max_tokens` / `max_usd`
@@ -109,6 +111,7 @@ The actors this core defends against (and the ones it assumes are honest):
 | 6 | **Operator with backend access** | Anyone who can write to the ledger backend can release, stamp a resolution, or assert worker death. |
 | 7 | **Provider indexing lag** | A provider (e.g. Gmail sent-log) hasn't made a sent message visible yet — a naive reconciler would say "never sent". |
 | 8 | **Caller tweaking args / keys** | A caller changes a "fluff" argument to re-mint a different transition key and dodge an in-flight lease, starting a second side effect. |
+| 9 | **Capability replay or tampering** | A copied release capability is replayed, altered, issued for another tenant/tool, or presented outside its validity window. Signed capabilities bind these claims and atomically consume a durable nonce. |
 
 Actors **assumed honest** (defended by contract, not cryptography): the
 `Reconciler` you wire in, the operator you put on-call, and the provider your

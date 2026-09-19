@@ -166,14 +166,13 @@ R = TypeVar("R")
 _logger = logging.getLogger(__name__)
 
 
-
-
 # Boundary ordering: a transition may only move forward toward CROSSED.
 _BOUNDARY_RANK: dict[SideEffectBoundary, int] = {
     SideEffectBoundary.NOT_CROSSED: 0,
     SideEffectBoundary.MAYBE_CROSSED: 1,
     SideEffectBoundary.CROSSED: 2,
 }
+
 
 class ActionLedger(LedgerRecoveryMixin):
     """Durable ledger of tool invocations for idempotency and audit."""
@@ -191,6 +190,7 @@ class ActionLedger(LedgerRecoveryMixin):
         audit_emitter: AuditReceiptEmitter | None = None,
         outcome_emitter: OutcomeEmitter | None = None,
         operator_authorizer: OperatorAuthorizer | None = None,
+        tenant_id: str | None = None,
         unclassified_policy: str = UNCLASSIFIED_POLICY_WARN,
         on_args_drift: str = ARGS_DRIFT_SOFT,
         reclaim_requires_death_signal: bool = False,
@@ -215,6 +215,7 @@ class ActionLedger(LedgerRecoveryMixin):
         # Optional host policy for authenticating and authorizing releases.
         # None preserves the documented legacy honesty model.
         self._operator_authorizer = operator_authorizer
+        self._tenant_id = tenant_id
         if unclassified_policy not in (
             UNCLASSIFIED_POLICY_WARN,
             UNCLASSIFIED_POLICY_STRICT,
@@ -370,9 +371,7 @@ class ActionLedger(LedgerRecoveryMixin):
                 tuple(existing.args), dict(existing.kwargs), exclude=exclude
             )
             if alias_redispatch:
-                alias_kwargs = {
-                    key: value for key, value in kwargs.items() if key != "request_id"
-                }
+                alias_kwargs = {key: value for key, value in kwargs.items() if key != "request_id"}
                 alias_fp = _args_drift_fingerprint(args, alias_kwargs, exclude=exclude)
                 stored_alias_kwargs = {
                     key: value
@@ -384,10 +383,7 @@ class ActionLedger(LedgerRecoveryMixin):
                 )
                 if (
                     existing.tool != tool
-                    or (
-                        not alias_redispatch
-                        and _identity_scopes_differ(existing, kwargs, binding)
-                    )
+                    or (not alias_redispatch and _identity_scopes_differ(existing, kwargs, binding))
                     or stored_alias_fp != alias_fp
                 ):
                     self._raise_identity_conflict(
@@ -675,6 +671,8 @@ class ActionLedger(LedgerRecoveryMixin):
             handoff_id=str(handoff_raw) if handoff_raw is not None else None,
             effect_protocol_required=binding is not None,
             effect_id=effect_id,
+            tenant_id=self._tenant_id,
+            policy_version=binding.policy_version if binding is not None else None,
         )
 
     def claim(
@@ -1202,11 +1200,7 @@ class ActionLedger(LedgerRecoveryMixin):
                 _provider_idempotency_key=(
                     explicit_provider_key
                     if explicit_provider_key is not None
-                    else (
-                        existing.provider_idempotency_key
-                        if existing is not None
-                        else None
-                    )
+                    else (existing.provider_idempotency_key if existing is not None else None)
                 ),
                 _effect_id=effect_id,
             )
@@ -1493,11 +1487,7 @@ class ActionLedger(LedgerRecoveryMixin):
                 _provider_idempotency_key=(
                     explicit_provider_key
                     if explicit_provider_key is not None
-                    else (
-                        existing.provider_idempotency_key
-                        if existing is not None
-                        else None
-                    )
+                    else (existing.provider_idempotency_key if existing is not None else None)
                 ),
                 _effect_id=effect_id,
             )
@@ -1685,9 +1675,7 @@ class ActionLedger(LedgerRecoveryMixin):
             expected_owner=_expected_owner,
             expected_fence=fence,
             expected_effect_state=(
-                EffectState.ATTEMPTING.value
-                if existing.effect_protocol_required
-                else None
+                EffectState.ATTEMPTING.value if existing.effect_protocol_required else None
             ),
         ):
             current = self._get_entry(request_id)
@@ -2002,8 +1990,7 @@ class ActionLedger(LedgerRecoveryMixin):
             raise LedgerError(f"Advancing request {request_id!r} requires the claim fence")
         if existing.effect_protocol_required and not _has_allowed_attempting_decision(existing):
             raise LedgerOutcomeAlreadySetError(
-                f"Cannot advance boundary for {request_id!r}: "
-                "no durable ATTEMPTING decision"
+                f"Cannot advance boundary for {request_id!r}: no durable ATTEMPTING decision"
             )
         current = SideEffectBoundary(existing.side_effect_boundary)
         entry = (
@@ -2167,8 +2154,6 @@ class ActionLedger(LedgerRecoveryMixin):
         return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
-
-
 def _mark_ledgered(
     wrapper: Callable[..., Any],
     ledger: ActionLedger,
@@ -2186,6 +2171,7 @@ def ledger(
     *,
     outcome_emitter: OutcomeEmitter | None = None,
     operator_authorizer: OperatorAuthorizer | None = None,
+    tenant_id: str | None = None,
     lease_ttl: float | None = None,
     lease_renew_interval: float | None = None,
     poll_interval: float | None = None,
@@ -2225,6 +2211,7 @@ def ledger(
         audit_emitter=audit_emitter,
         outcome_emitter=outcome_emitter,
         operator_authorizer=operator_authorizer,
+        tenant_id=tenant_id,
         unclassified_policy=unclassified_policy,
         on_args_drift=on_args_drift,
         request_identity_policy=request_identity_policy,
@@ -2259,6 +2246,7 @@ def ledger_sync(
     *,
     outcome_emitter: OutcomeEmitter | None = None,
     operator_authorizer: OperatorAuthorizer | None = None,
+    tenant_id: str | None = None,
     lease_ttl: float | None = None,
     lease_renew_interval: float | None = None,
     poll_interval: float | None = None,
@@ -2298,6 +2286,7 @@ def ledger_sync(
         audit_emitter=audit_emitter,
         outcome_emitter=outcome_emitter,
         operator_authorizer=operator_authorizer,
+        tenant_id=tenant_id,
         unclassified_policy=unclassified_policy,
         on_args_drift=on_args_drift,
         request_identity_policy=request_identity_policy,

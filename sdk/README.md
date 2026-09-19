@@ -1515,6 +1515,19 @@ interface is pluggable so an application can replace static tokens with SSO or
 another identity service later. This does not protect direct backend writes;
 keep ledger write credentials away from operator accounts.
 
+For production operator releases, use `SignedOperatorReleaseCapabilityAuthorizer`.
+Its `mcap1` capability is an HMAC-SHA256 signed, versioned envelope containing
+the operator, request and effect identities, tool, tenant, resolution,
+policy-version, issuer, audience, key id, `nbf`, `exp`, unique nonce, and
+`max_uses: 1`. Mint only from a trusted host control plane with
+`mint_capability()`; it is not a CLI or agent-input operation. Verification is
+fail-closed and consumes the nonce with an atomic create after all claims have
+validated. Configure a durable `FileAtomicStateBackend`, Redis, or Postgres
+backend for multi-process use; memory is for tests only. A consumed nonce is
+not restored if the subsequent ledger CAS/release fails, so retrying the same
+capability is refused and the host must mint a new capability after diagnosing
+the release failure.
+
 > **Warning: backend access = release authority.** Anyone who can write to the ledger backend can release transitions — `--by` is an audit stamp, not authentication. Protect Redis/Postgres/file access like you protect production credentials, and prefer signed audit receipts (`audit_receipt:`) so releases are tamper-evident.
 
 **4. (When `reclaim_requires_death_signal: true`) Assert worker death:**

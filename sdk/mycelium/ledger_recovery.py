@@ -58,6 +58,7 @@ _STUCK_OUTCOMES = frozenset(
     }
 )
 
+
 def _format_heartbeat_age(entry: LedgerEntry, *, now: float) -> str:
     """Human-readable age of the last heartbeat (or started_at fallback)."""
     ref = entry.last_heartbeat_at if entry.last_heartbeat_at is not None else entry.started_at
@@ -356,6 +357,9 @@ class LedgerRecoveryMixin:
                 request_id=request_id,
                 tool=existing.tool,
                 verified=verified,
+                effect_id=existing.effect_id,
+                tenant=existing.tenant_id,
+                policy_version=existing.policy_version,
             )
             try:
                 allowed = self._operator_authorizer.authorize_release(
@@ -411,9 +415,7 @@ class LedgerRecoveryMixin:
                     "Use mark_worker_dead() first, or wait for the grace window."
                 )
         if verified == OPERATOR_RESOLUTION_COMPLETED:
-            if existing.effect_protocol_required and not _has_allowed_attempting_decision(
-                existing
-            ):
+            if existing.effect_protocol_required and not _has_allowed_attempting_decision(existing):
                 raise LedgerReleaseRefusedError(
                     f"Cannot release request {request_id!r} as completed: "
                     "no allowed durable ATTEMPTING decision"
