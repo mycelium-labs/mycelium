@@ -3,6 +3,18 @@
 Release policy: **batch; calm over velocity.** Prefer one coherent cut over many
 small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEASE.md).
 
+## Unreleased
+
+### Added
+
+- Add a package reproducibility check (`.github/scripts/check-reproducible-build.py`,
+  CI job `reproducible-build`). It builds the wheel and sdist twice from the same
+  commit in clean source exports and fresh virtual environments, using the
+  toolchain pinned in `.github/reproducible-build-requirements.txt`, and fails
+  with a per-member report when contents or metadata differ. Expected
+  nondeterministic fields are normalized and documented in
+  `sdk/docs/RELEASE.md`. It needs no publishing rights or credentials.
+
 ## 1.38.3 (2026-09-10)
 
 ### Added

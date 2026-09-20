@@ -105,7 +105,8 @@ the PR description — do not skip silently.
 
 - [ ] `pytest tests/` passes locally from `sdk/` (full suite).
 - [ ] `ruff check mycelium tests` clean from `sdk/`.
-- [ ] CI green on the release PR (3.10–3.13).
+- [ ] CI green on the release PR (3.10–3.13), including the `reproducible-build`
+      job (see [Reproducible builds](#reproducible-builds)).
 - [ ] New guarantees mapped to tests (or explicitly “docs-only / no new
       guarantee” in CHANGELOG).
 - [ ] Hotfix: repro + regression test included.
@@ -195,6 +196,66 @@ To generate and verify the CycloneDX SBOM locally:
    ```
 
 ---
+
+## Reproducible builds
+
+CI builds the wheel and sdist **twice from the same commit** and fails if the two
+builds differ. Users and downstream packagers can then trust that the files
+published to PyPI contain exactly what the tagged commit says they contain.
+
+The check ([`check-reproducible-build.py`](../../.github/scripts/check-reproducible-build.py))
+runs each build in its own clean source export and its own fresh virtual
+environment. Both install only the toolchain pinned in
+[`reproducible-build-requirements.txt`](../../.github/reproducible-build-requirements.txt),
+because `sdk/pyproject.toml` asks for an unpinned `hatchling`. It needs no
+publishing rights or credentials, only read access to a package index.
+
+Run it locally from the repository root (it builds the last commit, not
+uncommitted changes):
+
+```bash
+python .github/scripts/check-reproducible-build.py
+python .github/scripts/check-reproducible-build.py --commit HEAD~1 --keep-artifacts /tmp/repro
+python .github/scripts/check-reproducible-build.py --require-identical-bytes
+```
+
+**What is compared.** For both the wheel and the sdist: every member's path,
+type, content, executable bit, and symlink target, plus every metadata header
+(`METADATA`, `WHEEL`, `PKG-INFO`).
+
+**What is normalized (documented, expected).** These differences do not change
+what pip installs, so they never fail the check. The report lists any that
+actually occurred:
+
+| Field | Why it is ignored |
+|-------|-------------------|
+| Member modification times (zip and tar) | Clock values, not content |
+| Tar `uid`, `gid`, `uname`, `gname` | Who ran the build |
+| Member order inside the archive | Same files, different listing order |
+| Sdist gzip header (mtime, OS byte) | Compression framing |
+| Zip compression level, extra fields, creator OS, permission bits other than the executable bit | Archive-writer framing |
+
+`--require-identical-bytes` also fails when the archives differ byte-for-byte,
+even if every member matches.
+
+**What is deliberately varied** so the check can find real problems: the
+absolute source directory, the temporary and virtual-environment locations, `TZ`,
+and `PYTHONHASHSEED` (left random, so set/dict ordering bugs surface).
+`SOURCE_DATE_EPOCH` is set to the commit time for both builds.
+
+**When it fails.** The report names each member that differs, shows a diff, and
+explains the usual cause: a timestamp or random id written into a file, an
+absolute build path, an unordered collection in generated metadata, or a
+build-machine-dependent file mode. The CI job uploads both builds
+(`reproducible-build-diff`) so they can be compared with a tool such as
+`diffoscope`.
+
+**Refreshing the toolchain pins.** In a scratch virtual environment run
+`pip install build hatchling` and `pip freeze`, copy the new versions into
+`.github/reproducible-build-requirements.txt`, and run the check. Bumping is
+safe: the check compares two builds made with the same pins, never against an
+older release. A build requirement added to `[build-system]` without a pin makes
+the check fail before it builds.
 
 ## How to cut a release (mechanics)
 
