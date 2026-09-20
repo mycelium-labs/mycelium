@@ -771,6 +771,10 @@ Runnable examples (fakes only, no provider credentials):
 See [examples/failure_cases/](examples/failure_cases/)
 (`python examples/failure_cases/run_all.py` from `sdk/`).
 
+**All bundled examples:** [examples/README.md](examples/README.md) lists the
+curated set that CI smoke-tests, what each needs, and which paths are skipped
+on purpose.
+
 ## What `@ledger` / `ledger_sync` do
 
 - Record every tool invocation in a durable `ActionLedger`

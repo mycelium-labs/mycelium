@@ -35,7 +35,7 @@ def main() -> None:
 
     print("=== AF-008 scope guard (run allowlist freeze) ===\n")
     with execution_scope(TransitionScope(thread_id="t", run_id="demo-1", node="tools")):
-        print("1) fetch_customer within frozen grant → ok")
+        print("1) fetch_customer within frozen grant -> ok")
         print(f"   {fetch_customer(customer_id='c1')!r}")
 
         print("\n2) Host widens ToolRegistry mid-run (handoff mistake)")

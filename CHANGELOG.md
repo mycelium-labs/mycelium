@@ -3,6 +3,22 @@
 Release policy: **batch; calm over velocity.** Prefer one coherent cut over many
 small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEASE.md).
 
+## Unreleased
+
+### Added
+
+- Add a CI smoke suite for the bundled SDK examples
+  (`sdk/tests/test_examples_smoke.py`). It runs a curated, credential-free
+  subset offline with non-loopback network access blocked, validates example
+  configuration against the current schema, and fails when an example under
+  `sdk/examples/` is not classified. The curated list and its intentional skips
+  are documented in `sdk/examples/README.md`.
+
+### Fixed
+
+- Replace non-ASCII arrows in the output of three bundled examples so they no
+  longer crash with `UnicodeEncodeError` on Windows consoles.
+
 ## 1.38.4 (2026-09-21)
 
 ### Added
