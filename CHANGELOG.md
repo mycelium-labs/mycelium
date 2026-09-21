@@ -3,7 +3,7 @@
 Release policy: **batch; calm over velocity.** Prefer one coherent cut over many
 small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEASE.md).
 
-## Unreleased
+## 1.38.4 (2026-09-21)
 
 ### Added
 
