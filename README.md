@@ -168,3 +168,7 @@ configuration, and manual APIs.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Maintainer
+
+Mycelium is maintained by [Nandana Dileep](https://github.com/nandanadileep).
