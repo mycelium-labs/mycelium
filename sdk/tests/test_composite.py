@@ -443,7 +443,7 @@ def test_stale_worker_cannot_admit_after_parent_reclaim(tmp_path, monkeypatch) -
 
     def pause_for_reclaim() -> None:
         started.set()
-        time.sleep(0.08)
+        time.sleep(0.3)
 
     register_composite_helper(pause_for_reclaim)
     original_start_renewal = CompositeInvocation._start_renewal
@@ -466,7 +466,7 @@ def test_stale_worker_cannot_admit_after_parent_reclaim(tmp_path, monkeypatch) -
     worker.start()
     assert started.wait(timeout=2)
     monkeypatch.setattr(CompositeInvocation, "_start_renewal", original_start_renewal)
-    time.sleep(0.06)
+    time.sleep(0.15)
     assert publish(operation_id="reclaim") == "ok"
     worker.join(timeout=2)
     assert not worker.is_alive()

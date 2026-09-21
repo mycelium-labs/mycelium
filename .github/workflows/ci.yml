@@ -71,16 +71,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
-      - name: Build wheel and sdist
-        run: |
-          pip install build
-          python -m build sdk
+      - name: Install build tools
+        run: pip install build hatchling
+
+      - name: Verify package build reproducibility
+        run: python .github/scripts/check-package-reproducibility.py --outdir sdk/dist
 
       - name: Inspect distribution skill payloads
         run: >-
@@ -168,9 +171,9 @@ jobs:
           fi
           pip-audit --desc on "${IGNORE_ARGS[@]}"
 
-      - name: Documentation and provenance tests
+      - name: Documentation, provenance, and packaging tests
         working-directory: sdk
-        run: pytest tests/test_architecture_provenance.py tests/test_doc_commands.py -q
+        run: pytest tests/test_architecture_provenance.py tests/test_doc_commands.py tests/test_package_reproducibility.py -q
 
   sidecar-conformance:
     runs-on: ubuntu-latest
@@ -315,6 +318,7 @@ jobs:
           pytest tests/ -q
           --ignore=tests/test_architecture_provenance.py
           --ignore=tests/test_doc_commands.py
+          --ignore=tests/test_package_reproducibility.py
 
   test:
     runs-on: ubuntu-latest
@@ -371,6 +375,7 @@ jobs:
           pytest tests/ -q
           --ignore=tests/test_architecture_provenance.py
           --ignore=tests/test_doc_commands.py
+          --ignore=tests/test_package_reproducibility.py
           --cov=mycelium --cov-report=term-missing
 
       - name: Output coverage report to job summary
