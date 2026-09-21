@@ -13,7 +13,7 @@ import hmac
 import json
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -85,6 +85,100 @@ class StaticTokenOperatorAuthorizer:
         return hmac.compare_digest(expected, credential)
 
 
+class DualControlOperatorAuthorizer:
+    """Require two distinct authenticated operators for one release.
+
+    Call :meth:`approve_release` with the first operator's credential, then
+    pass the second operator's credential to ``authorize_release`` through the
+    normal ledger release path.  The approval is keyed by every release field
+    except operator identity and is stored in the supplied atomic backend.
+    """
+
+    def __init__(
+        self,
+        delegate: OperatorAuthorizer,
+        *,
+        approval_backend: AtomicStateBackend | None = None,
+        approval_namespace: str = "operator_release_dual_control",
+        approval_ttl: float = 900.0,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        if approval_ttl <= 0:
+            raise ValueError("approval_ttl must be positive")
+        if not approval_namespace:
+            raise ValueError("approval_namespace must not be empty")
+        self._delegate = delegate
+        self._approvals = (
+            approval_backend
+            if approval_backend is not None
+            else InMemoryAtomicStateBackend()
+        )
+        self._namespace = approval_namespace
+        self._approval_ttl = approval_ttl
+        self._clock = clock
+
+    def approve_release(
+        self,
+        request: OperatorReleaseRequest,
+        *,
+        credential: str | None,
+    ) -> bool:
+        """Record the first approval after authenticating its operator."""
+        try:
+            if not self._delegate.authorize_release(request, credential=credential):
+                return False
+            return self._approvals.create(
+                self._namespace,
+                _approval_key(request),
+                {
+                    "operator_id": request.operator_id,
+                    "approved_at": self._clock(),
+                },
+            )
+        except Exception:
+            return False
+
+    def authorize_release(
+        self,
+        request: OperatorReleaseRequest,
+        *,
+        credential: str | None,
+    ) -> bool:
+        """Consume a valid second approval from a different operator."""
+        try:
+            key = _approval_key(request)
+            record = self._approvals.get(self._namespace, key)
+            if record is None:
+                return False
+            approval = record.value
+            first_operator = approval.get("operator_id")
+            approved_at = approval.get("approved_at")
+            now = self._clock()
+            if (
+                not isinstance(first_operator, str)
+                or not first_operator
+                or not isinstance(approved_at, (int, float))
+                or now >= float(approved_at) + self._approval_ttl
+            ):
+                self._approvals.delete(
+                    self._namespace,
+                    key,
+                    expected_version=record.version,
+                )
+                return False
+            if first_operator == request.operator_id:
+                return False
+            if not self._delegate.authorize_release(request, credential=credential):
+                return False
+            return self._approvals.delete(
+                self._namespace,
+                key,
+                expected_version=record.version,
+            )
+        except Exception:
+            return False
+
+
 class SignedOperatorReleaseCapabilityAuthorizer:
     """Verify short-lived, single-use, scoped signed release capabilities.
 
@@ -102,7 +196,7 @@ class SignedOperatorReleaseCapabilityAuthorizer:
         audience: str,
         nonce_backend: AtomicStateBackend | None = None,
         nonce_namespace: str = "operator_release_capability_nonce",
-        clock: callable = time.time,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         if not keys or not issuer or not audience:
             raise ValueError("keys, issuer, and audience are required")
@@ -277,7 +371,25 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode().rstrip("=")
 
 
+def _approval_key(request: OperatorReleaseRequest) -> str:
+    """Return a stable key for the exact release, excluding approver identity."""
+    payload = json.dumps(
+        {
+            "request_id": request.request_id,
+            "tool": request.tool,
+            "verified": request.verified,
+            "effect_id": request.effect_id,
+            "tenant": request.tenant,
+            "policy_version": request.policy_version,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
 __all__ = [
+    "DualControlOperatorAuthorizer",
     "OperatorAuthorizer",
     "OperatorReleaseRequest",
     "StaticTokenOperatorAuthorizer",

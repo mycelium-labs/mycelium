@@ -4,9 +4,9 @@ Tool permission is not object authorization. A configured destructive tool
 may claim, execute, or cross a side-effect boundary only when the host has
 minted an exact grant: this operation, this canonical object, this scope
 when bound, before expiry, for at most ``max_uses``. The model cannot
-create, widen, renew, or approve a grant. Dual control is intentionally
-not implemented — two-person approval belongs in the host workflow that
-calls :func:`issue_destructive_grant`.
+create, widen, renew, or approve a grant. Two-person approval before grant
+issuance remains host-owned; operator-release dual control is provided by
+``DualControlOperatorAuthorizer``.
 """
 
 from __future__ import annotations

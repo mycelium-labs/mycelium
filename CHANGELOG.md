@@ -14,6 +14,10 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
   with a per-member report when contents or metadata differ. Expected
   nondeterministic fields are normalized and documented in
   `sdk/docs/RELEASE.md`. It needs no publishing rights or credentials.
+- Add durable dual-control operator authorization. A first authenticated
+  operator approval is bound to the exact release scope and expires; a second,
+  distinct authenticated operator must authorize the same release before the
+  ledger release proceeds.
 
 ## 1.38.3 (2026-09-10)
 

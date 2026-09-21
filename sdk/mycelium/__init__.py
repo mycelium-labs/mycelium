@@ -183,6 +183,10 @@ _LAZY_IMPORTS = {
     "OUTCOME_ON_FAILURE_WARN": ("mycelium.outcome_emit", "OUTCOME_ON_FAILURE_WARN"),
     "OpenTelemetryOutcomeStorage": ("mycelium.outcome_export", "OpenTelemetryOutcomeStorage"),
     "OperatorAuthorizer": ("mycelium.operator_auth", "OperatorAuthorizer"),
+    "DualControlOperatorAuthorizer": (
+        "mycelium.operator_auth",
+        "DualControlOperatorAuthorizer",
+    ),
     "OperatorReleaseRequest": ("mycelium.operator_auth", "OperatorReleaseRequest"),
     "OutcomeEmitError": ("mycelium.outcome_emit", "OutcomeEmitError"),
     "OutcomeEmitter": ("mycelium.outcome_emit", "OutcomeEmitter"),
@@ -507,6 +511,7 @@ __all__ = [
     "plan_ledger_migration",
     "upgrade_ledger_entry",
     "OperatorAuthorizer",
+    "DualControlOperatorAuthorizer",
     "OperatorReleaseRequest",
     "StaticTokenOperatorAuthorizer",
     "SignedOperatorReleaseCapabilityAuthorizer",

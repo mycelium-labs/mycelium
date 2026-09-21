@@ -42,6 +42,7 @@ from mycelium.ledger_migrations import (
     upgrade_ledger_entry,
 )
 from mycelium.operator_auth import (
+    DualControlOperatorAuthorizer,
     OperatorAuthorizer,
     OperatorReleaseRequest,
     SignedOperatorReleaseCapabilityAuthorizer,
@@ -149,6 +150,7 @@ __all__ = [
     "MissingRequestIdentityError",
     "NamespacedAtomicStorage",
     "OperatorAuthorizer",
+    "DualControlOperatorAuthorizer",
     "OperatorReleaseRequest",
     "SignedOperatorReleaseCapabilityAuthorizer",
     "PostgresAtomicStateBackend",

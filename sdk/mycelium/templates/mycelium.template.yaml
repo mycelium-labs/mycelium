@@ -363,9 +363,9 @@ loop_guard:
 # destructive_confirm  (AF-011 — object grant at the tool boundary)
 # Tool permission is not object authorization. A listed destructive tool
 # may execute only with a host-issued grant for this exact operation on
-# this exact canonical object. The model cannot mint grants. Dual control
-# is not implemented — enforce two-person approval in the host workflow
-# before issue_destructive_grant. A grant authorizes an attempt, not the
+# this exact canonical object. The model cannot mint grants. Enforce
+# two-person approval before issue_destructive_grant in the host workflow,
+# or use DualControlOperatorAuthorizer for operator release. A grant authorizes an attempt, not the
 # provider's final outcome. For keyed_mutate, reuse the same request_id
 # as the provider idempotency key when the tool declares a mapping.
 # ---------------------------------------------------------------------------

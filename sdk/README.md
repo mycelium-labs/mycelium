@@ -1528,6 +1528,15 @@ not restored if the subsequent ledger CAS/release fails, so retrying the same
 capability is refused and the host must mint a new capability after diagnosing
 the release failure.
 
+For destructive recovery that requires separation of duties, wrap the
+authorizer with `DualControlOperatorAuthorizer`. The trusted host records the
+first approval with `approve_release()` using operator A's credential. The
+normal `ledger.release()` call then requires operator B's credential for the
+same request, effect, tenant, resolution, and policy version. The approval is
+durable, expires after `approval_ttl`, rejects self-approval, and is consumed
+with an atomic compare-and-delete. Use a durable `approval_backend` in
+multi-process deployments.
+
 > **Warning: backend access = release authority.** Anyone who can write to the ledger backend can release transitions — `--by` is an audit stamp, not authentication. Protect Redis/Postgres/file access like you protect production credentials, and prefer signed audit receipts (`audit_receipt:`) so releases are tamper-evident.
 
 **4. (When `reclaim_requires_death_signal: true`) Assert worker death:**
@@ -1873,9 +1882,9 @@ tool — refund, delete, cancel, settle, revoke, terminate, purge,
 overwrite — may claim or execute only when the host has granted **this
 exact operation** on **this exact canonical object**, in this scope/run
 when bound, before expiry, for at most `max_uses`. The model cannot
-create, widen, renew, or approve a grant. Dual control is intentionally
-not implemented; teams that need two-person approval must enforce it in
-the host workflow **before** grant issuance.
+create, widen, renew, or approve a grant. Use
+`DualControlOperatorAuthorizer` when the host requires two distinct
+authenticated operators before releasing a blocked destructive action.
 
 ```yaml
 destructive_confirm:
