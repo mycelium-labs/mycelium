@@ -1537,6 +1537,13 @@ durable, expires after `approval_ttl`, rejects self-approval, and is consumed
 with an atomic compare-and-delete. Use a durable `approval_backend` in
 multi-process deployments.
 
+Tool and retrieval output should remain data, even when it contains imperative
+language. Mark external content explicitly with
+`mark_untrusted_tool_output(value, source=...)`; marked values carry the
+`untrusted_data` label and are rejected if passed into operator-release claims.
+This is a narrow boundary guard; full context taint propagation remains an
+integration concern.
+
 > **Warning: backend access = release authority.** Anyone who can write to the ledger backend can release transitions — `--by` is an audit stamp, not authentication. Protect Redis/Postgres/file access like you protect production credentials, and prefer signed audit receipts (`audit_receipt:`) so releases are tamper-evident.
 
 **4. (When `reclaim_requires_death_signal: true`) Assert worker death:**

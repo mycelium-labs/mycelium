@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from mycelium.storage.atomic_state import AtomicStateBackend, InMemoryAtomicStateBackend
+from mycelium.trust import contains_untrusted_tool_output
 
 CAPABILITY_TOKEN_VERSION = 1
 CAPABILITY_SCHEMA_VERSION = 1
@@ -36,6 +37,14 @@ class OperatorReleaseRequest:
     effect_id: str | None = None
     tenant: str | None = None
     policy_version: str | None = None
+
+    def __post_init__(self) -> None:
+        for field_name, value in self.__dict__.items():
+            if contains_untrusted_tool_output(value):
+                raise TypeError(
+                    f"operator release field {field_name!r} cannot contain "
+                    "untrusted tool output"
+                )
 
 
 @runtime_checkable

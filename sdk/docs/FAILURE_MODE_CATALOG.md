@@ -201,8 +201,9 @@ policy.
 **What users hit:** poisoned tool returns or RAG chunks; “ignore previous
 instructions” payloads; instruction/data boundary collapse in context.
 
-**Why not core yet:** revisit at the **MCP gateway**, where taint isolation is
-mechanically enforceable. Complementary to dedicated prompt-injection products.
+**Current slice:** tool output can be wrapped as `untrusted_data`, and marked
+content is rejected when used as operator-release authorization claims. The
+broader MCP context and instruction pipeline still needs taint propagation.
 
 ---
 

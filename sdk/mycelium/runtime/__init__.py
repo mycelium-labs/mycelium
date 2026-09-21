@@ -118,6 +118,12 @@ from mycelium.transition_resolution import (
     repair_transition_fields,
     transition_needs_repair,
 )
+from mycelium.trust import (
+    UNTRUSTED_DATA,
+    UntrustedToolOutput,
+    contains_untrusted_tool_output,
+    mark_untrusted_tool_output,
+)
 
 __all__ = [
     "ActionLedger",
@@ -151,6 +157,10 @@ __all__ = [
     "NamespacedAtomicStorage",
     "OperatorAuthorizer",
     "DualControlOperatorAuthorizer",
+    "UNTRUSTED_DATA",
+    "UntrustedToolOutput",
+    "contains_untrusted_tool_output",
+    "mark_untrusted_tool_output",
     "OperatorReleaseRequest",
     "SignedOperatorReleaseCapabilityAuthorizer",
     "PostgresAtomicStateBackend",
