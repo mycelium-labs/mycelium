@@ -476,7 +476,7 @@ def main() -> int:
 
     print()
     print("Proof: same tool_call never double-charges across redispatch or crash.")
-    print("Copy mycelium.example.yaml → mycelium.yaml; keep Redis + signing_key in prod.")
+    print("Copy mycelium.example.yaml -> mycelium.yaml; keep Redis + signing_key in prod.")
     return 0
 
 

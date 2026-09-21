@@ -115,6 +115,10 @@ Additional expectations depend on what changed:
   promise, assumption, unsupported boundary, or residual risk changes.
 - **Documentation:** verify commands, links, configuration keys, and examples
   against the current implementation.
+- **Bundled examples:** a file added under `sdk/examples/` must be classified in
+  the manifest in `sdk/tests/test_examples_smoke.py` and listed in
+  `sdk/examples/README.md`. Run `pytest tests/test_examples_smoke.py -rs` from
+  `sdk/`.
 
 The relevant evidence references are:
 

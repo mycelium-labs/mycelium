@@ -47,7 +47,7 @@ def main() -> None:
         contract.mark("send_email", "success")
         contract.mark("write_pr", "failed")
 
-        print("3) Terminal again — optional post_slack still pending → warn + allow")
+        print("3) Terminal again — optional post_slack still pending -> warn + allow")
         result = contract.complete_run()
         assert result is not None
         print(f"   verdict={result.verdict} pending_optional={result.pending_optional}")
