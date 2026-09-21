@@ -21,6 +21,7 @@ _SCENARIO_LABELS = {
     "destructive-confirm": "Destructive-confirm",
     "authority-window": "Authority-window",
     "use-time-currency": "Use-time-currency",
+    "trust-boundary": "Trust boundary",
 }
 
 

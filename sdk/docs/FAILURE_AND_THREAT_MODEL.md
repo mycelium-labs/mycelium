@@ -46,7 +46,8 @@ This document is **explicitly out of scope** for:
   add host-issued release authentication, but do not make an agent/tool input
   an issuer. Static tokens remain a compatibility option; an unconfigured
   authorizer still has the legacy honesty model (`--by` is an audit stamp).
-  Built-in two-person approval is not implemented yet.
+  Built-in two-person approval is available through
+  `DualControlOperatorAuthorizer`.
 - **Spend / time budget enforcement** *unless* optional `budget:` is
   configured — the ledger does not meter tokens or USD. With `budget:`,
   host-declared `max_duration` / `max_steps` / `max_tokens` / `max_usd`
@@ -263,7 +264,8 @@ section; the tests are concrete `file::test_name` entries.
     destructive tool may execute only with a host-issued grant for this
     exact operation and canonical object, before expiry, for at most
     `max_uses`. Tool permission is not object authorization. The model
-    cannot mint or widen grants. Dual control is not implemented.
+    cannot mint or widen grants. `DualControlOperatorAuthorizer` can require
+    two distinct authenticated operators before release.
     Omitted `destructive_confirm:` keeps existing behavior.
     *Where:* [Destructive confirm (AF-011)](../README.md#destructive-confirm-af-011).
 
@@ -302,7 +304,7 @@ than the code makes.
   `StaticTokenOperatorAuthorizer`), but the raw operator CLI and direct backend
   writes remain the honesty model unless the host restricts them. Short-lived
   signed release capabilities, built-in scoped permissions, and two-person
-  approval are not implemented. See the runbook's
+  approval are available through the operator authorization layer. See the runbook's
   [warning](../README.md#operator-runbook-your-agent-hard-blocked). *(Not a
   guarantee — see `test_operator_release.py` for the one-shot/fail-closed
   semantics, and `test_audit_receipt.py::test_tampered_receipt_fails_verification`

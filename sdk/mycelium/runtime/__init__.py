@@ -42,6 +42,7 @@ from mycelium.ledger_migrations import (
     upgrade_ledger_entry,
 )
 from mycelium.operator_auth import (
+    DualControlOperatorAuthorizer,
     OperatorAuthorizer,
     OperatorReleaseRequest,
     SignedOperatorReleaseCapabilityAuthorizer,
@@ -117,6 +118,12 @@ from mycelium.transition_resolution import (
     repair_transition_fields,
     transition_needs_repair,
 )
+from mycelium.trust import (
+    UNTRUSTED_DATA,
+    UntrustedToolOutput,
+    contains_untrusted_tool_output,
+    mark_untrusted_tool_output,
+)
 
 __all__ = [
     "ActionLedger",
@@ -149,6 +156,11 @@ __all__ = [
     "MissingRequestIdentityError",
     "NamespacedAtomicStorage",
     "OperatorAuthorizer",
+    "DualControlOperatorAuthorizer",
+    "UNTRUSTED_DATA",
+    "UntrustedToolOutput",
+    "contains_untrusted_tool_output",
+    "mark_untrusted_tool_output",
     "OperatorReleaseRequest",
     "SignedOperatorReleaseCapabilityAuthorizer",
     "PostgresAtomicStateBackend",

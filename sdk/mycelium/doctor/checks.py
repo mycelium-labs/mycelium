@@ -1912,7 +1912,8 @@ def check_destructive_confirm(ctx: DoctorContext) -> Iterable[DoctorCheck]:
             "Configuration cannot show that call sites call "
             "issue_destructive_grant, that a human approved the grant, "
             "that the provider honors idempotency keys, or that an "
-            "external side effect occurred. Dual control is not implemented."
+            "external side effect occurred. Configure host-side approval before "
+            "grant issuance or use DualControlOperatorAuthorizer for operator release."
         ),
         evidence=EVIDENCE_NOT_VERIFIABLE,
         blocking=False,

@@ -201,8 +201,9 @@ policy.
 **What users hit:** poisoned tool returns or RAG chunks; “ignore previous
 instructions” payloads; instruction/data boundary collapse in context.
 
-**Why not core yet:** revisit at the **MCP gateway**, where taint isolation is
-mechanically enforceable. Complementary to dedicated prompt-injection products.
+**Current slice:** tool output can be wrapped as `untrusted_data`, and marked
+content is rejected when used as operator-release authorization claims. The
+broader MCP context and instruction pipeline still needs taint propagation.
 
 ---
 
@@ -251,8 +252,9 @@ runs after ordinary argument validation and before ledger claim, lease,
 tool body, or any side effect. Missing, expired, exhausted, mismatched,
 or unverifiable grants raise `DestructiveGrantError` and do not claim.
 Retries with the same stable `request_id` reuse the ledger result and do
-not consume a second use. Dual control is intentionally not implemented
-— two-person approval belongs in the host workflow that issues the grant.
+not consume a second use. Two-person approval before grant issuance remains
+host-owned; operator-release dual control is provided by
+`DualControlOperatorAuthorizer`.
 A grant authorizes an attempt; it does not prove the provider outcome.
 Omitted `destructive_confirm:` keeps existing behavior.
 

@@ -27,6 +27,10 @@ SCENARIO_ORDER = (
     "effect-protocol-proof",
 )
 
+# Security-focused boundary checks are opt-in until they become part of the
+# stable default verification contract.
+OPTIONAL_SCENARIOS = ("trust-boundary",)
+
 ScenarioFn = Callable[["ScenarioContext"], "VerificationEvidence"]
 
 _REGISTRY: dict[str, ScenarioFn] = {}
@@ -59,7 +63,7 @@ def get_scenario(name: str) -> ScenarioFn | None:
 
 
 def known_scenarios() -> tuple[str, ...]:
-    return SCENARIO_ORDER
+    return SCENARIO_ORDER + OPTIONAL_SCENARIOS
 
 
 def resolve_scenario_names(selected: list[str]) -> list[str]:
@@ -70,7 +74,7 @@ def resolve_scenario_names(selected: list[str]) -> list[str]:
                 if item not in names:
                     names.append(item)
             continue
-        if raw not in SCENARIO_ORDER:
+        if raw not in SCENARIO_ORDER + OPTIONAL_SCENARIOS:
             raise ValueError(
                 f"unknown scenario {raw!r}; choose from {list(SCENARIO_ORDER)} or 'all'"
             )
@@ -93,12 +97,14 @@ def ensure_builtin_scenarios_registered() -> None:
         simulation,
         state_machine_exhaustive,
         storage_outage,
+        trust_boundary,
         use_time_currency,
         worker_crash,
     )
 
 
 __all__ = [
+    "OPTIONAL_SCENARIOS",
     "SCENARIO_ORDER",
     "ScenarioContext",
     "ensure_builtin_scenarios_registered",
