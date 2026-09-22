@@ -126,6 +126,38 @@ The relevant evidence references are:
 - [Failure-mode catalog](sdk/docs/FAILURE_MODE_CATALOG.md)
 - [Configuration reference](sdk/docs/CONFIG_REFERENCE.md)
 
+### Python typing
+
+CI runs Pyright in basic mode with Python 3.10 semantics, the SDK's minimum
+supported version. The explicit include list in
+[`sdk/pyrightconfig.json`](sdk/pyrightconfig.json) currently covers the cache,
+session, tool schema and boundary, tool registry, configuration schema, and
+decision modules. Imports still supply type information, but this gate does not
+claim package-wide coverage. Modules outside the list retain existing typing
+debt tracked in [issue #84](https://github.com/mycelium-labs/mycelium/issues/84).
+
+Run the same pinned checker from `sdk/`:
+
+```bash
+uv run --with-requirements ../.github/typing-requirements.txt python -m pyright --project pyrightconfig.json --warnings
+```
+
+Or, in the activated pip development environment:
+
+```bash
+python -m pip install -r ../.github/typing-requirements.txt
+python -m pyright --project pyrightconfig.json --warnings
+```
+
+Errors and warnings fail the gate. Expand the include list as modules become
+clean; do not remove covered modules or add broad diagnostic suppressions to
+make a change pass. The checker version is pinned in
+[`.github/typing-requirements.txt`](.github/typing-requirements.txt).
+
+The package has inline annotations but does not yet publish a `py.typed` marker
+or promise complete consumer-facing typing. Add that marker only after the
+public typing contract, including decorators and framework adapters, is ready.
+
 ### Real Redis and Postgres tests
 
 CI runs the full test suite against Redis 7 and Postgres 16. Tests that require

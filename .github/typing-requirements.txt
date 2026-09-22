@@ -1,0 +1,2 @@
+# Keep local and CI type-checker diagnostics consistent.
+pyright==1.1.414
