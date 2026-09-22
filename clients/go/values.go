@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-var decimalPattern = regexp.MustCompile(`^(0|-?[1-9][0-9]*)(\.[0-9]*[1-9])?$`)
+var decimalPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]*[1-9])?$`)
 
 func Decimal(value string) (DecimalValue, error) {
 	if !decimalPattern.MatchString(value) || value == "-0" || strings.HasSuffix(value, "0") && strings.Contains(value, ".") {
