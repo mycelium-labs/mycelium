@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPTS_DIR = ROOT / ".github" / "scripts"
 
@@ -176,3 +178,47 @@ class TestArchitectureProvenance:
             strict=True,
         )
         assert valid, f"Generated manifest failed validation: {errors}"
+
+    @pytest.mark.parametrize(
+        ("fragment", "valid"),
+        [
+            ("", True),
+            ("#L1", True),
+            ("#L3", True),
+            ("#L1-L3", True),
+            ("#L2-L2", True),
+            ("#L0", False),
+            ("#L4", False),
+            ("#L1-L4", False),
+            ("#L3-L1", False),
+            ("#Lone", False),
+            ("#L1-L", False),
+        ],
+    )
+    def test_source_line_anchors(self, tmp_path, monkeypatch, fragment, valid):
+        """A valid file hash must not hide a broken source line reference."""
+        source = tmp_path / "source.py"
+        source.write_text("def example():\n    pass\n# final line\n", encoding="utf-8")
+        doc = tmp_path / "map.md"
+        doc.write_text(f"[source](source.py{fragment})\n", encoding="utf-8")
+        manifest = tmp_path / "manifest.json"
+        manifest.write_text(
+            json.dumps({
+                "schema_version": 1,
+                "package_version": "1.0.0",
+                "review_base_commit": "abcdef0",
+                "reviewed_at": "2026-09-22",
+                "source_files": {"source.py": check_mod.compute_sha256(source)},
+                "test_files": {},
+            }),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(check_mod, "check_git_ancestor", lambda *_: (True, "test base"))
+
+        actual, errors = check_mod.validate_provenance(
+            root=tmp_path, doc_path=doc, manifest_path=manifest, strict=True,
+        )
+
+        assert actual is valid
+        if not valid:
+            assert any(f"Invalid source line anchor: source.py{fragment}" in e for e in errors)

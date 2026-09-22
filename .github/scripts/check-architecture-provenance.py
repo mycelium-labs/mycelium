@@ -7,7 +7,8 @@ Verifies:
 3. All source and test files listed in the manifest exist on disk.
 4. All source and test files linked from sdk/docs/ARCHITECTURE_AND_GUARANTEE_MAP.md
    are captured in the provenance manifest.
-5. Emits standard compiler diagnostics and GitHub Actions annotations on failure.
+5. Linked Python line anchors have valid syntax and stay within the target file.
+6. Emits standard compiler diagnostics and GitHub Actions annotations on failure.
 
 Usage:
     python .github/scripts/check-architecture-provenance.py [--root <DIR>] [--strict]
@@ -201,7 +202,7 @@ def validate_provenance(
         links = re.findall(r"\[.*?\]\((.*?)\)", doc_content)
         doc_dir = doc.parent
         for link in links:
-            clean = link.split("#")[0]
+            clean, separator, anchor = link.partition("#")
             if not clean.endswith(".py"):
                 continue
             target = (doc_dir / clean).resolve()
@@ -214,6 +215,20 @@ def validate_provenance(
                 msg = f"Architecture map links to unindexed file: {rel} (link: {link})"
                 errors.append(msg)
                 emit_error(msg, str(doc))
+
+            if separator and target.is_file():
+                match = re.fullmatch(r"L([0-9]+)(?:-L([0-9]+))?", anchor)
+                line_count = len(target.read_text(encoding="utf-8").splitlines())
+                if match:
+                    start = int(match.group(1))
+                    end = int(match.group(2) or match.group(1))
+                if not match or not (1 <= start <= end <= line_count):
+                    msg = (
+                        f"Invalid source line anchor: {link} "
+                        f"(expected #L<n> or #L<n>-L<m> within 1..{line_count})"
+                    )
+                    errors.append(msg)
+                    emit_error(msg, str(doc))
 
     return len(errors) == 0, errors
 
