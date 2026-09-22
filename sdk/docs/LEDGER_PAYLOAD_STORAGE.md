@@ -7,6 +7,8 @@ operator-sensitive data, not as an opaque cache.
 
 This page describes the behavior shipped today. It does not describe the
 payload-policy design proposed in [issue #82](https://github.com/mycelium-labs/mycelium/issues/82).
+See the [payload-controls proposal](LEDGER_PAYLOAD_POLICY_DESIGN.md) for design
+decisions that still need review before implementation.
 
 ## What an action-ledger entry contains
 
