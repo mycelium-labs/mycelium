@@ -2,8 +2,8 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 
-export interface DecimalValue { $type: "decimal"; profile: "decimal-1"; value: string }
-export interface UrlValue { $type: "url"; profile: "url-1"; value: string }
+export interface DecimalValue extends JsonObject { $type: "decimal"; profile: "decimal-1"; value: string }
+export interface UrlValue extends JsonObject { $type: "url"; profile: "url-1"; value: string }
 
 export interface IdentityRequest {
   businessRequestId: string;

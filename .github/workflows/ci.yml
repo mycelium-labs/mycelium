@@ -207,6 +207,10 @@ jobs:
       - name: TypeScript build artifacts are current
         run: git diff --exit-code -- clients/typescript/dist
 
+      - name: TypeScript package consumer types
+        working-directory: clients/typescript
+        run: npm run test:types
+
   shared-sidecar:
     runs-on: ubuntu-latest
     steps:

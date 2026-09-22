@@ -16,6 +16,8 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Fixed
 
+- Make the TypeScript decimal and URL helper results assignable to JSON inputs,
+  destinations, and completion results without consumer casts.
 - Replace non-ASCII arrows in the output of three bundled examples so they no
   longer crash with `UnicodeEncodeError` on Windows consoles.
 
