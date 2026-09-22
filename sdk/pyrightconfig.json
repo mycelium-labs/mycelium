@@ -1,0 +1,13 @@
+{
+  "include": [
+    "mycelium/cache.py",
+    "mycelium/config_schema.py",
+    "mycelium/decision.py",
+    "mycelium/schema.py",
+    "mycelium/session.py",
+    "mycelium/tool_boundary.py",
+    "mycelium/tool_registry.py"
+  ],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "basic"
+}
