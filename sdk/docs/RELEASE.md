@@ -161,6 +161,39 @@ uploads to PyPI. Confirm:
 
 Releases automatically generate and attach a machine-readable Software Bill of Materials (SBOM) in CycloneDX JSON format (`mycelium-runtime-<version>.cdx.json`) as a release asset in GitHub Releases and as a workflow artifact in GitHub Actions.
 
+## Build provenance attestations
+
+The publish workflow creates signed SLSA build-provenance attestations for every
+wheel, sdist, and CycloneDX SBOM. The attestations are associated with the
+repository through GitHub's artifact-attestation service and are signed by the
+`publish.yml` workflow. The workflow also verifies each attestation before
+publishing to PyPI, requiring the exact source commit and release ref.
+
+To verify downloaded release artifacts, install a recent GitHub CLI with
+attestation support, set the release version, and place the wheel, sdist, and
+SBOM in the paths below:
+
+```bash
+REPO=mycelium-labs/mycelium
+VERSION=1.38.4
+TAG="refs/tags/v${VERSION}"
+SOURCE_SHA=$(git ls-remote "https://github.com/${REPO}.git" "refs/tags/v${VERSION}^{}" | cut -f1)
+
+for artifact in sdk/dist/*.whl sdk/dist/*.tar.gz sdk/sbom/*.cdx.json; do
+  gh attestation verify "$artifact" \
+    --repo "$REPO" \
+    --signer-workflow "$REPO/.github/workflows/publish.yml" \
+    --source-ref "$TAG" \
+    --source-digest "$SOURCE_SHA"
+done
+```
+
+Verification fails if an artifact has no valid signed attestation, if the
+attestation was created by another workflow or repository, or if its source
+commit or release ref does not match the requested release. A successful
+signature check establishes build provenance; it does not replace review of
+the package contents or the release checklist below.
+
 ### Reproducing and verifying locally
 
 To generate and verify the CycloneDX SBOM locally:
