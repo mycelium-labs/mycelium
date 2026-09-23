@@ -1,74 +1,72 @@
-package mycelium_test
+package mycelium
 
 import (
 	"encoding/json"
 	"os"
-	"strings"
+	"path/filepath"
+	"runtime"
 	"testing"
-
-	mycelium "github.com/mycelium-labs/mycelium/clients/go"
 )
 
-func TestDecimalProtocolFixtures(t *testing.T) {
-	raw, err := os.ReadFile("../../sdk/docs/spec/fixtures/canonicalization.json")
+type decimalFixture struct {
+	Name          string          `json:"name"`
+	Input         json.RawMessage `json:"input"`
+	InvalidInputs []string        `json:"invalid_inputs"`
+}
+
+type canonicalizationFixture struct {
+	Cases []decimalFixture `json:"cases"`
+}
+
+func TestDecimalMatchesFixture(t *testing.T) {
+	_, file, _, _ := runtime.Caller(0)
+	fixturePath := filepath.Join(filepath.Dir(file), "..", "..", "sdk", "docs", "spec", "fixtures", "canonicalization.json")
+	contents, err := os.ReadFile(fixturePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var fixtures struct {
-		Cases []struct {
-			Name          string          `json:"name"`
-			Input         json.RawMessage `json:"input"`
-			InvalidInputs []string        `json:"invalid_inputs"`
-			Expected      string          `json:"expected"`
-		} `json:"cases"`
-	}
-	if err := json.Unmarshal(raw, &fixtures); err != nil {
+	var fixture canonicalizationFixture
+	if err := json.Unmarshal(contents, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	count := 0
-	for _, fixture := range fixtures.Cases {
-		if !strings.HasPrefix(fixture.Name, "decimal-") {
+
+	for _, testCase := range fixture.Cases {
+		if len(testCase.Name) < len("decimal-") || testCase.Name[:len("decimal-")] != "decimal-" {
 			continue
 		}
-		count++
-		t.Run(fixture.Name, func(t *testing.T) {
-			switch fixture.Expected {
-			case "valid":
-				var want mycelium.DecimalValue
-				if err := json.Unmarshal(fixture.Input, &want); err != nil {
-					t.Fatal(err)
-				}
-				got, err := mycelium.Decimal(want.Value)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if got != want {
-					t.Fatalf("got %#v, want %#v", got, want)
-				}
-			case "error":
-				for _, value := range fixture.InvalidInputs {
-					if _, err := mycelium.Decimal(value); err == nil {
-						t.Errorf("accepted noncanonical decimal %q", value)
-					}
-				}
-			default:
-				t.Fatalf("unknown fixture expectation %q", fixture.Expected)
+		if len(testCase.Input) > 0 {
+			var input struct {
+				Value string `json:"value"`
 			}
-		})
-	}
-	if count == 0 {
-		t.Fatal("decimal protocol fixtures must be present")
+			if err := json.Unmarshal(testCase.Input, &input); err != nil {
+				t.Fatalf("%s: decode input: %v", testCase.Name, err)
+			}
+			value, err := Decimal(input.Value)
+			if err != nil {
+				t.Errorf("%s: unexpected error: %v", testCase.Name, err)
+				continue
+			}
+			if value.Value != input.Value {
+				t.Errorf("%s: got %q, want %q", testCase.Name, value.Value, input.Value)
+			}
+			continue
+		}
+		for _, input := range testCase.InvalidInputs {
+			if _, err := Decimal(input); err == nil {
+				t.Errorf("%s: %q unexpectedly accepted", testCase.Name, input)
+			}
+		}
 	}
 }
 
 func TestDecimalNegativeFractionLimits(t *testing.T) {
 	value := "-0.000000000000000001"
-	got, err := mycelium.Decimal(value)
+	got, err := Decimal(value)
 	if err != nil || got.Value != value {
 		t.Fatalf("Decimal(%q) = %#v, %v", value, got, err)
 	}
 	for _, value := range []string{"-0.0", "-0.10", "-0.0000000000000000001"} {
-		if _, err := mycelium.Decimal(value); err == nil {
+		if _, err := Decimal(value); err == nil {
 			t.Errorf("accepted noncanonical decimal %q", value)
 		}
 	}

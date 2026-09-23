@@ -150,6 +150,13 @@ jobs:
         working-directory: sdk
         run: ruff check mycelium tests
 
+      - name: Install pinned type checker
+        run: python -m pip install -r .github/typing-requirements.txt
+
+      - name: Pyright scoped Python 3.10 gate
+        working-directory: sdk
+        run: python -m pyright --project pyrightconfig.json --warnings
+
       - name: Bandit static security scanner
         working-directory: sdk
         run: bandit -c pyproject.toml -r mycelium
@@ -174,6 +181,29 @@ jobs:
       - name: Documentation, provenance, and packaging tests
         working-directory: sdk
         run: pytest tests/test_architecture_provenance.py tests/test_doc_commands.py tests/test_package_reproducibility.py -q
+
+  crewai-integration:
+    runs-on: ubuntu-latest
+    env:
+      OTEL_SDK_DISABLED: "true"
+      CREWAI_TRACING_ENABLED: "false"
+      CREWAI_TELEMETRY_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install SDK with the CrewAI extra
+        run: pip install -e "./sdk[dev,crewai]"
+
+      - name: Require CrewAI and test its public lifecycle
+        working-directory: sdk
+        run: |
+          python -c "import crewai"
+          pytest tests/test_crewai_integration.py -q -rs
 
   sidecar-conformance:
     runs-on: ubuntu-latest
@@ -206,6 +236,18 @@ jobs:
 
       - name: TypeScript build artifacts are current
         run: git diff --exit-code -- clients/typescript/dist
+
+      - name: TypeScript package consumer types
+        working-directory: clients/typescript
+        run: npm run test:types
+
+      - name: TypeScript decimal fixture helpers
+        working-directory: clients/typescript
+        run: npm run test:values
+
+      - name: Go client tests
+        working-directory: clients/go
+        run: go test ./...
 
   shared-sidecar:
     runs-on: ubuntu-latest

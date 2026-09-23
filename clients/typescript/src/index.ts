@@ -7,7 +7,7 @@ import { MyceliumLocalValidationError } from "./errors.js";
 import type { DecimalValue, UrlValue } from "./types.js";
 
 export function decimal(value: string): DecimalValue {
-  if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) throw new MyceliumLocalValidationError("decimal is not in decimal-1 form");
+  if (!/^(?:(?:0|-[1-9]\d*|[1-9]\d*)(?:\.\d+)?|-0\.\d+)$/.test(value)) throw new MyceliumLocalValidationError("decimal is not in decimal-1 form");
   if (value === "-0" || (value.includes(".") && value.endsWith("0"))) throw new MyceliumLocalValidationError("decimal has noncanonical zero digits");
   const digits = value.replace(/[-.]/g, "");
   const scale = value.includes(".") ? value.length - value.indexOf(".") - 1 : 0;
