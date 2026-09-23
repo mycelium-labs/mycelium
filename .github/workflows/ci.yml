@@ -241,6 +241,14 @@ jobs:
         working-directory: clients/typescript
         run: npm run test:types
 
+      - name: TypeScript decimal fixture helpers
+        working-directory: clients/typescript
+        run: npm run test:values
+
+      - name: Go client tests
+        working-directory: clients/go
+        run: go test ./...
+
   shared-sidecar:
     runs-on: ubuntu-latest
     steps:
