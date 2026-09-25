@@ -1,0 +1,8 @@
+profile: development
+action_ledger:
+  storage: memory
+  tools: [send_notice]
+tools:
+  send_notice:
+    callable: tools:send_notice
+    side_effect_class: non_idempotent_mutate
