@@ -1,0 +1,27 @@
+{
+  "schema_version": "discovery-spike/v1",
+  "boundary": "registered Python callable",
+  "findings": [
+    {
+      "name": "send_notice",
+      "status": "protected",
+      "evidence": "test_discovery_spike.py launches app.py through mycelium run and observes one body call for two same-identity calls"
+    },
+    {
+      "name": "lookup_status",
+      "status": "unclassified",
+      "evidence": "static detector finds @tool, but the callable is absent from mycelium.yaml"
+    },
+    {
+      "name": "ProviderClient.charge",
+      "status": "unsupported",
+      "evidence": "class method is outside the current top-level callable detector and launcher target syntax"
+    },
+    {
+      "name": "hidden_provider_call",
+      "status": "opaque",
+      "evidence": "manually identified unregistered direct call; static detector and launcher do not observe it"
+    }
+  ],
+  "limitation": "This inventory is scoped to the reviewed fixture. Unknown hidden calls cannot be enumerated or claimed protected."
+}

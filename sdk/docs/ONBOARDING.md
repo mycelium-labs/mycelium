@@ -31,3 +31,7 @@ See the complete deterministic
 example. A real integration must supply host-owned stable action identity,
 capability, authorized destinations, policy, and provider idempotency or
 reconciliation support. Direct provider calls bypass Mycelium coverage.
+
+The [discovery and instrumentation design spike](DISCOVERY_AND_INSTRUMENTATION_DESIGN.md)
+shows how a reviewed Python callable can be instrumented without changing its
+application body, and records the coverage limits of that approach.
