@@ -613,6 +613,14 @@ def main() -> int:
             if not (typescript / "node_modules/.bin/tsc").exists():
                 subprocess.run(["npm", "ci"], cwd=typescript, check=True, env=environment)
             subprocess.run(["npm", "run", "build"], cwd=typescript, check=True, env=environment)
+            subprocess.run(
+                ["node", "--test", "tests/decimal.test.mjs"],
+                cwd=typescript, check=True, env=environment,
+            )
+            subprocess.run(
+                ["go", "test", "./..."],
+                cwd=ROOT / "clients/go", check=True, env=environment,
+            )
             ts_result = run_client(
                 ["node", "conformance.mjs"],
                 cwd=typescript,

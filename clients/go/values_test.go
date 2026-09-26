@@ -58,3 +58,16 @@ func TestDecimalMatchesFixture(t *testing.T) {
 		}
 	}
 }
+
+func TestDecimalNegativeFractionLimits(t *testing.T) {
+	value := "-0.000000000000000001"
+	got, err := Decimal(value)
+	if err != nil || got.Value != value {
+		t.Fatalf("Decimal(%q) = %#v, %v", value, got, err)
+	}
+	for _, value := range []string{"-0.0", "-0.10", "-0.0000000000000000001"} {
+		if _, err := Decimal(value); err == nil {
+			t.Errorf("accepted noncanonical decimal %q", value)
+		}
+	}
+}

@@ -20,6 +20,8 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
   destinations, and completion results without consumer casts.
 - Replace non-ASCII arrows in the output of three bundled examples so they no
   longer crash with `UnicodeEncodeError` on Windows consoles.
+- Accept canonical negative fractions between -1 and 0 in the TypeScript and Go
+  decimal helpers, matching the frozen decimal-1 protocol fixtures.
 
 ## 1.38.4 (2026-09-21)
 
