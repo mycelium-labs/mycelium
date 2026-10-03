@@ -103,8 +103,10 @@ Completion storage and optional custom-runtime startup adapter.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `max_tokens` | `integer \| null` | `null` | — |
-| `max_messages` | `integer \| null` | `null` | — |
+| `max_tokens` | `integer \| null` | `null` | Positive token limit. |
+| `max_messages` | `integer \| null` | `null` | Positive message limit. |
+| `warn_at` | `number` | `0.9` | Finite fraction in (0, 1] of the token limit. |
+| `detect_duplicates` | `boolean` | `true` | Requires an unquoted YAML boolean. |
 
 ## Integrations
 

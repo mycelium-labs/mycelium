@@ -35,6 +35,7 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 - Require a real boolean for `message_validator.enabled` instead of coercing strings.
 - Require a real boolean for `state_flush.flush_on_complete` before building storage.
 - Validate PostgreSQL ledger pool sizes before conversion or storage construction.
+- Validate history-guard limits, warning fractions, and duplicate-detection booleans at YAML load.
 - Reject boolean `budget.warn_at` values instead of interpreting `true` as a
   warning threshold of `1.0`.
 - Reject a shadowed `range` argument or a changed closure/global binding

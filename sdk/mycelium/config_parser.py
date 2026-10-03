@@ -2069,6 +2069,23 @@ def _parse_config(
     history_guard_raw = data.get("history_guard")
     if history_guard_raw is not None and not isinstance(history_guard_raw, dict):
         raise ConfigError("'history_guard' must be a mapping")
+    if history_guard_raw is not None:
+        for field in ("max_tokens", "max_messages"):
+            value = history_guard_raw.get(field)
+            if value is not None and (
+                not isinstance(value, int) or isinstance(value, bool) or value < 1
+            ):
+                raise ConfigError(f"'history_guard.{field}' must be an integer >= 1 or null")
+        warn_at = history_guard_raw.get("warn_at", 0.9)
+        if (
+            not isinstance(warn_at, (int, float))
+            or isinstance(warn_at, bool)
+            or not math.isfinite(warn_at)
+            or not 0 < warn_at <= 1
+        ):
+            raise ConfigError("'history_guard.warn_at' must be finite and in (0, 1]")
+        if not isinstance(history_guard_raw.get("detect_duplicates", True), bool):
+            raise ConfigError("'history_guard.detect_duplicates' must be a bool")
 
     loop_guard_raw = data.get("loop_guard")
     if loop_guard_raw is not None and not isinstance(loop_guard_raw, dict):

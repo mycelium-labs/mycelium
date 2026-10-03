@@ -302,8 +302,16 @@ class RunnerConfigModel(_ConfigModel):
 
 
 class HistoryGuardConfigModel(_ConfigModel):
-    max_tokens: int | None = Field(default=None, gt=0)
-    max_messages: int | None = Field(default=None, gt=0)
+    max_tokens: int | None = Field(default=None, gt=0, description="Positive token limit.")
+    max_messages: int | None = Field(default=None, gt=0, description="Positive message limit.")
+    warn_at: float = Field(
+        default=0.9,
+        gt=0,
+        le=1,
+        allow_inf_nan=False,
+        description="Finite fraction in (0, 1] of the token limit.",
+    )
+    detect_duplicates: bool = Field(default=True, description="Requires an unquoted YAML boolean.")
 
 
 class MessageValidatorConfigModel(_ConfigModel):
