@@ -167,6 +167,56 @@ body. The sidecar also offers an experimental `composite-v1` extension for
 explicitly declared straight-line manifests on file or shared PostgreSQL
 storage.
 
+## Real-process recovery proof
+
+The recovery protocol above already exists; this proof tests its boundaries,
+not a new workflow engine. Run the opt-in suite from `sdk/`:
+
+```sh
+pip install -e ".[dev,redis,postgres]"
+export MYCELIUM_TEST_COMPOSITE_PROCESS_PROOF=1
+export MYCELIUM_TEST_REDIS_URL=redis://127.0.0.1:6379/15
+export MYCELIUM_TEST_POSTGRES_DSN=postgresql://mycelium:mycelium@127.0.0.1:5432/mycelium_test
+export MYCELIUM_CI_REQUIRE_REDIS=1
+export MYCELIUM_CI_REQUIRE_POSTGRES=1
+pytest tests/test_composite_process_recovery.py tests/test_backend_gates.py -q -rs
+```
+
+Use dedicated test services. Redis keys and PostgreSQL tables are UUID-scoped
+and cleaned up without flushing databases. Without the require flags, a missing
+driver, unreachable Redis, or unset PostgreSQL DSN skips that backend's cases;
+the SQLite cases still run. A configured PostgreSQL connection failure fails
+the test. Ordinary SDK tests skip the opt-in process suite.
+The `Composite recovery proof` workflow requires both shared backends and runs
+on affected runtime/test changes or manual dispatch, not documentation-only PRs.
+
+[The process suite](../tests/test_composite_process_recovery.py) launches
+[independent workers](../tests/fixtures/composite_shared_worker.py), kills them
+with the OS process-kill operation, and reopens storage in a new process. Lease
+renewal remains enabled; suspension tests stop the whole worker, including its
+heartbeat threads. A separate SQLite fake provider uses FULL-synchronous
+commits and deliberately does not deduplicate effects, so the suite counts
+actual provider effects rather than trusting ledger state alone.
+
+| Interruption or contention | Required observation |
+| --- | --- |
+| Parent admitted a child; child has not claimed yet | Resume executes the unattempted child once |
+| Child claimed; provider boundary not crossed | Authoritative non-execution permits recovery |
+| Child completed; parent has not recorded resolution | Replay returns the saved receipt and resolves the parent step |
+| Completed child or all children completed; parent unfinished | Completed effects do not run again |
+| Boundary marked or effect committed; result not stored | Unknown evidence blocks; read-only confirmed evidence permits resolution |
+| Missing provider reference | Availability of a lookup adapter does not silently authorize replay |
+| Pinned items, loops, or input/result branches | Stored results preserve the original path and iteration identities |
+| Changed arguments, order, branch, loop count, or definition | Reject before any new provider effect, including under a reused version label |
+| Two resumers | Only the current parent owner progresses |
+| Suspended stale worker resumes after takeover | Reject its next admission or provider-boundary crossing; winning result remains intact |
+
+The fake provider's `proven_absent` mode supplies authoritative non-execution
+only for this controlled, synchronous model. A real provider's missing search
+result, eventual visibility, or expired key is not equivalent evidence. These
+tests do not prove power-loss durability, production provider correctness,
+arbitrary hidden-effect coverage, or cancellation of an already-sent request.
+
 ## Language-neutral sidecar extension
 
 The extension is advertised in `GET /v1/capabilities` under

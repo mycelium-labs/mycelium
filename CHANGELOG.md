@@ -7,6 +7,11 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Added
 
+- Add an opt-in real-process composite recovery proof across SQLite, Redis,
+  and PostgreSQL. Kill and suspend workers at durable boundaries, count effects
+  in an independent non-deduplicating provider, and verify stored-result replay,
+  fail-closed ambiguity, pinned branches/loops, drift rejection, concurrent
+  resume, and stale-worker fencing. Run it in a targeted CI workflow.
 - Include configured-versus-observed tool protection in Doctor's JSON and human
   reports, with optional host-supplied callable observations and explicit
   unverified provider boundaries and recovery paths.
@@ -37,6 +42,8 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Fixed
 
+- Fail required Redis/PostgreSQL test gates when their driver is missing,
+  instead of silently skipping the shared-backend proofs.
 - Reject unknown options and unsupported `enabled` settings in budget,
   completion, loop, scope, and history configuration with full field paths.
   Omit the section to disable these controls; documented per-tool overrides
