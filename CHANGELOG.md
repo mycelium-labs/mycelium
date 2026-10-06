@@ -7,6 +7,15 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Added
 
+- Include configured-versus-observed tool protection in Doctor's JSON and human
+  reports, with optional host-supplied callable observations and explicit
+  unverified provider boundaries and recovery paths.
+- Inspect configured state-authority resolvers without invoking them and warn
+  about empty selections, missing state-reference enforcement, and operator-
+  asserted Redis persistence.
+- Generate complete reference sections for opt-in action controls, including
+  loop/scope/state authority, destination policies, destructive grants, and
+  current-fact validation, with composite and sidecar documentation links.
 - Add opt-in action-ledger argument omission, recursive field redaction, and
   result omission with explicit replay refusal for completed calls. Ledger entry
   schema 3 makes older workers reject the new payload-state fields.
@@ -28,6 +37,10 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Fixed
 
+- Reject unknown options and unsupported `enabled` settings in budget,
+  completion, loop, scope, and history configuration with full field paths.
+  Omit the section to disable these controls; documented per-tool overrides
+  retain their behavior.
 - Reject non-finite values (NaN, ±Infinity), booleans, and non-positive numbers
   for action and task ledger `retention_seconds` and `in_flight_ttl` timing
   fields with field-specific configuration errors.

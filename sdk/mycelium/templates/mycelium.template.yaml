@@ -295,6 +295,7 @@ tasks: {}
 
 # ---------------------------------------------------------------------------
 # loop_guard  (AF-003 — halt identical actions across new tool_call_ids)
+# Omit the section to disable. enabled and unknown keys are rejected.
 # ---------------------------------------------------------------------------
 loop_guard:
   # storage omitted: inherits state_backend
@@ -443,6 +444,7 @@ loop_guard:
 # cleanup paths; enforce candidate/attempt/success limits separately.
 # ---------------------------------------------------------------------------
 # budget:
+#   # Omit this section to disable; enabled is unsupported.
 #   storage: file
 #   path: ./mycelium-budget.json
 #   max_duration: 15m
@@ -467,6 +469,7 @@ loop_guard:
 # register_terminal_adapter("custom").
 # ---------------------------------------------------------------------------
 # completion:
+#   # Omit this section to disable; enabled is unsupported.
 #   # storage omitted: inherits state_backend
 #   # adapter_installer: my_app.mycelium_completion:install
 #   required:
@@ -483,6 +486,7 @@ loop_guard:
 # only. Wrapper: @scope_guard → @loop_guard → @ledger → @bounded → @protect.
 # ---------------------------------------------------------------------------
 # scope_guard:
+#   # Omit this section to disable; enabled is unsupported.
 #   # storage omitted: inherits state_backend
 #   # missing_run_id_policy: error   # warn (default, skip if no run_id) | error
 #   # allowed_tools: from_registry   # default; or all | [tool_a, tool_b]
@@ -519,6 +523,7 @@ runner:
   max_tool_retries: 3
 
 history_guard:
+  # Omit the section to disable; enabled and unknown keys are rejected.
   max_tokens: 100000
   max_messages: 1000
 

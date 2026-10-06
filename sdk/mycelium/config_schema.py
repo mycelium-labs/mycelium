@@ -41,7 +41,12 @@ class StorageConfigModel(_ConfigModel):
 
 
 class BudgetConfigModel(StorageConfigModel):
-    """Run-wide ceilings for protected calls, time, tokens, and cost."""
+    """Run-wide ceilings. Omit this section to disable; enabled is unsupported."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    storage: Literal["memory", "file", "sqlite", "redis", "postgres"] = "memory"
+    tools: Literal["all"] | list[str] = "all"
+    exclude: list[str] = Field(default_factory=list)
 
     max_duration: float | str | None = Field(
         default=None,
@@ -64,7 +69,14 @@ class BudgetConfigModel(StorageConfigModel):
 
 
 class CompletionConfigModel(StorageConfigModel):
-    """Completion storage and optional custom-runtime startup adapter."""
+    """Host checklist. Omit this section to disable; enabled is unsupported."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    storage: Literal["memory", "file", "redis", "postgres", "shared"] | None = Field(
+        default=None, description="Omitted storage inherits state_backend, otherwise uses memory."
+    )
+    required: list[str | dict[str, Any]] = Field(default_factory=list)
+    optional: list[str | dict[str, Any]] = Field(default_factory=list)
 
     adapter_installer: str | None = Field(
         default=None,
@@ -74,6 +86,47 @@ class CompletionConfigModel(StorageConfigModel):
             "register_terminal_adapter()."
         ),
     )
+
+
+class LoopGuardConfigModel(StorageConfigModel):
+    """Consecutive-action limits. Omit this section to disable; enabled is unsupported."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    storage: Literal["memory", "file", "redis", "postgres", "shared"] | None = Field(
+        default=None, description="Omitted storage inherits state_backend, otherwise uses memory."
+    )
+    tools: Literal["all"] | list[str] = "all"
+    exclude: list[str] = Field(default_factory=list)
+    consecutive_soft: dict[str, int] | None = None
+    escalate_after_soft: int = Field(default=1, gt=0)
+    unclassified_policy: Literal["warn", "strict"] = "warn"
+    missing_run_id_policy: Literal["warn", "error"] | None = None
+
+
+class ScopeGuardConfigModel(StorageConfigModel):
+    """Frozen tool scope. Omit this section to disable; enabled is unsupported."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    storage: Literal["memory", "file", "redis", "postgres", "shared"] | None = Field(
+        default=None, description="Omitted storage inherits state_backend, otherwise uses memory."
+    )
+    tools: Literal["all"] | list[str] = "all"
+    exclude: list[str] = Field(default_factory=list)
+    allowed_tools: Literal["from_registry", "all"] | list[str] = "from_registry"
+    on_violation: Literal["soft", "hard"] = "soft"
+    auto_bind: bool = True
+    missing_run_id_policy: Literal["warn", "error"] | None = None
+
+
+class StateAuthorityConfigModel(_ConfigModel):
+    """Compare the host's frozen state reference with its current canonical reference."""
+
+    canonical_callable: str = Field(description="Host resolver path: package.module:function.")
+    require_state_ref: bool = False
+    on_mismatch: Literal["soft", "hard"] = "hard"
+    on_missing: Literal["soft", "hard"] = "hard"
+    tools: Literal["all"] | list[str] = "all"
+    exclude: list[str] = Field(default_factory=list)
 
 
 class TransitionConfigModel(_ConfigModel):
@@ -302,6 +355,9 @@ class RunnerConfigModel(_ConfigModel):
 
 
 class HistoryGuardConfigModel(_ConfigModel):
+    """History limits. Omit this section to disable; enabled is unsupported."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
     max_tokens: int | None = Field(default=None, gt=0, description="Positive token limit.")
     max_messages: int | None = Field(default=None, gt=0, description="Positive message limit.")
     warn_at: float = Field(
@@ -357,6 +413,118 @@ class SecretArgsConfigModel(_ConfigModel):
     entropy_detection: bool = True
 
 
+class EntityAllowConfigModel(_ConfigModel):
+    addresses: list[str] = Field(default_factory=list)
+    domains: list[str] = Field(default_factory=list)
+    hosts: list[str] = Field(default_factory=list)
+    values: list[str] = Field(default_factory=list)
+
+
+class EntityDestinationConfigModel(_ConfigModel):
+    path: str = Field(description="Argument path containing the destination.")
+    type: Literal["email", "https_url", "entity_id", "host"]
+    allow: EntityAllowConfigModel = Field(default_factory=EntityAllowConfigModel)
+    required: bool = True
+    reject_redirects: bool = True
+
+    @field_validator("allow", mode="before")
+    @classmethod
+    def _normalize_empty_allow(cls, value: Any) -> Any:
+        # The semantic parser has always accepted these empty legacy forms.
+        return {} if value is None or value == [] else value
+
+
+class EntityToolConfigModel(_ConfigModel):
+    destinations: list[EntityDestinationConfigModel]
+
+
+class EntityGuardConfigModel(_ConfigModel):
+    """Destination allowlists. See the SDK reference for transport limitations."""
+
+    enabled: bool = True
+    missing_policy: Literal["error", "warn"] = "error"
+    policy_version: str | None = None
+    tools: dict[str, EntityToolConfigModel] = Field(default_factory=dict)
+
+
+class AuthorityWindowConfigModel(_ConfigModel):
+    """Check host-issued authority expiry immediately before execution."""
+
+    enabled: bool = True
+    use_time_check: Literal["required", "optional"] = "required"
+    clock_skew_tolerance_seconds: float = Field(default=0, ge=0, allow_inf_nan=False)
+
+
+class FactSubjectConfigModel(_ConfigModel):
+    type: str
+    id_from: str
+    tenant_from: str | None = None
+    account_from: str | None = None
+
+
+class UseTimeFactConfigModel(_ConfigModel):
+    name: str
+    subject: FactSubjectConfigModel
+    validator: str = Field(description="Name of a host-registered current-fact validator.")
+    require: dict[str, Any] | None = None
+    revision_from: str | None = None
+    max_age_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    bind_request_id: bool = False
+    bind_run_id: bool = False
+    bind_thread_id: bool = False
+    compare_to_arg: str | None = None
+    provider_precondition: str | None = None
+
+
+class UseTimeToolConfigModel(_ConfigModel):
+    facts: list[UseTimeFactConfigModel]
+
+
+class UseTimeCurrencyConfigModel(_ConfigModel):
+    """Revalidate host-bound facts at use time; host validators supply current evidence."""
+
+    enabled: bool = True
+    missing_policy: Literal["error", "warn"] = "error"
+    policy_version: str | None = None
+    tools: dict[str, UseTimeToolConfigModel] = Field(default_factory=dict)
+
+
+class DestructiveObjectConfigModel(FactSubjectConfigModel):
+    case_sensitive: bool = True
+    require_canonicalizer: bool = False
+
+
+class DestructiveGrantConfigModel(_ConfigModel):
+    bind_request_id: bool = False
+    bind_run_id: bool = False
+    bind_thread_id: bool = False
+    max_uses: int = Field(default=1, gt=0)
+    ttl_seconds: float = Field(default=300, gt=0, allow_inf_nan=False)
+
+
+class DestructiveToolConfigModel(_ConfigModel):
+    operation: str
+    object: DestructiveObjectConfigModel
+    grant: DestructiveGrantConfigModel = Field(default_factory=DestructiveGrantConfigModel)
+
+
+class DestructiveConfirmConfigModel(_ConfigModel):
+    """Require a host-issued grant bound to the exact destructive action and object."""
+
+    enabled: bool = True
+    missing_policy: Literal["error", "warn"] = "error"
+    policy_version: str | None = None
+    storage: Literal["memory", "file", "sqlite", "redis", "postgres"] = "memory"
+    path: str | None = None
+    table: str | None = None
+    url: str | None = None
+    url_env: str | None = None
+    dsn: str | None = None
+    dsn_env: str | None = None
+    prefix: str | None = None
+    tools: dict[str, DestructiveToolConfigModel] = Field(default_factory=dict)
+
+
 class MyceliumConfigModel(_ConfigModel):
     """Version 1 structural model for a complete ``mycelium.yaml`` file.
 
@@ -397,18 +565,18 @@ class MyceliumConfigModel(_ConfigModel):
     history_guard: HistoryGuardConfigModel | None = None
     message_validator: bool | MessageValidatorConfigModel = False
     integrations: IntegrationsConfigModel | None = None
-    loop_guard: StorageConfigModel | None = None
+    loop_guard: LoopGuardConfigModel | None = None
     budget: BudgetConfigModel | None = None
-    scope_guard: StorageConfigModel | None = None
-    state_authority: dict[str, Any] | None = None
+    scope_guard: ScopeGuardConfigModel | None = None
+    state_authority: StateAuthorityConfigModel | None = None
     completion: CompletionConfigModel | None = None
     deployment: DeploymentConfigModel | None = None
     verify: dict[str, Any] | None = None
     secret_args: SecretArgsConfigModel | None = None
-    entity_guard: dict[str, Any] | None = None
-    destructive_confirm: dict[str, Any] | None = None
-    authority_window: dict[str, Any] | None = None
-    use_time_currency: dict[str, Any] | None = None
+    entity_guard: EntityGuardConfigModel | None = None
+    destructive_confirm: DestructiveConfirmConfigModel | None = None
+    authority_window: AuthorityWindowConfigModel | None = None
+    use_time_currency: UseTimeCurrencyConfigModel | None = None
 
     @field_validator("config_version", mode="before")
     @classmethod
@@ -420,6 +588,15 @@ class MyceliumConfigModel(_ConfigModel):
                 "or migrate the file after reviewing the release notes"
             )
         return value
+
+
+_STRICT_GUARD_MODELS = {
+    "budget": BudgetConfigModel,
+    "completion": CompletionConfigModel,
+    "loop_guard": LoopGuardConfigModel,
+    "scope_guard": ScopeGuardConfigModel,
+    "history_guard": HistoryGuardConfigModel,
+}
 
 
 def config_json_schema() -> dict[str, Any]:

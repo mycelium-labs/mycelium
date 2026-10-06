@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 from mycelium.config import PROFILE_DEVELOPMENT, ConfigError, MyceliumConfig, load_config
 from mycelium.doctor import checks as _builtin_checks
+from mycelium.doctor.coverage import protection_coverage
 from mycelium.doctor.registry import DoctorContext, iter_registered_checks
 from mycelium.doctor.types import DoctorCheck, DoctorReport, DoctorStatus
 from mycelium.storage._helpers import redact_secrets
@@ -60,6 +62,7 @@ def run_doctor_on_config(
     connectivity: bool = True,
     timeout_seconds: float = 2.0,
     verbose: bool = False,
+    observed_tools: Mapping[str, Callable[..., Any]] | None = None,
 ) -> DoctorReport:
     """Run all registered checks against an already-loaded config."""
     ctx = DoctorContext(
@@ -84,6 +87,7 @@ def run_doctor_on_config(
         skipped_count=skipped,
         production_ready=_production_ready(config, checks),
         distributed_ready=_distributed_ready(config, checks),
+        protection_coverage=protection_coverage(config, observed_tools),
     )
 
 

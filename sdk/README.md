@@ -2638,6 +2638,31 @@ Evidence labels distinguish what Mycelium can prove (`statically_verified`,
 config alone (call-site `request_id` / `run_id` binding). Doctor does not
 replace integration tests or fault injection.
 
+Doctor also inspects an optional `state_authority.canonical_callable` for
+importability and a synchronous host-resolver signature, without calling it.
+It reports empty or unknown tool selections and consequential tools that allow
+missing state references. Redis stores always produce an advisory persistence
+warning; a successful connectivity probe does not verify durability.
+
+The human and JSON reports include `protection_coverage`: configured controls,
+effect class, ledger storage, request identity, observed wrapper markers, and
+missing requirements for each known tool. The CLI reads configuration and marks
+wrapper usage, provider boundaries, and recovery paths as unverified. Inside an
+application, pass the exact callables the host uses to obtain wrapper observations:
+
+```python
+report = run_doctor_on_config(
+    config,
+    connectivity=False,
+    observed_tools={"send_notice": application.send_notice},
+)
+```
+
+Callables supplied without wrappers are reported as `unprotected`. Wrapper
+markers show that a wrapper is present; they do not prove that hidden effects
+are covered. Provider boundaries and reconciliation still require integration
+tests. Doctor never invokes the supplied tools or the state resolver.
+
 ### `mycelium verify` (exercise the guarantees)
 
 Doctor inspects configuration. `mycelium verify` empirically tests Mycelium’s

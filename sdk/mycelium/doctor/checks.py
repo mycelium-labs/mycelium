@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Iterable
 from typing import Any
 
@@ -46,6 +47,7 @@ from mycelium.outcome_emit import (
     InMemoryOutcomeStorage,
     OutcomeStorage,
 )
+from mycelium.runtime_builder import _import_callable
 from mycelium.storage._helpers import redact_secrets, resolve_storage_url
 from mycelium.storage.postgres_outcome import PostgresOutcomeStorage
 from mycelium.storage.redis_outcome import RedisOutcomeStorage
@@ -2117,6 +2119,156 @@ def check_authority_window(ctx: DoctorContext) -> Iterable[DoctorCheck]:
             "valid throughout an external network call."
         ),
         evidence=EVIDENCE_NOT_VERIFIABLE,
+        blocking=False,
+    )
+
+
+@doctor_check("state_authority")
+def check_state_authority(ctx: DoctorContext) -> Iterable[DoctorCheck]:
+    cfg = ctx.config
+    raw = cfg.state_authority
+    if raw is None:
+        yield _check(
+            id="state_authority.configured",
+            category="State authority",
+            status=DoctorStatus.SKIP,
+            summary="State authority is not configured",
+            blocking=False,
+        )
+        return
+    selected = [name for name in cfg.tools if cfg.state_authority_applies(name)]
+    declared = raw.get("tools", "all")
+    unknown = set(declared if isinstance(declared, list) else []) - set(cfg.tools)
+    unknown.update(set(raw.get("exclude") or []) - set(cfg.tools))
+    yield _check(
+        id="state_authority.selection",
+        category="State authority",
+        status=DoctorStatus.WARN if unknown or not selected else DoctorStatus.PASS,
+        summary="State authority tool selection needs review"
+        if unknown or not selected
+        else "State authority selects configured tools",
+        details=f"selected={sorted(selected)}; unknown={sorted(unknown)}",
+        remediation="Select configured tool names and review exclusions."
+        if unknown or not selected
+        else "",
+        blocking=False,
+    )
+    try:
+        resolver = _import_callable(
+            raw["canonical_callable"], kind="state_authority.canonical_callable"
+        )
+        if (
+            inspect.iscoroutinefunction(resolver)
+            or inspect.iscoroutinefunction(getattr(resolver, "__call__", None))
+            or inspect.isasyncgenfunction(resolver)
+        ):
+            raise ValueError("canonical_callable must be synchronous")
+        try:
+            signature = inspect.signature(resolver)
+        except (ValueError, TypeError):
+            yield _check(
+                id="state_authority.callable",
+                category="State authority",
+                status=DoctorStatus.WARN,
+                summary="State resolver signature could not be inspected",
+                evidence=EVIDENCE_NOT_VERIFIABLE,
+                blocking=False,
+            )
+        else:
+            signature.bind(tool="tool", thread_id=None, run_id=None, kwargs={})
+            yield _check(
+                id="state_authority.callable",
+                category="State authority",
+                status=DoctorStatus.PASS,
+                summary="Synchronous state resolver is importable",
+                details="Callable accepts tool, thread_id, run_id, kwargs; it was not invoked.",
+                evidence=EVIDENCE_RUNTIME,
+            )
+    except Exception as exc:
+        yield _check(
+            id="state_authority.callable",
+            category="State authority",
+            status=DoctorStatus.FAIL,
+            summary="State resolver is not usable",
+            details=redact_secrets(str(exc)),
+            remediation=(
+                "Provide an importable synchronous canonical_callable "
+                "with the host resolver signature."
+            ),
+        )
+    required = raw.get("require_state_ref", False)
+    consequential = any(
+        cfg.tools[name].side_effect_class in CONSEQUENTIAL_SIDE_EFFECT_CLASSES for name in selected
+    )
+    yield _check(
+        id="state_authority.missing_ref",
+        category="State authority",
+        status=DoctorStatus.WARN if consequential and not required else DoctorStatus.PASS,
+        summary="Calls without state_ref can skip the state check"
+        if not required
+        else "Missing state references are blocked",
+        details=(
+            f"require_state_ref={required}; profile={cfg.profile}. "
+            "Production does not implicitly require state_authority; "
+            "configured policy applies."
+        ),
+        remediation="Set require_state_ref: true when current state is required for these actions."
+        if consequential and not required
+        else "",
+        blocking=False,
+    )
+    yield _check(
+        id="state_authority.host_evidence",
+        category="State authority",
+        status=DoctorStatus.SKIP,
+        summary="Host state freshness and wrapper usage are unverified",
+        details=(
+            "Doctor does not call the resolver, execute tools, or prove the host's canonical state."
+        ),
+        evidence=EVIDENCE_NOT_VERIFIABLE,
+        blocking=False,
+    )
+
+
+@doctor_check("redis_persistence")
+def check_redis_persistence(ctx: DoctorContext) -> Iterable[DoctorCheck]:
+    cfg = ctx.config
+    sections = {
+        "action_ledger": cfg.action_ledger,
+        "task_ledger": cfg.task_ledger_defaults,
+        "state_backend": cfg.state_backend,
+        "outcome_emit": cfg.outcome_emit,
+        "loop_guard": cfg.loop_guard,
+        "budget": cfg.budget,
+        "scope_guard": cfg.scope_guard,
+        "completion": cfg.completion,
+        "state_flush": cfg.state_flush,
+        "audit_receipt": cfg.audit_receipt,
+        "destructive_confirm": cfg.destructive_confirm,
+    }
+    sections.update({f"tools.{name}.ledger": tool.ledger for name, tool in cfg.tools.items()})
+    sections.update(
+        {f"tasks.{name}.ledger": task.ledger for name, task in (cfg.tasks or {}).items()}
+    )
+    redis_sections = sorted(
+        name for name, raw in sections.items() if raw is not None and raw.get("storage") == "redis"
+    )
+    if not redis_sections:
+        return
+    yield _check(
+        id="redis.persistence",
+        category="Redis durability",
+        status=DoctorStatus.WARN,
+        summary="Redis durability is operator-asserted",
+        details=(
+            f"Configured Redis stores: {', '.join(redis_sections)}. "
+            "PING does not verify persistence."
+        ),
+        remediation=(
+            "Configure and test AOF/RDB persistence and failover for your deployment. "
+            "Mycelium does not inspect the server's persistence or data-loss policy."
+        ),
+        evidence=EVIDENCE_OPERATOR,
         blocking=False,
     )
 

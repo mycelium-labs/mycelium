@@ -61,6 +61,7 @@ class DoctorReport:
     production_ready: bool = False
     distributed_ready: bool = False
     load_error: str | None = None
+    protection_coverage: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -74,6 +75,7 @@ class DoctorReport:
             "production_ready": self.production_ready,
             "distributed_ready": self.distributed_ready,
             "load_error": self.load_error,
+            "protection_coverage": self.protection_coverage,
         }
 
 

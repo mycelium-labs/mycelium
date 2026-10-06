@@ -32,26 +32,36 @@ JSON-Schema-aware editors and configuration agents.
 | `history_guard` | `HistoryGuard \| null` | `null` | — |
 | `message_validator` | `boolean \| MessageValidator` | `false` | — |
 | `integrations` | `Integrations \| null` | `null` | — |
-| `loop_guard` | `Storage \| null` | `null` | — |
+| `loop_guard` | `LoopGuard \| null` | `null` | — |
 | `budget` | `Budget \| null` | `null` | — |
-| `scope_guard` | `Storage \| null` | `null` | — |
-| `state_authority` | `object \| null` | `null` | — |
+| `scope_guard` | `ScopeGuard \| null` | `null` | — |
+| `state_authority` | `StateAuthority \| null` | `null` | — |
 | `completion` | `Completion \| null` | `null` | — |
 | `deployment` | `Deployment \| null` | `null` | — |
 | `verify` | `object \| null` | `null` | — |
 | `secret_args` | `SecretArgs \| null` | `null` | — |
-| `entity_guard` | `object \| null` | `null` | — |
-| `destructive_confirm` | `object \| null` | `null` | — |
-| `authority_window` | `object \| null` | `null` | — |
-| `use_time_currency` | `object \| null` | `null` | — |
+| `entity_guard` | `EntityGuard \| null` | `null` | — |
+| `destructive_confirm` | `DestructiveConfirm \| null` | `null` | — |
+| `authority_window` | `AuthorityWindow \| null` | `null` | — |
+| `use_time_currency` | `UseTimeCurrency \| null` | `null` | — |
 
-## Budget
+## AuthorityWindow
 
-Run-wide ceilings for protected calls, time, tokens, and cost.
+Check host-issued authority expiry immediately before execution.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres" \| "shared" \| null` | `null` | — |
+| `enabled` | `boolean` | `true` | — |
+| `use_time_check` | `"required" \| "optional"` | `"required"` | — |
+| `clock_skew_tolerance_seconds` | `number` | `0` | — |
+
+## Budget
+
+Run-wide ceilings. Omit this section to disable; enabled is unsupported.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres"` | `"memory"` | — |
 | `path` | `string \| null` | `null` | — |
 | `table` | `string \| null` | `null` | — |
 | `namespace` | `string \| null` | `null` | — |
@@ -60,6 +70,8 @@ Run-wide ceilings for protected calls, time, tokens, and cost.
 | `url_env` | `string \| null` | `null` | — |
 | `dsn` | `string \| null` | `null` | — |
 | `dsn_env` | `string \| null` | `null` | — |
+| `tools` | `"all" \| array[string]` | `"all"` | — |
+| `exclude` | `array[string]` | — | — |
 | `max_duration` | `number \| string \| null` | `null` | Wall-clock ceiling for the run, in seconds or with a duration suffix. |
 | `max_steps` | `integer \| null` | `null` | Run-wide protected-call ceiling. Each budget-guarded tool invocation and instrumented LLM turn reserves one step; business workflow counters are separate. |
 | `max_tokens` | `integer \| null` | `null` | — |
@@ -71,11 +83,11 @@ Run-wide ceilings for protected calls, time, tokens, and cost.
 
 ## Completion
 
-Completion storage and optional custom-runtime startup adapter.
+Host checklist. Omit this section to disable; enabled is unsupported.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres" \| "shared" \| null` | `null` | — |
+| `storage` | `"memory" \| "file" \| "redis" \| "postgres" \| "shared" \| null` | `null` | Omitted storage inherits state_backend, otherwise uses memory. |
 | `path` | `string \| null` | `null` | — |
 | `table` | `string \| null` | `null` | — |
 | `namespace` | `string \| null` | `null` | — |
@@ -84,6 +96,8 @@ Completion storage and optional custom-runtime startup adapter.
 | `url_env` | `string \| null` | `null` | — |
 | `dsn` | `string \| null` | `null` | — |
 | `dsn_env` | `string \| null` | `null` | — |
+| `required` | `array[string \| object]` | — | — |
+| `optional` | `array[string \| object]` | — | — |
 | `adapter_installer` | `string \| null` | `null` | Import path (package.module:function) called during runtime config activation. It must wire the custom terminal boundary and call register_terminal_adapter(). |
 
 ## CrewAIIntegration
@@ -99,7 +113,102 @@ Completion storage and optional custom-runtime startup adapter.
 | --- | --- | --- | --- |
 | `topology` | `"single_node" \| "multi_node" \| null` | `null` | — |
 
+## DestructiveConfirm
+
+Require a host-issued grant bound to the exact destructive action and object.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | `boolean` | `true` | — |
+| `missing_policy` | `"error" \| "warn"` | `"error"` | — |
+| `policy_version` | `string \| null` | `null` | — |
+| `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres"` | `"memory"` | — |
+| `path` | `string \| null` | `null` | — |
+| `table` | `string \| null` | `null` | — |
+| `url` | `string \| null` | `null` | — |
+| `url_env` | `string \| null` | `null` | — |
+| `dsn` | `string \| null` | `null` | — |
+| `dsn_env` | `string \| null` | `null` | — |
+| `prefix` | `string \| null` | `null` | — |
+| `tools` | `object[string, DestructiveTool]` | — | — |
+
+## DestructiveGrant
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `bind_request_id` | `boolean` | `false` | — |
+| `bind_run_id` | `boolean` | `false` | — |
+| `bind_thread_id` | `boolean` | `false` | — |
+| `max_uses` | `integer` | `1` | — |
+| `ttl_seconds` | `number` | `300` | — |
+
+## DestructiveObject
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `type` | `string` | required | — |
+| `id_from` | `string` | required | — |
+| `tenant_from` | `string \| null` | `null` | — |
+| `account_from` | `string \| null` | `null` | — |
+| `case_sensitive` | `boolean` | `true` | — |
+| `require_canonicalizer` | `boolean` | `false` | — |
+
+## DestructiveTool
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `operation` | `string` | required | — |
+| `object` | `DestructiveObject` | required | — |
+| `grant` | `DestructiveGrant` | — | — |
+
+## EntityAllow
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `addresses` | `array[string]` | — | — |
+| `domains` | `array[string]` | — | — |
+| `hosts` | `array[string]` | — | — |
+| `values` | `array[string]` | — | — |
+
+## EntityDestination
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `path` | `string` | required | Argument path containing the destination. |
+| `type` | `"email" \| "https_url" \| "entity_id" \| "host"` | required | — |
+| `allow` | `EntityAllow` | — | — |
+| `required` | `boolean` | `true` | — |
+| `reject_redirects` | `boolean` | `true` | — |
+
+## EntityGuard
+
+Destination allowlists. See the SDK reference for transport limitations.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | `boolean` | `true` | — |
+| `missing_policy` | `"error" \| "warn"` | `"error"` | — |
+| `policy_version` | `string \| null` | `null` | — |
+| `tools` | `object[string, EntityTool]` | — | — |
+
+## EntityTool
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `destinations` | `array[EntityDestination]` | required | — |
+
+## FactSubject
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `type` | `string` | required | — |
+| `id_from` | `string` | required | — |
+| `tenant_from` | `string \| null` | `null` | — |
+| `account_from` | `string \| null` | `null` | — |
+
 ## HistoryGuard
+
+History limits. Omit this section to disable; enabled is unsupported.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -152,6 +261,28 @@ Defaults and allowlist for tool-level durable execution.
 | `store_result` | `boolean` | `true` | — |
 | `redact_fields` | `array[string]` | — | — |
 
+## LoopGuard
+
+Consecutive-action limits. Omit this section to disable; enabled is unsupported.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `storage` | `"memory" \| "file" \| "redis" \| "postgres" \| "shared" \| null` | `null` | Omitted storage inherits state_backend, otherwise uses memory. |
+| `path` | `string \| null` | `null` | — |
+| `table` | `string \| null` | `null` | — |
+| `namespace` | `string \| null` | `null` | — |
+| `prefix` | `string \| null` | `null` | — |
+| `url` | `string \| null` | `null` | — |
+| `url_env` | `string \| null` | `null` | — |
+| `dsn` | `string \| null` | `null` | — |
+| `dsn_env` | `string \| null` | `null` | — |
+| `tools` | `"all" \| array[string]` | `"all"` | — |
+| `exclude` | `array[string]` | — | — |
+| `consecutive_soft` | `object[string, integer] \| null` | `null` | — |
+| `escalate_after_soft` | `integer` | `1` | — |
+| `unclassified_policy` | `"warn" \| "strict"` | `"warn"` | — |
+| `missing_run_id_policy` | `"warn" \| "error" \| null` | `null` | — |
+
 ## MessageValidator
 
 | Field | Type | Default | Description |
@@ -172,6 +303,28 @@ Defaults and allowlist for tool-level durable execution.
 | `max_llm_retries` | `integer \| null` | `null` | — |
 | `max_tool_retries` | `integer \| null` | `null` | — |
 
+## ScopeGuard
+
+Frozen tool scope. Omit this section to disable; enabled is unsupported.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `storage` | `"memory" \| "file" \| "redis" \| "postgres" \| "shared" \| null` | `null` | Omitted storage inherits state_backend, otherwise uses memory. |
+| `path` | `string \| null` | `null` | — |
+| `table` | `string \| null` | `null` | — |
+| `namespace` | `string \| null` | `null` | — |
+| `prefix` | `string \| null` | `null` | — |
+| `url` | `string \| null` | `null` | — |
+| `url_env` | `string \| null` | `null` | — |
+| `dsn` | `string \| null` | `null` | — |
+| `dsn_env` | `string \| null` | `null` | — |
+| `tools` | `"all" \| array[string]` | `"all"` | — |
+| `exclude` | `array[string]` | — | — |
+| `allowed_tools` | `"from_registry" \| "all" \| array[string]` | `"from_registry"` | — |
+| `on_violation` | `"soft" \| "hard"` | `"soft"` | — |
+| `auto_bind` | `boolean` | `true` | — |
+| `missing_run_id_policy` | `"warn" \| "error" \| null` | `null` | — |
+
 ## SecretArgs
 
 | Field | Type | Default | Description |
@@ -181,6 +334,19 @@ Defaults and allowlist for tool-level durable execution.
 | `allow_fields` | `array[string]` | — | — |
 | `allow_tools` | `array[string]` | — | — |
 | `entropy_detection` | `boolean` | `true` | — |
+
+## StateAuthority
+
+Compare the host's frozen state reference with its current canonical reference.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `canonical_callable` | `string` | required | Host resolver path: package.module:function. |
+| `require_state_ref` | `boolean` | `false` | — |
+| `on_mismatch` | `"soft" \| "hard"` | `"hard"` | — |
+| `on_missing` | `"soft" \| "hard"` | `"hard"` | — |
+| `tools` | `"all" \| array[string]` | `"all"` | — |
+| `exclude` | `array[string]` | — | — |
 
 ## Storage
 
@@ -277,3 +443,58 @@ Stable identity and retry timing for guarded transitions.
 | `poll_timeout` | `number \| null` | `null` | — |
 | `reclaim_requires_death_signal` | `boolean` | `true` | — |
 | `presumed_dead_after` | `number \| null` | `null` | — |
+
+## UseTimeCurrency
+
+Revalidate host-bound facts at use time; host validators supply current evidence.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | `boolean` | `true` | — |
+| `missing_policy` | `"error" \| "warn"` | `"error"` | — |
+| `policy_version` | `string \| null` | `null` | — |
+| `tools` | `object[string, UseTimeTool]` | — | — |
+
+## UseTimeFact
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | required | — |
+| `subject` | `FactSubject` | required | — |
+| `validator` | `string` | required | Name of a host-registered current-fact validator. |
+| `require` | `object \| null` | `null` | — |
+| `revision_from` | `string \| null` | `null` | — |
+| `max_age_seconds` | `number \| null` | `null` | — |
+| `bind_request_id` | `boolean` | `false` | — |
+| `bind_run_id` | `boolean` | `false` | — |
+| `bind_thread_id` | `boolean` | `false` | — |
+| `compare_to_arg` | `string \| null` | `null` | — |
+| `provider_precondition` | `string \| null` | `null` | — |
+
+## UseTimeTool
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `facts` | `array[UseTimeFact]` | required | — |
+
+## Activation and recovery boundaries
+
+Omit `budget`, `completion`, `loop_guard`, `scope_guard`, or `history_guard`
+to disable that control. These sections reject `enabled` and unknown keys.
+Existing per-tool boolean overrides remain supported where documented.
+
+For configured state authority, Doctor resolves and inspects the synchronous
+host callable without invoking it. The host must supply current canonical state
+and use the wrapper. Set `require_state_ref: true` when missing or unresolved
+state must block an action; the default permits calls without state references.
+
+Composite recovery is a Python API, not a top-level YAML section. See
+[durable composite recovery](COMPOSITE_RECOVERY.md) for `@composite`,
+`composite_choice()`, `composite_items()`, definition pinning, and bounded syntax.
+The experimental sidecar uses explicit manifests; see
+[sidecar self-hosting](SELF_HOSTING.md) for supported deployment profiles.
+
+For wiring and limitations of the opt-in action controls, see the
+[SDK reference](../README.md). URL allowlists do not enforce process-wide egress.
+Redis persistence is operator-asserted; Doctor reports an advisory warning
+and does not inspect AOF/RDB or the server's data-loss policy.

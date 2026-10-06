@@ -20,6 +20,8 @@ def render_json(report: DoctorReport) -> str:
 
 
 def render_human(report: DoctorReport, *, verbose: bool = False) -> str:
+    from mycelium.secret_protection import sanitize_text
+
     lines = ["Mycelium Doctor", ""]
     # Collapse to one line per category for the headline view, but keep every
     # check when verbose or when status is WARN/FAIL.
@@ -45,10 +47,19 @@ def render_human(report: DoctorReport, *, verbose: bool = False) -> str:
         for _key, check in headline:
             lines.append(_format_check_line(check, verbose=False))
 
+    if report.protection_coverage:
+        lines.extend(["", "Tool protection coverage (provider boundaries remain unverified)"])
+        for row in report.protection_coverage:
+            lines.append(
+                sanitize_text(
+                    f"  {row['tool']}: {row['wrapper_status']}; "
+                    f"ledger={row['ledger_storage'] or 'unconfigured'}; "
+                    f"identity={row['request_identity']}"
+                )
+            )
+
     lines.append("")
-    lines.append(
-        f"Production ready: {'YES' if report.production_ready else 'NO'}"
-    )
+    lines.append(f"Production ready: {'YES' if report.production_ready else 'NO'}")
     lines.append(
         f"Distributed ready: {'YES' if report.distributed_ready else 'NO'}"
     )

@@ -25,6 +25,7 @@ from mycelium.config_policies import (
     _storage_settings,
 )
 from mycelium.config_schema import (
+    _STRICT_GUARD_MODELS,
     CONFIG_VERSION,
     ToolContractModel,
 )
@@ -1949,6 +1950,22 @@ def _parse_config(
     if not isinstance(data, dict):
         raise ConfigError("config root must be a mapping")
 
+    # Use the schema's declared fields so runtime validation and generated
+    # configuration documentation share one allowlist. Do not coerce values
+    # or inject model defaults into the existing semantic parser.
+    for section, model in _STRICT_GUARD_MODELS.items():
+        raw = data.get(section)
+        if isinstance(raw, dict):
+            extra = set(raw) - model.model_fields.keys()
+            if extra:
+                paths = ", ".join(f"{section}.{key}" for key in sorted(extra, key=str))
+                hint = (
+                    f"; omit the '{section}' section to disable this guard"
+                    if "enabled" in extra
+                    else ""
+                )
+                raise ConfigError(f"unsupported configuration option(s): {paths}{hint}")
+
     config_version = data.get("config_version", CONFIG_VERSION)
     if config_version != CONFIG_VERSION:
         raise ConfigError(
@@ -2207,6 +2224,8 @@ def _parse_config(
         tools_sel = state_authority_raw.get("tools", "all")
         if tools_sel != "all" and not isinstance(tools_sel, list):
             raise ConfigError("'state_authority.tools' must be 'all' or a list of tool names")
+        if isinstance(tools_sel, list):
+            _parse_string_list(tools_sel, field="state_authority.tools")
         on_mismatch = state_authority_raw.get("on_mismatch", ON_MISMATCH_HARD)
         if on_mismatch not in ON_MISMATCH_MODES:
             raise ConfigError(
@@ -2224,6 +2243,7 @@ def _parse_config(
         exclude = state_authority_raw.get("exclude") or []
         if not isinstance(exclude, list):
             raise ConfigError("'state_authority.exclude' must be a list of tool names")
+        _parse_string_list(exclude, field="state_authority.exclude")
 
     secret_args_raw = _parse_secret_args(data, profile=profile, tools=tools)
     entity_guard_raw = _parse_entity_guard(data, profile=profile)
