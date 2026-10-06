@@ -1,0 +1,71 @@
+name: Composite recovery proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "sdk/mycelium/**"
+      - "sdk/tests/test_composite*"
+      - "sdk/tests/fixtures/composite*"
+      - "sdk/tests/*backend_gates*"
+      - "sdk/pyproject.toml"
+      - ".github/workflows/composite-recovery.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "sdk/mycelium/**"
+      - "sdk/tests/test_composite*"
+      - "sdk/tests/fixtures/composite*"
+      - "sdk/tests/*backend_gates*"
+      - "sdk/pyproject.toml"
+      - ".github/workflows/composite-recovery.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: composite-recovery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  process-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mycelium
+          POSTGRES_PASSWORD: mycelium
+          POSTGRES_DB: mycelium_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mycelium -d mycelium_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      MYCELIUM_TEST_COMPOSITE_PROCESS_PROOF: "1"
+      MYCELIUM_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+      MYCELIUM_TEST_POSTGRES_DSN: postgresql://mycelium:mycelium@127.0.0.1:5432/mycelium_test
+      MYCELIUM_CI_REQUIRE_REDIS: "1"
+      MYCELIUM_CI_REQUIRE_POSTGRES: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install SDK and required backend drivers
+        run: pip install -e "./sdk[dev,redis,postgres]"
+      - name: Kill, restart, contend, and fence real worker processes
+        working-directory: sdk
+        run: pytest tests/test_composite_process_recovery.py tests/test_backend_gates.py -q -rs
