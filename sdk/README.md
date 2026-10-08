@@ -395,6 +395,15 @@ guard.check_for_drops(processed_messages)  # after framework trimming
 
 Raises on token overflow, message count limits, duplicate turns, and silent message drops.
 
+In YAML, declare `history_guard` with `max_tokens`, `max_messages`, `warn_at`,
+and/or `detect_duplicates`. Omit the entire section to disable it.
+`history_guard.enabled` is unsupported for both real booleans and quoted values,
+so `enabled: false` cannot silently leave a guard active. Unknown options raise
+`ConfigError` with the full field path. Disabling `detect_duplicates` disables
+only duplicate detection, while configured token and message limits still apply.
+See the [configuration reference](docs/CONFIG_REFERENCE.md#history-guard-activation)
+for a supported declaration and defaults.
+
 ## Quickstart: tool boundaries (opt-in)
 
 ```python

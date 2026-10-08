@@ -524,8 +524,11 @@ runner:
 
 history_guard:
   # Omit the section to disable; enabled and unknown keys are rejected.
+  # An empty mapping creates a guard with defaults. enabled: false is not an off switch.
   max_tokens: 100000
   max_messages: 1000
+  # warn_at: 0.9           # fraction of token limit at which to warn; finite and in (0, 1]
+  # detect_duplicates: true  # unquoted boolean; false keeps token/message limits active
 
 message_validator:
   enabled: true
