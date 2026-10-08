@@ -87,6 +87,9 @@ manifests. Call `AssertCompositeCompatible` before using it. The host supplies
 a stable operation ID, definition, and ordered steps, renews the parent lease
 during long provider calls, and replays completed child results after a crash.
 See the [composite recovery guide](../../sdk/docs/COMPOSITE_RECOVERY.md).
+The [composite extension contract](../../sdk/docs/spec/TRANSITION_ENVELOPE_DECISIONS.md#d19-composite-sidecar-extension)
+records the route fields, distinct parent/child authority, and shared storage
+choice without expanding the frozen `v1alpha1` effect protocol.
 
 ## Types and errors
 
