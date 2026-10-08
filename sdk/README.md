@@ -2663,6 +2663,32 @@ markers show that a wrapper is present; they do not prove that hidden effects
 are covered. Provider boundaries and reconciliation still require integration
 tests. Doctor never invokes the supplied tools or the state resolver.
 
+#### Redis persistence warning
+
+Any configured Redis store produces the `redis.persistence` finding in Doctor's
+human and JSON reports, including Redis inherited through `state_backend` and
+per-tool or per-task ledgers. The finding lists the explicitly configured Redis
+sections. It is present even when connectivity probes are disabled, and a
+successful `PING` does not remove it.
+
+| Finding field | Value | Meaning |
+| --- | --- | --- |
+| `id` | `redis.persistence` | Redis durability needs an operator-owned check. |
+| `status` | `WARN` | Advisory reminder; Mycelium does not inspect server persistence. |
+| `evidence` | `operator_asserted` | AOF/RDB and the accepted data-loss policy are outside Doctor's evidence. |
+| `blocking` | `false` | This finding alone does not make `production_ready` false. |
+
+Configure and test AOF/RDB, failover, and recovery for your topology. Review the
+accepted loss window and repeat that verification after changing Redis settings
+or deployment. Setting a persistence assertion in YAML does not prove those
+server properties. Memory, file, SQLite, and PostgreSQL stores alone do not
+produce this Redis-specific finding.
+
+`--strict` still exits nonzero for warnings, including this advisory one, because
+the operator explicitly selected a warning-free gate. The ordinary report keeps
+the warning visible without turning this individual check into a blocking
+production-readiness requirement.
+
 ### `mycelium verify` (exercise the guarantees)
 
 Doctor inspects configuration. `mycelium verify` empirically tests Mycelium’s
