@@ -251,8 +251,59 @@ cancel an external request already sent.
 
 ## Decision record
 
-The implementation chooses a lightweight durable parent-control record plus
-ordinary child `LedgerEntry` rows. `handoff_scope()` remains audit causation
-only. The parent is not an atomic transaction and never aggregates away child
-ambiguity. General workflow scheduling and arbitrary conditions based on
-prior child outcomes remain deferred.
+### Bounded conditional paths
+
+**Decision: accepted and implemented for one top-level boolean branch.** Keep
+the lightweight durable parent-control record and ordinary child `LedgerEntry`
+rows. A branch selects a prevalidated sequence; it does not authorize a scheduler
+to invent a new sequence during recovery. `handoff_scope()` remains audit
+causation only.
+
+Both arms are statically checked at decoration time. The selector must be an
+immutable boolean function argument, optionally negated, or a faithfully
+reconstructable boolean returned by the immediately preceding ledgered child
+and consumed through `composite_choice()`.
+
+| Selector | What is pinned | Replay requirement |
+| --- | --- | --- |
+| Host boolean argument | The selected path label, ordered child manifest, and definition before any child effect | Supply the same boolean and selected definition; another path is definition drift. |
+| Previous child result | The prerequisite manifest and both possible path digests before the prerequisite runs; the selected manifest is stored under the current parent owner and fence after prerequisites resolve | Replay the stored boolean result, resolve prerequisite children in this replay, and select the same pinned manifest. |
+
+An explicit host definition label does not permit a changed manifest. Changing
+the selected path, prerequisite shape, or pinned result-path definitions blocks
+recovery rather than creating new child identities for the same operation.
+
+### Untaken paths and ambiguous children
+
+Children on the untaken arm are not executed or claimed, and parent completion
+does not require evidence for them. The current replay must instead encounter
+and resolve every child in the selected manifest, in order. Replaying a completed
+child returns its stored result; it is not permission to execute the other arm.
+
+An ambiguous prerequisite cannot supply a trustworthy boolean, so no result
+branch is selected until that child resolves. An ambiguous child on the selected
+arm retains the ordinary reconciliation or hard-block rules. Switching arms to
+work around that ambiguity is forbidden. A new parent owner or fence does not
+erase child uncertainty, clear a blocked outcome, or authorize a provider retry.
+
+Branch selection, child admission, provider-boundary crossing, and parent
+completion require current parent authority. Lease renewal and fenced takeover
+retain the same rules as straight-line recovery. These checks cannot cancel a
+provider request already sent.
+
+### Non-goals and verification
+
+- A workflow scheduler, automatic alternate-tool retries, or compensation for
+  already completed effects.
+- Multiple or nested conditions, conditions reading fresh external state,
+  arbitrary result expressions, or combining a branch with a loop.
+- Automatic discovery of hidden effects or transactional rollback of the parent.
+- Branching in the language-neutral `composite-v1` extension; its current host
+  manifests declare one complete straight-line sequence.
+
+The existing [composite checks](../tests/test_composite.py) cover input-path
+pinning, immutable boolean selectors, durable result choices, interruption after
+selection, definition drift before the first child, and asynchronous replay.
+The [process recovery proof](../tests/test_composite_process_recovery.py) exercises
+branch recovery with independent workers. More general workflow scheduling and
+conditions based on arbitrary prior outcomes require a separate design decision.
