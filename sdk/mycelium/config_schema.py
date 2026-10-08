@@ -30,23 +30,39 @@ class StorageConfigModel(_ConfigModel):
             "enum": ["memory", "file", "sqlite", "redis", "postgres", "shared", None]
         },
     )
-    path: str | None = None
-    table: str | None = None
-    namespace: str | None = None
-    prefix: str | None = None
-    url: str | None = None
-    url_env: str | None = None
-    dsn: str | None = None
-    dsn_env: str | None = None
+    path: str | None = Field(
+        default=None, description="Local file or SQLite path for that backend."
+    )
+    table: str | None = Field(
+        default=None, description="PostgreSQL table name for the control's state."
+    )
+    namespace: str | None = Field(default=None, description="Namespace for backend state keys.")
+    prefix: str | None = Field(
+        default=None, description="Redis key prefix for isolated control state."
+    )
+    url: str | None = Field(
+        default=None, description="Redis connection URL; prefer url_env for secrets."
+    )
+    url_env: str | None = Field(
+        default=None, description="Environment variable holding the Redis URL."
+    )
+    dsn: str | None = Field(default=None, description="PostgreSQL DSN; prefer dsn_env for secrets.")
+    dsn_env: str | None = Field(
+        default=None, description="Environment variable holding the PostgreSQL DSN."
+    )
 
 
 class BudgetConfigModel(StorageConfigModel):
     """Run-wide ceilings. Omit this section to disable; enabled is unsupported."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
-    storage: Literal["memory", "file", "sqlite", "redis", "postgres"] = "memory"
-    tools: Literal["all"] | list[str] = "all"
-    exclude: list[str] = Field(default_factory=list)
+    storage: Literal["memory", "file", "sqlite", "redis", "postgres"] = Field(
+        default="memory", description="Backend for run-wide budget counters."
+    )
+    tools: Literal["all"] | list[str] = Field(
+        default="all", description="Configured tools whose calls consume the run budget."
+    )
+    exclude: list[str] = Field(default_factory=list, description="Tools exempt from budget checks.")
 
     max_duration: float | str | None = Field(
         default=None,
@@ -60,12 +76,23 @@ class BudgetConfigModel(StorageConfigModel):
             "instrumented LLM turn reserves one step; business workflow counters are separate."
         ),
     )
-    max_tokens: int | None = Field(default=None, gt=0)
-    max_usd: int | float | None = Field(default=None, gt=0)
-    max_cost_usd: int | float | None = Field(default=None, gt=0)
-    missing_usage_policy: Literal["warn", "error"] | None = None
-    warn_at: int | float | None = Field(default=None, gt=0, le=1)
-    on_missing_meter: Literal["warn", "hard"] | None = None
+    max_tokens: int | None = Field(default=None, gt=0, description="Run-wide token ceiling.")
+    max_usd: int | float | None = Field(
+        default=None, gt=0, description="Run-wide cost ceiling in USD."
+    )
+    max_cost_usd: int | float | None = Field(default=None, gt=0, description="Alias for max_usd.")
+    missing_usage_policy: Literal["warn", "error"] | None = Field(
+        default=None, description="Missing LLM usage: warn in development, error in production."
+    )
+    warn_at: int | float | None = Field(
+        default=None,
+        gt=0,
+        le=1,
+        description="Ceiling fraction at which to warn; runtime default 0.8.",
+    )
+    on_missing_meter: Literal["warn", "hard"] | None = Field(
+        default=None, description="Missing budget meter response; runtime default hard."
+    )
 
 
 class CompletionConfigModel(StorageConfigModel):
@@ -75,8 +102,13 @@ class CompletionConfigModel(StorageConfigModel):
     storage: Literal["memory", "file", "redis", "postgres", "shared"] | None = Field(
         default=None, description="Omitted storage inherits state_backend, otherwise uses memory."
     )
-    required: list[str | dict[str, Any]] = Field(default_factory=list)
-    optional: list[str | dict[str, Any]] = Field(default_factory=list)
+    required: list[str | dict[str, Any]] = Field(
+        default_factory=list,
+        description="Checklist IDs (strings or id mappings) that must be marked.",
+    )
+    optional: list[str | dict[str, Any]] = Field(
+        default_factory=list, description="Checklist IDs that warn when unmarked at completion."
+    )
 
     adapter_installer: str | None = Field(
         default=None,
@@ -95,12 +127,29 @@ class LoopGuardConfigModel(StorageConfigModel):
     storage: Literal["memory", "file", "redis", "postgres", "shared"] | None = Field(
         default=None, description="Omitted storage inherits state_backend, otherwise uses memory."
     )
-    tools: Literal["all"] | list[str] = "all"
-    exclude: list[str] = Field(default_factory=list)
-    consecutive_soft: dict[str, int] | None = None
-    escalate_after_soft: int = Field(default=1, gt=0)
-    unclassified_policy: Literal["warn", "strict"] = "warn"
-    missing_run_id_policy: Literal["warn", "error"] | None = None
+    tools: Literal["all"] | list[str] = Field(
+        default="all", description="Configured tools whose consecutive action hashes are checked."
+    )
+    exclude: list[str] = Field(default_factory=list, description="Tools exempt from loop checks.")
+    consecutive_soft: dict[str, int] | None = Field(
+        default=None,
+        description="Soft-block thresholds by side-effect class; omitted uses built-in limits.",
+    )
+    escalate_after_soft: int = Field(
+        default=1,
+        gt=0,
+        description="Additional identical attempts after a soft block before hard block.",
+    )
+    unclassified_policy: Literal["warn", "strict"] = Field(
+        default="warn",
+        description=(
+            "Unclassified actions use read (warn) or non-idempotent mutation (strict) limits."
+        ),
+    )
+    missing_run_id_policy: Literal["warn", "error"] | None = Field(
+        default=None,
+        description="Missing run identity: defaults to warn in development, error in production.",
+    )
 
 
 class ScopeGuardConfigModel(StorageConfigModel):
@@ -110,23 +159,46 @@ class ScopeGuardConfigModel(StorageConfigModel):
     storage: Literal["memory", "file", "redis", "postgres", "shared"] | None = Field(
         default=None, description="Omitted storage inherits state_backend, otherwise uses memory."
     )
-    tools: Literal["all"] | list[str] = "all"
-    exclude: list[str] = Field(default_factory=list)
-    allowed_tools: Literal["from_registry", "all"] | list[str] = "from_registry"
-    on_violation: Literal["soft", "hard"] = "soft"
-    auto_bind: bool = True
-    missing_run_id_policy: Literal["warn", "error"] | None = None
+    tools: Literal["all"] | list[str] = Field(
+        default="all", description="Configured tools that must pass the frozen run allowlist."
+    )
+    exclude: list[str] = Field(default_factory=list, description="Tools exempt from scope checks.")
+    allowed_tools: Literal["from_registry", "all"] | list[str] = Field(
+        default="from_registry",
+        description="Initial allowlist: registry.allowed, all configured tools, or explicit names.",
+    )
+    on_violation: Literal["soft", "hard"] = Field(
+        default="soft",
+        description="Soft boundary error or hard block when a tool exceeds the allowlist.",
+    )
+    auto_bind: bool = Field(
+        default=True, description="Bind the initial allowlist on the first guarded call."
+    )
+    missing_run_id_policy: Literal["warn", "error"] | None = Field(
+        default=None,
+        description="Missing run identity: defaults to warn in development, error in production.",
+    )
 
 
 class StateAuthorityConfigModel(_ConfigModel):
     """Compare the host's frozen state reference with its current canonical reference."""
 
     canonical_callable: str = Field(description="Host resolver path: package.module:function.")
-    require_state_ref: bool = False
-    on_mismatch: Literal["soft", "hard"] = "hard"
-    on_missing: Literal["soft", "hard"] = "hard"
-    tools: Literal["all"] | list[str] = "all"
-    exclude: list[str] = Field(default_factory=list)
+    require_state_ref: bool = Field(
+        default=False, description="Block calls without a host-supplied state reference."
+    )
+    on_mismatch: Literal["soft", "hard"] = Field(
+        default="hard", description="Response when the frozen reference differs from current state."
+    )
+    on_missing: Literal["soft", "hard"] = Field(
+        default="hard", description="Response when a supplied state reference cannot be resolved."
+    )
+    tools: Literal["all"] | list[str] = Field(
+        default="all", description="Configured tools whose state references are checked."
+    )
+    exclude: list[str] = Field(
+        default_factory=list, description="Tools exempt from state-authority checks."
+    )
 
 
 class TransitionConfigModel(_ConfigModel):
@@ -414,18 +486,28 @@ class SecretArgsConfigModel(_ConfigModel):
 
 
 class EntityAllowConfigModel(_ConfigModel):
-    addresses: list[str] = Field(default_factory=list)
-    domains: list[str] = Field(default_factory=list)
-    hosts: list[str] = Field(default_factory=list)
-    values: list[str] = Field(default_factory=list)
+    addresses: list[str] = Field(default_factory=list, description="Allowed email addresses.")
+    domains: list[str] = Field(default_factory=list, description="Allowed email domains.")
+    hosts: list[str] = Field(default_factory=list, description="Allowed URL or host destinations.")
+    values: list[str] = Field(default_factory=list, description="Allowed entity identifiers.")
 
 
 class EntityDestinationConfigModel(_ConfigModel):
     path: str = Field(description="Argument path containing the destination.")
-    type: Literal["email", "https_url", "entity_id", "host"]
-    allow: EntityAllowConfigModel = Field(default_factory=EntityAllowConfigModel)
-    required: bool = True
-    reject_redirects: bool = True
+    type: Literal["email", "https_url", "entity_id", "host"] = Field(
+        description="Destination interpretation used for normalization and allowlist matching."
+    )
+    allow: EntityAllowConfigModel = Field(
+        default_factory=EntityAllowConfigModel,
+        description="Allowed destinations for this argument.",
+    )
+    required: bool = Field(
+        default=True, description="Require the destination argument to be present."
+    )
+    reject_redirects: bool = Field(
+        default=True,
+        description="Reject HTTPS URLs with embedded absolute redirect destinations.",
+    )
 
     @field_validator("allow", mode="before")
     @classmethod
@@ -435,94 +517,179 @@ class EntityDestinationConfigModel(_ConfigModel):
 
 
 class EntityToolConfigModel(_ConfigModel):
-    destinations: list[EntityDestinationConfigModel]
+    destinations: list[EntityDestinationConfigModel] = Field(
+        description="Destination arguments checked before the tool executes."
+    )
 
 
 class EntityGuardConfigModel(_ConfigModel):
     """Destination allowlists. See the SDK reference for transport limitations."""
 
-    enabled: bool = True
-    missing_policy: Literal["error", "warn"] = "error"
-    policy_version: str | None = None
-    tools: dict[str, EntityToolConfigModel] = Field(default_factory=dict)
+    enabled: bool = Field(
+        default=True, description="Enable destination validation before execution."
+    )
+    missing_policy: Literal["error", "warn"] = Field(
+        default="error",
+        description="Response to missing destination evidence; production requires error.",
+    )
+    policy_version: str | None = Field(
+        default=None, description="Host policy label bound to destination evidence."
+    )
+    tools: dict[str, EntityToolConfigModel] = Field(
+        default_factory=dict, description="Per-tool destination paths, types, and allowlists."
+    )
 
 
 class AuthorityWindowConfigModel(_ConfigModel):
     """Check host-issued authority expiry immediately before execution."""
 
-    enabled: bool = True
-    use_time_check: Literal["required", "optional"] = "required"
-    clock_skew_tolerance_seconds: float = Field(default=0, ge=0, allow_inf_nan=False)
+    enabled: bool = Field(
+        default=True, description="Check the host-issued authority window at execution time."
+    )
+    use_time_check: Literal["required", "optional"] = Field(
+        default="required",
+        description="Require authority metadata; optional checks only when present.",
+    )
+    clock_skew_tolerance_seconds: float = Field(
+        default=0,
+        ge=0,
+        allow_inf_nan=False,
+        description="Finite, nonnegative tolerance for host clock differences, in seconds.",
+    )
 
 
 class FactSubjectConfigModel(_ConfigModel):
-    type: str
-    id_from: str
-    tenant_from: str | None = None
-    account_from: str | None = None
+    type: str = Field(description="Host-defined subject kind, such as order or account.")
+    id_from: str = Field(description="Tool argument path containing the subject identifier.")
+    tenant_from: str | None = Field(
+        default=None, description="Argument path containing tenant identity."
+    )
+    account_from: str | None = Field(
+        default=None, description="Argument path containing account identity."
+    )
 
 
 class UseTimeFactConfigModel(_ConfigModel):
-    name: str
-    subject: FactSubjectConfigModel
+    name: str = Field(description="Stable name of the fact bound by the host.")
+    subject: FactSubjectConfigModel = Field(
+        description="Subject identity resolved from tool arguments."
+    )
     validator: str = Field(description="Name of a host-registered current-fact validator.")
-    require: dict[str, Any] | None = None
-    revision_from: str | None = None
-    max_age_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
-    bind_request_id: bool = False
-    bind_run_id: bool = False
-    bind_thread_id: bool = False
-    compare_to_arg: str | None = None
-    provider_precondition: str | None = None
+    require: dict[str, Any] | None = Field(
+        default=None,
+        description="Mapping with a value key specifying the required current fact value.",
+    )
+    revision_from: str | None = Field(
+        default=None, description="Argument path for the expected revision."
+    )
+    max_age_seconds: float | None = Field(
+        default=None,
+        ge=0,
+        allow_inf_nan=False,
+        description="Maximum age of bound fact evidence in seconds.",
+    )
+    bind_request_id: bool = Field(
+        default=False, description="Bind evidence to the current request."
+    )
+    bind_run_id: bool = Field(default=False, description="Bind evidence to the current run.")
+    bind_thread_id: bool = Field(default=False, description="Bind evidence to the current thread.")
+    compare_to_arg: str | None = Field(
+        default=None, description="Argument path compared to current fact value."
+    )
+    provider_precondition: str | None = Field(
+        default=None,
+        description=(
+            "Provider precondition argument whose presence is recorded in validation evidence."
+        ),
+    )
 
 
 class UseTimeToolConfigModel(_ConfigModel):
-    facts: list[UseTimeFactConfigModel]
+    facts: list[UseTimeFactConfigModel] = Field(description="Facts revalidated for this tool.")
 
 
 class UseTimeCurrencyConfigModel(_ConfigModel):
     """Revalidate host-bound facts at use time; host validators supply current evidence."""
 
-    enabled: bool = True
-    missing_policy: Literal["error", "warn"] = "error"
-    policy_version: str | None = None
-    tools: dict[str, UseTimeToolConfigModel] = Field(default_factory=dict)
+    enabled: bool = Field(
+        default=True, description="Revalidate host-bound facts before consequential execution."
+    )
+    missing_policy: Literal["error", "warn"] = Field(
+        default="error", description="Response to missing fact evidence; production requires error."
+    )
+    policy_version: str | None = Field(
+        default=None, description="Host policy label bound to current-fact evidence."
+    )
+    tools: dict[str, UseTimeToolConfigModel] = Field(
+        default_factory=dict,
+        description="Per-tool fact declarations and registered validator names.",
+    )
 
 
 class DestructiveObjectConfigModel(FactSubjectConfigModel):
-    case_sensitive: bool = True
-    require_canonicalizer: bool = False
+    case_sensitive: bool = Field(
+        default=True, description="Preserve case in object identity matching."
+    )
+    require_canonicalizer: bool = Field(
+        default=False, description="Require a host-registered canonicalizer for this object type."
+    )
 
 
 class DestructiveGrantConfigModel(_ConfigModel):
-    bind_request_id: bool = False
-    bind_run_id: bool = False
-    bind_thread_id: bool = False
-    max_uses: int = Field(default=1, gt=0)
-    ttl_seconds: float = Field(default=300, gt=0, allow_inf_nan=False)
+    bind_request_id: bool = Field(
+        default=False, description="Restrict grants to the current request."
+    )
+    bind_run_id: bool = Field(default=False, description="Restrict grants to the current run.")
+    bind_thread_id: bool = Field(
+        default=False, description="Restrict grants to the current thread."
+    )
+    max_uses: int = Field(default=1, gt=0, description="Maximum uses of one issued grant.")
+    ttl_seconds: float = Field(
+        default=300, gt=0, allow_inf_nan=False, description="Grant lifetime in seconds."
+    )
 
 
 class DestructiveToolConfigModel(_ConfigModel):
-    operation: str
-    object: DestructiveObjectConfigModel
-    grant: DestructiveGrantConfigModel = Field(default_factory=DestructiveGrantConfigModel)
+    operation: str = Field(description="Exact destructive operation authorized by the host grant.")
+    object: DestructiveObjectConfigModel = Field(
+        description="Subject identity and canonicalization requirements."
+    )
+    grant: DestructiveGrantConfigModel = Field(
+        default_factory=DestructiveGrantConfigModel,
+        description="Grant identity bindings, use limit, and lifetime.",
+    )
 
 
 class DestructiveConfirmConfigModel(_ConfigModel):
     """Require a host-issued grant bound to the exact destructive action and object."""
 
-    enabled: bool = True
-    missing_policy: Literal["error", "warn"] = "error"
-    policy_version: str | None = None
-    storage: Literal["memory", "file", "sqlite", "redis", "postgres"] = "memory"
-    path: str | None = None
-    table: str | None = None
-    url: str | None = None
-    url_env: str | None = None
-    dsn: str | None = None
-    dsn_env: str | None = None
-    prefix: str | None = None
-    tools: dict[str, DestructiveToolConfigModel] = Field(default_factory=dict)
+    enabled: bool = Field(
+        default=True, description="Require host-issued destructive-action authorization."
+    )
+    missing_policy: Literal["error", "warn"] = Field(
+        default="error", description="Response to missing grants; production requires error."
+    )
+    policy_version: str | None = Field(
+        default=None, description="Host policy label bound to authorization grants."
+    )
+    storage: Literal["memory", "file", "sqlite", "redis", "postgres"] = Field(
+        default="memory",
+        description="Grant store; choose durable storage when grants must survive worker restarts.",
+    )
+    path: str | None = Field(default=None, description="Local file or SQLite grant-store path.")
+    table: str | None = Field(default=None, description="PostgreSQL grant-store table name.")
+    url: str | None = Field(default=None, description="Redis URL; prefer url_env for secrets.")
+    url_env: str | None = Field(
+        default=None, description="Environment variable holding the Redis URL."
+    )
+    dsn: str | None = Field(default=None, description="PostgreSQL DSN; prefer dsn_env for secrets.")
+    dsn_env: str | None = Field(
+        default=None, description="Environment variable holding the PostgreSQL DSN."
+    )
+    prefix: str | None = Field(default=None, description="Redis key prefix for grants.")
+    tools: dict[str, DestructiveToolConfigModel] = Field(
+        default_factory=dict, description="Per-tool operation, object, and grant policy."
+    )
 
 
 class MyceliumConfigModel(_ConfigModel):
