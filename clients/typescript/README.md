@@ -86,6 +86,9 @@ manifest and replay completed child results before proceeding. Renew the parent
 lease during long provider calls. See the
 [composite recovery guide](../../sdk/docs/COMPOSITE_RECOVERY.md) for the
 protocol and its limits.
+For route fields, storage scope, and the decision to keep this extension separate
+from `v1alpha1`, see the
+[composite extension contract](../../sdk/docs/spec/TRANSITION_ENVELOPE_DECISIONS.md#d19-composite-sidecar-extension).
 
 The client preserves `UNKNOWN`, denial, terminal, and wait dispositions. Unknown
 future dispositions fail closed. Reconciliation, provider attestation, operator

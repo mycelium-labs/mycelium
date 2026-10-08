@@ -314,3 +314,71 @@ protocol guarantees.
 - **Release meaning:** Frozen means that implementations have a fixed target. It
   does not mean production-ready, stable `v1`, published, or supported for remote
   and multi-tenant deployment.
+
+## D19. Composite sidecar extension
+
+**Decision: ship as the separately negotiated experimental `composite-v1`
+extension.** Parent recovery needs one authoritative lease, fence, pinned
+sequence, and completion check across child claims. Host-only orchestration of
+unrelated child effects cannot establish that shared parent authority.
+
+Keep the frozen `v1alpha1` effect routes and `identity-v1` canonicalization.
+Clients require `v1alpha1` compatibility and check `extensions.composite-v1`
+in authenticated capabilities before issuing composite commands. The current
+extension contract is the implemented route and message shape below; an
+incompatible expansion must use a separately negotiated extension revision.
+
+### Current wire shape
+
+All routes are beneath `/extensions/composite-v1/composites`. Use URL-encoded
+operation and step IDs in paths. Authentication and the fixed tenant/application
+scope remain the same as the ordinary sidecar routes.
+
+| Method and relative route | Purpose and request fields |
+| --- | --- |
+| `POST /claim` | Pin or reclaim `operation_id`, `definition`, and the complete ordered `steps` list of unique `{step_id, tool_id}` pairs; supply `tenant_id`, `application_id`, and optional `lease_ttl`. |
+| `GET /{operation_id}` | Inspect durable parent state without executing a provider call. |
+| `POST /{operation_id}/renew` | Extend the current parent's lease; optional `lease_ttl`. |
+| `POST /{operation_id}/release` | Relinquish parent authority after controlled interruption. |
+| `POST /{operation_id}/finish` | Finish only after this replay has resolved every committed child in order. |
+| `POST /{operation_id}/steps/{step_id}/claim` | Supply child `identity` and `decision`; only `EXECUTE` permits the provider call. |
+| `POST /{operation_id}/steps/{step_id}/boundary` | Validate both fences immediately before the provider boundary; supply `identity`, `effect_owner_id`, and `effect_fence`. |
+| `POST /{operation_id}/steps/{step_id}/complete` | Record the result under both fences; supply the same child authority fields and `result`. |
+| `POST /{operation_id}/steps/{step_id}/resolve` | Acknowledge a completed child's durable evidence during replay; supply `identity`. |
+
+Every mutating route after parent claim also carries `tenant_id`,
+`application_id`, `owner_id`, and the parent `fence`. Parent projections identify
+both `protocol_version: v1alpha1` and `composite_protocol_version: composite-v1`.
+The host keeps the returned parent handle and each executing child's effect
+handle; the two fences are distinct authorities.
+
+The current manifest accepts 1–64 steps. The engine pins definition, order, and
+tool IDs, then binds each child's identity to the parent and step. Changing the
+manifest or a child binding blocks replay. A completed child returns
+`RETURN_STORED_RESULT` and must be resolved under the new parent fence before
+progression. `UNKNOWN` remains unresolved; claiming another parent lease is
+not permission to repeat an uncertain effect.
+
+### Storage and client decision
+
+File-backed development and shared PostgreSQL sidecars use their configured
+action-ledger storage for parent state as well as child rows. PostgreSQL permits
+multiple sidecars to arbitrate the same parent through shared durable state.
+There is no separate opt-in YAML orchestration section and no new promise of
+transactional provider execution. The host must renew long-running parent
+leases and truthfully report provider boundaries and outcomes.
+
+Protocol, Python sidecar, TypeScript, and Go implementation work is already
+present. TypeScript's `assertCompositeCompatible()` and Go's
+`AssertCompositeCompatible` check the extension; both clients expose parent
+claim/inspect/renew/release/finish and child claim/boundary/complete/resolve
+operations. The existing [sidecar composite checks](../../tests/test_sidecar_composite.py)
+cover ordered recovery, parent-bound child identity, and stale-fence rejection.
+The [shared-sidecar conformance path](../../../conformance/README.md) covers
+the shared PostgreSQL deployment and language clients.
+
+The host declares a complete straight-line sequence. Arbitrary conditions,
+automatic scheduling, Python decorator-state migration, provider-call ownership,
+hostile-client guarantees, and a public multi-tenant service remain out of scope.
+See [composite recovery](../COMPOSITE_RECOVERY.md) and
+[self-hosting](../SELF_HOSTING.md) for the recovery and deployment boundaries.

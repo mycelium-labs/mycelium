@@ -180,6 +180,10 @@ under `extensions` in the authenticated capabilities response. File-backed
 development and shared PostgreSQL sidecars can resume a parent after restart;
 long-running hosts must renew the parent lease. See
 [composite recovery](COMPOSITE_RECOVERY.md) for its sequence and limits.
+The [composite extension decision](spec/TRANSITION_ENVELOPE_DECISIONS.md#d19-composite-sidecar-extension)
+records the wire routes, distinct parent and child fences, shared storage choice,
+and TypeScript/Go client surface. Clients negotiate `composite-v1` separately
+from the frozen `v1alpha1` effect protocol.
 
 ## Verify the installation
 
