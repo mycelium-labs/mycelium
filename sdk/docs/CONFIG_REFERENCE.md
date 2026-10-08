@@ -6,6 +6,30 @@ Configuration format version: `1`.
 Generate the machine-readable schema with `mycelium config schema`.
 Generate a validated starter with `mycelium config example`.
 
+## Control index
+
+The tables below use schema model names; the corresponding YAML keys are:
+
+| YAML section | Field reference |
+| --- | --- |
+| `budget` | [Budget](#budget) |
+| `completion` | [Completion](#completion) |
+| `loop_guard` | [LoopGuard](#loopguard) |
+| `scope_guard` | [ScopeGuard](#scopeguard) |
+| `state_authority` | [StateAuthority](#stateauthority) |
+| `secret_args` | [SecretArgs](#secretargs) |
+| `entity_guard` | [EntityGuard](#entityguard), [destinations](#entitydestination), [allowlists](#entityallow) |
+| `destructive_confirm` | [DestructiveConfirm](#destructiveconfirm), [tools](#destructivetool), [objects](#destructiveobject), [grants](#destructivegrant) |
+| `authority_window` | [AuthorityWindow](#authoritywindow) |
+| `use_time_currency` | [UseTimeCurrency](#usetimecurrency), [tools](#usetimetool), [facts](#usetimefact), [subjects](#factsubject) |
+| `history_guard` | [HistoryGuard](#historyguard) |
+| `message_validator` | [MessageValidator](#messagevalidator) |
+
+Defaults in the tables describe the structural schema. A `null` or omitted
+value can select a runtime default or inherit a backend; section descriptions
+explain those choices. Storage support varies by control, so use its own
+`storage` row rather than the common Storage table to choose a backend.
+
 ## Top-level fields
 
 Version 1 structural model for a complete ``mycelium.yaml`` file.
@@ -51,9 +75,9 @@ Check host-issued authority expiry immediately before execution.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `enabled` | `boolean` | `true` | — |
-| `use_time_check` | `"required" \| "optional"` | `"required"` | — |
-| `clock_skew_tolerance_seconds` | `number` | `0` | — |
+| `enabled` | `boolean` | `true` | Check the host-issued authority window at execution time. |
+| `use_time_check` | `"required" \| "optional"` | `"required"` | Require authority metadata; optional checks only when present. |
+| `clock_skew_tolerance_seconds` | `number` | `0` | Finite, nonnegative tolerance for host clock differences, in seconds. |
 
 ## Budget
 
@@ -61,25 +85,25 @@ Run-wide ceilings. Omit this section to disable; enabled is unsupported.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres"` | `"memory"` | — |
-| `path` | `string \| null` | `null` | — |
-| `table` | `string \| null` | `null` | — |
-| `namespace` | `string \| null` | `null` | — |
-| `prefix` | `string \| null` | `null` | — |
-| `url` | `string \| null` | `null` | — |
-| `url_env` | `string \| null` | `null` | — |
-| `dsn` | `string \| null` | `null` | — |
-| `dsn_env` | `string \| null` | `null` | — |
-| `tools` | `"all" \| array[string]` | `"all"` | — |
-| `exclude` | `array[string]` | — | — |
+| `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres"` | `"memory"` | Backend for run-wide budget counters. |
+| `path` | `string \| null` | `null` | Local file or SQLite path for that backend. |
+| `table` | `string \| null` | `null` | PostgreSQL table name for the control's state. |
+| `namespace` | `string \| null` | `null` | Namespace for backend state keys. |
+| `prefix` | `string \| null` | `null` | Redis key prefix for isolated control state. |
+| `url` | `string \| null` | `null` | Redis connection URL; prefer url_env for secrets. |
+| `url_env` | `string \| null` | `null` | Environment variable holding the Redis URL. |
+| `dsn` | `string \| null` | `null` | PostgreSQL DSN; prefer dsn_env for secrets. |
+| `dsn_env` | `string \| null` | `null` | Environment variable holding the PostgreSQL DSN. |
+| `tools` | `"all" \| array[string]` | `"all"` | Configured tools whose calls consume the run budget. |
+| `exclude` | `array[string]` | — | Tools exempt from budget checks. |
 | `max_duration` | `number \| string \| null` | `null` | Wall-clock ceiling for the run, in seconds or with a duration suffix. |
 | `max_steps` | `integer \| null` | `null` | Run-wide protected-call ceiling. Each budget-guarded tool invocation and instrumented LLM turn reserves one step; business workflow counters are separate. |
-| `max_tokens` | `integer \| null` | `null` | — |
-| `max_usd` | `integer \| number \| null` | `null` | — |
-| `max_cost_usd` | `integer \| number \| null` | `null` | — |
-| `missing_usage_policy` | `"warn" \| "error" \| null` | `null` | — |
-| `warn_at` | `integer \| number \| null` | `null` | — |
-| `on_missing_meter` | `"warn" \| "hard" \| null` | `null` | — |
+| `max_tokens` | `integer \| null` | `null` | Run-wide token ceiling. |
+| `max_usd` | `integer \| number \| null` | `null` | Run-wide cost ceiling in USD. |
+| `max_cost_usd` | `integer \| number \| null` | `null` | Alias for max_usd. |
+| `missing_usage_policy` | `"warn" \| "error" \| null` | `null` | Missing LLM usage: warn in development, error in production. |
+| `warn_at` | `integer \| number \| null` | `null` | Ceiling fraction at which to warn; runtime default 0.8. |
+| `on_missing_meter` | `"warn" \| "hard" \| null` | `null` | Missing budget meter response; runtime default hard. |
 
 ## Completion
 
@@ -88,16 +112,16 @@ Host checklist. Omit this section to disable; enabled is unsupported.
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `storage` | `"memory" \| "file" \| "redis" \| "postgres" \| "shared" \| null` | `null` | Omitted storage inherits state_backend, otherwise uses memory. |
-| `path` | `string \| null` | `null` | — |
-| `table` | `string \| null` | `null` | — |
-| `namespace` | `string \| null` | `null` | — |
-| `prefix` | `string \| null` | `null` | — |
-| `url` | `string \| null` | `null` | — |
-| `url_env` | `string \| null` | `null` | — |
-| `dsn` | `string \| null` | `null` | — |
-| `dsn_env` | `string \| null` | `null` | — |
-| `required` | `array[string \| object]` | — | — |
-| `optional` | `array[string \| object]` | — | — |
+| `path` | `string \| null` | `null` | Local file or SQLite path for that backend. |
+| `table` | `string \| null` | `null` | PostgreSQL table name for the control's state. |
+| `namespace` | `string \| null` | `null` | Namespace for backend state keys. |
+| `prefix` | `string \| null` | `null` | Redis key prefix for isolated control state. |
+| `url` | `string \| null` | `null` | Redis connection URL; prefer url_env for secrets. |
+| `url_env` | `string \| null` | `null` | Environment variable holding the Redis URL. |
+| `dsn` | `string \| null` | `null` | PostgreSQL DSN; prefer dsn_env for secrets. |
+| `dsn_env` | `string \| null` | `null` | Environment variable holding the PostgreSQL DSN. |
+| `required` | `array[string \| object]` | — | Checklist IDs (strings or id mappings) that must be marked. |
+| `optional` | `array[string \| object]` | — | Checklist IDs that warn when unmarked at completion. |
 | `adapter_installer` | `string \| null` | `null` | Import path (package.module:function) called during runtime config activation. It must wire the custom terminal boundary and call register_terminal_adapter(). |
 
 ## CrewAIIntegration
@@ -119,66 +143,66 @@ Require a host-issued grant bound to the exact destructive action and object.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `enabled` | `boolean` | `true` | — |
-| `missing_policy` | `"error" \| "warn"` | `"error"` | — |
-| `policy_version` | `string \| null` | `null` | — |
-| `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres"` | `"memory"` | — |
-| `path` | `string \| null` | `null` | — |
-| `table` | `string \| null` | `null` | — |
-| `url` | `string \| null` | `null` | — |
-| `url_env` | `string \| null` | `null` | — |
-| `dsn` | `string \| null` | `null` | — |
-| `dsn_env` | `string \| null` | `null` | — |
-| `prefix` | `string \| null` | `null` | — |
-| `tools` | `object[string, DestructiveTool]` | — | — |
+| `enabled` | `boolean` | `true` | Require host-issued destructive-action authorization. |
+| `missing_policy` | `"error" \| "warn"` | `"error"` | Response to missing grants; production requires error. |
+| `policy_version` | `string \| null` | `null` | Host policy label bound to authorization grants. |
+| `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres"` | `"memory"` | Grant store; choose durable storage when grants must survive worker restarts. |
+| `path` | `string \| null` | `null` | Local file or SQLite grant-store path. |
+| `table` | `string \| null` | `null` | PostgreSQL grant-store table name. |
+| `url` | `string \| null` | `null` | Redis URL; prefer url_env for secrets. |
+| `url_env` | `string \| null` | `null` | Environment variable holding the Redis URL. |
+| `dsn` | `string \| null` | `null` | PostgreSQL DSN; prefer dsn_env for secrets. |
+| `dsn_env` | `string \| null` | `null` | Environment variable holding the PostgreSQL DSN. |
+| `prefix` | `string \| null` | `null` | Redis key prefix for grants. |
+| `tools` | `object[string, DestructiveTool]` | — | Per-tool operation, object, and grant policy. |
 
 ## DestructiveGrant
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `bind_request_id` | `boolean` | `false` | — |
-| `bind_run_id` | `boolean` | `false` | — |
-| `bind_thread_id` | `boolean` | `false` | — |
-| `max_uses` | `integer` | `1` | — |
-| `ttl_seconds` | `number` | `300` | — |
+| `bind_request_id` | `boolean` | `false` | Restrict grants to the current request. |
+| `bind_run_id` | `boolean` | `false` | Restrict grants to the current run. |
+| `bind_thread_id` | `boolean` | `false` | Restrict grants to the current thread. |
+| `max_uses` | `integer` | `1` | Maximum uses of one issued grant. |
+| `ttl_seconds` | `number` | `300` | Grant lifetime in seconds. |
 
 ## DestructiveObject
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `type` | `string` | required | — |
-| `id_from` | `string` | required | — |
-| `tenant_from` | `string \| null` | `null` | — |
-| `account_from` | `string \| null` | `null` | — |
-| `case_sensitive` | `boolean` | `true` | — |
-| `require_canonicalizer` | `boolean` | `false` | — |
+| `type` | `string` | required | Host-defined subject kind, such as order or account. |
+| `id_from` | `string` | required | Tool argument path containing the subject identifier. |
+| `tenant_from` | `string \| null` | `null` | Argument path containing tenant identity. |
+| `account_from` | `string \| null` | `null` | Argument path containing account identity. |
+| `case_sensitive` | `boolean` | `true` | Preserve case in object identity matching. |
+| `require_canonicalizer` | `boolean` | `false` | Require a host-registered canonicalizer for this object type. |
 
 ## DestructiveTool
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `operation` | `string` | required | — |
-| `object` | `DestructiveObject` | required | — |
-| `grant` | `DestructiveGrant` | — | — |
+| `operation` | `string` | required | Exact destructive operation authorized by the host grant. |
+| `object` | `DestructiveObject` | required | Subject identity and canonicalization requirements. |
+| `grant` | `DestructiveGrant` | — | Grant identity bindings, use limit, and lifetime. |
 
 ## EntityAllow
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `addresses` | `array[string]` | — | — |
-| `domains` | `array[string]` | — | — |
-| `hosts` | `array[string]` | — | — |
-| `values` | `array[string]` | — | — |
+| `addresses` | `array[string]` | — | Allowed email addresses. |
+| `domains` | `array[string]` | — | Allowed email domains. |
+| `hosts` | `array[string]` | — | Allowed URL or host destinations. |
+| `values` | `array[string]` | — | Allowed entity identifiers. |
 
 ## EntityDestination
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `path` | `string` | required | Argument path containing the destination. |
-| `type` | `"email" \| "https_url" \| "entity_id" \| "host"` | required | — |
-| `allow` | `EntityAllow` | — | — |
-| `required` | `boolean` | `true` | — |
-| `reject_redirects` | `boolean` | `true` | — |
+| `type` | `"email" \| "https_url" \| "entity_id" \| "host"` | required | Destination interpretation used for normalization and allowlist matching. |
+| `allow` | `EntityAllow` | — | Allowed destinations for this argument. |
+| `required` | `boolean` | `true` | Require the destination argument to be present. |
+| `reject_redirects` | `boolean` | `true` | Reject HTTPS URLs with embedded absolute redirect destinations. |
 
 ## EntityGuard
 
@@ -186,25 +210,25 @@ Destination allowlists. See the SDK reference for transport limitations.
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `enabled` | `boolean` | `true` | — |
-| `missing_policy` | `"error" \| "warn"` | `"error"` | — |
-| `policy_version` | `string \| null` | `null` | — |
-| `tools` | `object[string, EntityTool]` | — | — |
+| `enabled` | `boolean` | `true` | Enable destination validation before execution. |
+| `missing_policy` | `"error" \| "warn"` | `"error"` | Response to missing destination evidence; production requires error. |
+| `policy_version` | `string \| null` | `null` | Host policy label bound to destination evidence. |
+| `tools` | `object[string, EntityTool]` | — | Per-tool destination paths, types, and allowlists. |
 
 ## EntityTool
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `destinations` | `array[EntityDestination]` | required | — |
+| `destinations` | `array[EntityDestination]` | required | Destination arguments checked before the tool executes. |
 
 ## FactSubject
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `type` | `string` | required | — |
-| `id_from` | `string` | required | — |
-| `tenant_from` | `string \| null` | `null` | — |
-| `account_from` | `string \| null` | `null` | — |
+| `type` | `string` | required | Host-defined subject kind, such as order or account. |
+| `id_from` | `string` | required | Tool argument path containing the subject identifier. |
+| `tenant_from` | `string \| null` | `null` | Argument path containing tenant identity. |
+| `account_from` | `string \| null` | `null` | Argument path containing account identity. |
 
 ## HistoryGuard
 
@@ -237,14 +261,14 @@ Defaults and allowlist for tool-level durable execution.
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres" \| "shared" \| null` | `null` | — |
-| `path` | `string \| null` | `null` | — |
-| `table` | `string \| null` | `null` | — |
-| `namespace` | `string \| null` | `null` | — |
-| `prefix` | `string \| null` | `null` | — |
-| `url` | `string \| null` | `null` | — |
-| `url_env` | `string \| null` | `null` | — |
-| `dsn` | `string \| null` | `null` | — |
-| `dsn_env` | `string \| null` | `null` | — |
+| `path` | `string \| null` | `null` | Local file or SQLite path for that backend. |
+| `table` | `string \| null` | `null` | PostgreSQL table name for the control's state. |
+| `namespace` | `string \| null` | `null` | Namespace for backend state keys. |
+| `prefix` | `string \| null` | `null` | Redis key prefix for isolated control state. |
+| `url` | `string \| null` | `null` | Redis connection URL; prefer url_env for secrets. |
+| `url_env` | `string \| null` | `null` | Environment variable holding the Redis URL. |
+| `dsn` | `string \| null` | `null` | PostgreSQL DSN; prefer dsn_env for secrets. |
+| `dsn_env` | `string \| null` | `null` | Environment variable holding the PostgreSQL DSN. |
 | `tools` | `"all" \| array[string] \| null` | `null` | — |
 | `unclassified_policy` | `"warn" \| "strict" \| null` | `null` | — |
 | `memory_storage_policy` | `"warn" \| "error" \| null` | `null` | — |
@@ -268,20 +292,20 @@ Consecutive-action limits. Omit this section to disable; enabled is unsupported.
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `storage` | `"memory" \| "file" \| "redis" \| "postgres" \| "shared" \| null` | `null` | Omitted storage inherits state_backend, otherwise uses memory. |
-| `path` | `string \| null` | `null` | — |
-| `table` | `string \| null` | `null` | — |
-| `namespace` | `string \| null` | `null` | — |
-| `prefix` | `string \| null` | `null` | — |
-| `url` | `string \| null` | `null` | — |
-| `url_env` | `string \| null` | `null` | — |
-| `dsn` | `string \| null` | `null` | — |
-| `dsn_env` | `string \| null` | `null` | — |
-| `tools` | `"all" \| array[string]` | `"all"` | — |
-| `exclude` | `array[string]` | — | — |
-| `consecutive_soft` | `object[string, integer] \| null` | `null` | — |
-| `escalate_after_soft` | `integer` | `1` | — |
-| `unclassified_policy` | `"warn" \| "strict"` | `"warn"` | — |
-| `missing_run_id_policy` | `"warn" \| "error" \| null` | `null` | — |
+| `path` | `string \| null` | `null` | Local file or SQLite path for that backend. |
+| `table` | `string \| null` | `null` | PostgreSQL table name for the control's state. |
+| `namespace` | `string \| null` | `null` | Namespace for backend state keys. |
+| `prefix` | `string \| null` | `null` | Redis key prefix for isolated control state. |
+| `url` | `string \| null` | `null` | Redis connection URL; prefer url_env for secrets. |
+| `url_env` | `string \| null` | `null` | Environment variable holding the Redis URL. |
+| `dsn` | `string \| null` | `null` | PostgreSQL DSN; prefer dsn_env for secrets. |
+| `dsn_env` | `string \| null` | `null` | Environment variable holding the PostgreSQL DSN. |
+| `tools` | `"all" \| array[string]` | `"all"` | Configured tools whose consecutive action hashes are checked. |
+| `exclude` | `array[string]` | — | Tools exempt from loop checks. |
+| `consecutive_soft` | `object[string, integer] \| null` | `null` | Soft-block thresholds by side-effect class; omitted uses built-in limits. |
+| `escalate_after_soft` | `integer` | `1` | Additional identical attempts after a soft block before hard block. |
+| `unclassified_policy` | `"warn" \| "strict"` | `"warn"` | Unclassified actions use read (warn) or non-idempotent mutation (strict) limits. |
+| `missing_run_id_policy` | `"warn" \| "error" \| null` | `null` | Missing run identity: defaults to warn in development, error in production. |
 
 ## MessageValidator
 
@@ -310,20 +334,20 @@ Frozen tool scope. Omit this section to disable; enabled is unsupported.
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `storage` | `"memory" \| "file" \| "redis" \| "postgres" \| "shared" \| null` | `null` | Omitted storage inherits state_backend, otherwise uses memory. |
-| `path` | `string \| null` | `null` | — |
-| `table` | `string \| null` | `null` | — |
-| `namespace` | `string \| null` | `null` | — |
-| `prefix` | `string \| null` | `null` | — |
-| `url` | `string \| null` | `null` | — |
-| `url_env` | `string \| null` | `null` | — |
-| `dsn` | `string \| null` | `null` | — |
-| `dsn_env` | `string \| null` | `null` | — |
-| `tools` | `"all" \| array[string]` | `"all"` | — |
-| `exclude` | `array[string]` | — | — |
-| `allowed_tools` | `"from_registry" \| "all" \| array[string]` | `"from_registry"` | — |
-| `on_violation` | `"soft" \| "hard"` | `"soft"` | — |
-| `auto_bind` | `boolean` | `true` | — |
-| `missing_run_id_policy` | `"warn" \| "error" \| null` | `null` | — |
+| `path` | `string \| null` | `null` | Local file or SQLite path for that backend. |
+| `table` | `string \| null` | `null` | PostgreSQL table name for the control's state. |
+| `namespace` | `string \| null` | `null` | Namespace for backend state keys. |
+| `prefix` | `string \| null` | `null` | Redis key prefix for isolated control state. |
+| `url` | `string \| null` | `null` | Redis connection URL; prefer url_env for secrets. |
+| `url_env` | `string \| null` | `null` | Environment variable holding the Redis URL. |
+| `dsn` | `string \| null` | `null` | PostgreSQL DSN; prefer dsn_env for secrets. |
+| `dsn_env` | `string \| null` | `null` | Environment variable holding the PostgreSQL DSN. |
+| `tools` | `"all" \| array[string]` | `"all"` | Configured tools that must pass the frozen run allowlist. |
+| `exclude` | `array[string]` | — | Tools exempt from scope checks. |
+| `allowed_tools` | `"from_registry" \| "all" \| array[string]` | `"from_registry"` | Initial allowlist: registry.allowed, all configured tools, or explicit names. |
+| `on_violation` | `"soft" \| "hard"` | `"soft"` | Soft boundary error or hard block when a tool exceeds the allowlist. |
+| `auto_bind` | `boolean` | `true` | Bind the initial allowlist on the first guarded call. |
+| `missing_run_id_policy` | `"warn" \| "error" \| null` | `null` | Missing run identity: defaults to warn in development, error in production. |
 
 ## SecretArgs
 
@@ -342,11 +366,11 @@ Compare the host's frozen state reference with its current canonical reference.
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `canonical_callable` | `string` | required | Host resolver path: package.module:function. |
-| `require_state_ref` | `boolean` | `false` | — |
-| `on_mismatch` | `"soft" \| "hard"` | `"hard"` | — |
-| `on_missing` | `"soft" \| "hard"` | `"hard"` | — |
-| `tools` | `"all" \| array[string]` | `"all"` | — |
-| `exclude` | `array[string]` | — | — |
+| `require_state_ref` | `boolean` | `false` | Block calls without a host-supplied state reference. |
+| `on_mismatch` | `"soft" \| "hard"` | `"hard"` | Response when the frozen reference differs from current state. |
+| `on_missing` | `"soft" \| "hard"` | `"hard"` | Response when a supplied state reference cannot be resolved. |
+| `tools` | `"all" \| array[string]` | `"all"` | Configured tools whose state references are checked. |
+| `exclude` | `array[string]` | — | Tools exempt from state-authority checks. |
 
 ## Storage
 
@@ -355,14 +379,14 @@ Common durable-state backend settings.
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres" \| "shared" \| null` | `null` | — |
-| `path` | `string \| null` | `null` | — |
-| `table` | `string \| null` | `null` | — |
-| `namespace` | `string \| null` | `null` | — |
-| `prefix` | `string \| null` | `null` | — |
-| `url` | `string \| null` | `null` | — |
-| `url_env` | `string \| null` | `null` | — |
-| `dsn` | `string \| null` | `null` | — |
-| `dsn_env` | `string \| null` | `null` | — |
+| `path` | `string \| null` | `null` | Local file or SQLite path for that backend. |
+| `table` | `string \| null` | `null` | PostgreSQL table name for the control's state. |
+| `namespace` | `string \| null` | `null` | Namespace for backend state keys. |
+| `prefix` | `string \| null` | `null` | Redis key prefix for isolated control state. |
+| `url` | `string \| null` | `null` | Redis connection URL; prefer url_env for secrets. |
+| `url_env` | `string \| null` | `null` | Environment variable holding the Redis URL. |
+| `dsn` | `string \| null` | `null` | PostgreSQL DSN; prefer dsn_env for secrets. |
+| `dsn_env` | `string \| null` | `null` | Environment variable holding the PostgreSQL DSN. |
 
 ## Task
 
@@ -382,14 +406,14 @@ Defaults and allowlist for task-level durable execution.
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `storage` | `"memory" \| "file" \| "sqlite" \| "redis" \| "postgres" \| "shared" \| null` | `null` | — |
-| `path` | `string \| null` | `null` | — |
-| `table` | `string \| null` | `null` | — |
-| `namespace` | `string \| null` | `null` | — |
-| `prefix` | `string \| null` | `null` | — |
-| `url` | `string \| null` | `null` | — |
-| `url_env` | `string \| null` | `null` | — |
-| `dsn` | `string \| null` | `null` | — |
-| `dsn_env` | `string \| null` | `null` | — |
+| `path` | `string \| null` | `null` | Local file or SQLite path for that backend. |
+| `table` | `string \| null` | `null` | PostgreSQL table name for the control's state. |
+| `namespace` | `string \| null` | `null` | Namespace for backend state keys. |
+| `prefix` | `string \| null` | `null` | Redis key prefix for isolated control state. |
+| `url` | `string \| null` | `null` | Redis connection URL; prefer url_env for secrets. |
+| `url_env` | `string \| null` | `null` | Environment variable holding the Redis URL. |
+| `dsn` | `string \| null` | `null` | PostgreSQL DSN; prefer dsn_env for secrets. |
+| `dsn_env` | `string \| null` | `null` | Environment variable holding the PostgreSQL DSN. |
 | `tasks` | `"all" \| array[string] \| null` | `null` | — |
 
 ## Tool
@@ -450,32 +474,32 @@ Revalidate host-bound facts at use time; host validators supply current evidence
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `enabled` | `boolean` | `true` | — |
-| `missing_policy` | `"error" \| "warn"` | `"error"` | — |
-| `policy_version` | `string \| null` | `null` | — |
-| `tools` | `object[string, UseTimeTool]` | — | — |
+| `enabled` | `boolean` | `true` | Revalidate host-bound facts before consequential execution. |
+| `missing_policy` | `"error" \| "warn"` | `"error"` | Response to missing fact evidence; production requires error. |
+| `policy_version` | `string \| null` | `null` | Host policy label bound to current-fact evidence. |
+| `tools` | `object[string, UseTimeTool]` | — | Per-tool fact declarations and registered validator names. |
 
 ## UseTimeFact
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `name` | `string` | required | — |
-| `subject` | `FactSubject` | required | — |
+| `name` | `string` | required | Stable name of the fact bound by the host. |
+| `subject` | `FactSubject` | required | Subject identity resolved from tool arguments. |
 | `validator` | `string` | required | Name of a host-registered current-fact validator. |
-| `require` | `object \| null` | `null` | — |
-| `revision_from` | `string \| null` | `null` | — |
-| `max_age_seconds` | `number \| null` | `null` | — |
-| `bind_request_id` | `boolean` | `false` | — |
-| `bind_run_id` | `boolean` | `false` | — |
-| `bind_thread_id` | `boolean` | `false` | — |
-| `compare_to_arg` | `string \| null` | `null` | — |
-| `provider_precondition` | `string \| null` | `null` | — |
+| `require` | `object \| null` | `null` | Mapping with a value key specifying the required current fact value. |
+| `revision_from` | `string \| null` | `null` | Argument path for the expected revision. |
+| `max_age_seconds` | `number \| null` | `null` | Maximum age of bound fact evidence in seconds. |
+| `bind_request_id` | `boolean` | `false` | Bind evidence to the current request. |
+| `bind_run_id` | `boolean` | `false` | Bind evidence to the current run. |
+| `bind_thread_id` | `boolean` | `false` | Bind evidence to the current thread. |
+| `compare_to_arg` | `string \| null` | `null` | Argument path compared to current fact value. |
+| `provider_precondition` | `string \| null` | `null` | Provider precondition argument whose presence is recorded in validation evidence. |
 
 ## UseTimeTool
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `facts` | `array[UseTimeFact]` | required | — |
+| `facts` | `array[UseTimeFact]` | required | Facts revalidated for this tool. |
 
 ## Activation and recovery boundaries
 

@@ -109,6 +109,34 @@ def render_config_reference() -> str:
         "Generate the machine-readable schema with `mycelium config schema`.",
         "Generate a validated starter with `mycelium config example`.",
         "",
+        "## Control index",
+        "",
+        "The tables below use schema model names; the corresponding YAML keys are:",
+        "",
+        "| YAML section | Field reference |",
+        "| --- | --- |",
+        "| `budget` | [Budget](#budget) |",
+        "| `completion` | [Completion](#completion) |",
+        "| `loop_guard` | [LoopGuard](#loopguard) |",
+        "| `scope_guard` | [ScopeGuard](#scopeguard) |",
+        "| `state_authority` | [StateAuthority](#stateauthority) |",
+        "| `secret_args` | [SecretArgs](#secretargs) |",
+        "| `entity_guard` | [EntityGuard](#entityguard), "
+        "[destinations](#entitydestination), [allowlists](#entityallow) |",
+        "| `destructive_confirm` | [DestructiveConfirm](#destructiveconfirm), "
+        "[tools](#destructivetool), [objects](#destructiveobject), "
+        "[grants](#destructivegrant) |",
+        "| `authority_window` | [AuthorityWindow](#authoritywindow) |",
+        "| `use_time_currency` | [UseTimeCurrency](#usetimecurrency), "
+        "[tools](#usetimetool), [facts](#usetimefact), [subjects](#factsubject) |",
+        "| `history_guard` | [HistoryGuard](#historyguard) |",
+        "| `message_validator` | [MessageValidator](#messagevalidator) |",
+        "",
+        "Defaults in the tables describe the structural schema. A `null` or omitted",
+        "value can select a runtime default or inherit a backend; section descriptions",
+        "explain those choices. Storage support varies by control, so use its own",
+        "`storage` row rather than the common Storage table to choose a backend.",
+        "",
     ]
     lines.extend(_section_table("Top-level fields", schema))
     for name, definition in schema.get("$defs", {}).items():
