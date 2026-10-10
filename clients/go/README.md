@@ -123,3 +123,7 @@ or TypeScript model hierarchy. Generated types do not grant trust or ownership.
 Browser, public multi-tenant hosting, production IAM, hostile-client protection,
 provider attestation, reconciliation authority, and exactly-once guarantees remain
 unsupported.
+
+Maintainers: use the [client release checklist](../../sdk/docs/RELEASE.md#experimental-typescript-and-go-client-releases)
+for compatibility review, approval, and the `clients/go/v*` tag procedure.
+Python releases do not publish this module.

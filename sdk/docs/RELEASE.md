@@ -161,6 +161,125 @@ uploads to PyPI. Confirm:
 
 Releases automatically generate and attach a machine-readable Software Bill of Materials (SBOM) in CycloneDX JSON format (`mycelium-runtime-<version>.cdx.json`) as a release asset in GitHub Releases and as a workflow artifact in GitHub Actions.
 
+## Experimental TypeScript and Go client releases
+
+**Decision:** client releases use a manual, reviewed checklist for now. A
+repository maintainer with release authority approves each npm publish and Go
+tag in a client release PR, including the exact source commit and version.
+Package access or a green Python release alone is not that approval. A future
+client workflow must be a separate change with an explicit approval gate;
+neither `release.yml` nor `publish.yml` publishes clients.
+
+Client versions are independent of Python's `1.38.x` release line and of each
+other. A sidecar change triggers compatibility review, not an automatic client
+bump. Record the supported protocol (`v1alpha1`, plus `composite-v1` when
+applicable), Python sidecar version tested, source commit, and conformance
+results in the client PR. An incompatible wire change requires a new protocol
+revision before a matching client release. Keep npm on `experimental` until a
+separate decision changes its support status.
+
+### Prepare a client release PR
+
+From a clean checkout at the intended source revision, replace the sample
+version below with an unused, independently selected client version:
+
+```bash
+git switch -c release/sidecar-clients
+cd clients/typescript
+npm ci
+npm version 0.1.2 --no-git-tag-version
+npm run build
+npm run typecheck
+npm run test:types
+npm run test:values
+npm pack --dry-run
+cd ../go
+go test ./...
+go vet ./...
+cd ../..
+python conformance/run.py
+```
+
+The conformance runner requires the SDK development dependencies, Node/npm,
+and Go; it starts a local sidecar and builds the TypeScript client. For shared
+Postgres behavior, also require the `shared-sidecar` CI job on the PR. Run only
+the relevant version-edit step when releasing one client; conformance still
+checks both. No Go version file needs a bump: the module version comes from
+its repository tag.
+
+Update the client README version/install statements and add client release
+notes to the PR. Commit the npm manifest, lockfile, rebuilt tracked `dist/`,
+and README changes together. Confirm the package file list from the dry run
+contains no credentials or local state. Merge only after all CI checks pass
+and the maintainer has approved each requested publication. Do not change
+`sdk/pyproject.toml` for a client-only release.
+
+### Publish the approved revision
+
+Use a clean checkout of the **approved merged commit**, not whichever commit
+is now at the tip of `main`. Replace both version values and the commit below:
+
+```bash
+CLIENT_RELEASE_COMMIT=REPLACE_WITH_APPROVED_COMMIT
+TS_CLIENT_VERSION=0.1.2
+GO_CLIENT_VERSION=0.1.2
+git fetch origin main --tags
+git checkout --detach "$CLIENT_RELEASE_COMMIT"
+git status --short
+```
+
+Stop if the checkout is dirty or if either version is already published. Do
+not rerun a publish to repair a partial release; first inspect registry/tag
+state and complete only the missing approved step.
+
+For npm, the approved publisher authenticates with their npm account and
+checks the version and file list before publication:
+
+```bash
+cd clients/typescript
+npm ci
+npm run build
+npm whoami
+npm view @mycelium-labs/sidecar-client versions --json
+npm pkg get version
+npm pack --dry-run
+npm publish --access public --tag experimental --provenance=false
+npm view "@mycelium-labs/sidecar-client@$TS_CLIENT_VERSION" version dist.integrity
+npm dist-tag ls @mycelium-labs/sidecar-client
+cd ../..
+```
+
+The manifest defaults to `provenance: true`. This local manual command
+explicitly publishes **without build provenance**, which must be included in
+the maintainer's approval and release notes; npm's
+[provenance generation](https://docs.npmjs.com/generating-provenance-statements/)
+requires a supported CI build environment. If provenance is required for the
+release, stop and approve a dedicated client workflow instead. Never present a
+local publish as attested, change `latest`, or disable provenance in the Python
+publish workflow. Check that `experimental` resolves to the approved version
+and that `latest` has not moved.
+
+For Go, the approved maintainer publishes the subdirectory tag at that same
+commit; there is no separate package upload:
+
+```bash
+git tag -a "clients/go/v$GO_CLIENT_VERSION" "$CLIENT_RELEASE_COMMIT" \
+  -m "Experimental Go sidecar client v$GO_CLIENT_VERSION"
+git push origin "refs/tags/clients/go/v$GO_CLIENT_VERSION"
+go list -m "github.com/mycelium-labs/mycelium/clients/go@v$GO_CLIENT_VERSION"
+```
+
+Follow the [Go module publishing guidance](https://go.dev/doc/modules/publishing)
+for version and module-path rules. A Go proxy may take time to observe the new
+tag; verify the tag's commit before retrying lookup. Never move or overwrite a
+published tag. `clients/go/v*` does not match the Python publish workflow's
+`v*` tag trigger.
+
+Record npm integrity, dist-tag results, the Go tag/commit, and the successful
+module lookup in the client release PR. For a partial publication, document
+the actual state and get approval for any corrective version. This checklist
+documents future releases; running the Python release workflow does not run it.
+
 ## Build provenance attestations
 
 The publish workflow creates signed SLSA build-provenance attestations for every
