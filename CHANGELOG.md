@@ -42,6 +42,9 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Fixed
 
+- Report state-authority callable inspection as static Doctor evidence, reject
+  generator resolvers (including callable objects), and flag ineffective
+  per-tool policy dictionaries without invoking host resolvers or tools.
 - Fail required Redis/PostgreSQL test gates when their driver is missing,
   instead of silently skipping the shared-backend proofs.
 - Reject unknown options and unsupported `enabled` settings in budget,

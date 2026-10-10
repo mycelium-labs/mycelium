@@ -2140,16 +2140,28 @@ def check_state_authority(ctx: DoctorContext) -> Iterable[DoctorCheck]:
     declared = raw.get("tools", "all")
     unknown = set(declared if isinstance(declared, list) else []) - set(cfg.tools)
     unknown.update(set(raw.get("exclude") or []) - set(cfg.tools))
+    overrides = sorted(
+        name for name, tool in cfg.tools.items()
+        if isinstance(tool.state_authority, dict) and tool.state_authority
+    )
+    selection_warning = bool(unknown or not selected or overrides)
     yield _check(
         id="state_authority.selection",
         category="State authority",
-        status=DoctorStatus.WARN if unknown or not selected else DoctorStatus.PASS,
+        status=DoctorStatus.WARN if selection_warning else DoctorStatus.PASS,
         summary="State authority tool selection needs review"
-        if unknown or not selected
+        if selection_warning
         else "State authority selects configured tools",
-        details=f"selected={sorted(selected)}; unknown={sorted(unknown)}",
-        remediation="Select configured tool names and review exclusions."
-        if unknown or not selected
+        details=(
+            f"selected={sorted(selected)}; unknown={sorted(unknown)}; "
+            f"unsupported_tool_overrides={overrides}. "
+            "Per-tool dictionaries do not override the top-level state-authority policy."
+        ),
+        remediation=(
+            "Select configured tool names and review exclusions. Configure resolver and "
+            "require_state_ref at the top level; use per-tool false only to opt out."
+        )
+        if selection_warning
         else "",
         blocking=False,
     )
@@ -2157,12 +2169,17 @@ def check_state_authority(ctx: DoctorContext) -> Iterable[DoctorCheck]:
         resolver = _import_callable(
             raw["canonical_callable"], kind="state_authority.canonical_callable"
         )
-        if (
-            inspect.iscoroutinefunction(resolver)
-            or inspect.iscoroutinefunction(getattr(resolver, "__call__", None))
-            or inspect.isasyncgenfunction(resolver)
+        call_method = getattr(resolver, "__call__", None)
+        if any(
+            predicate(target)
+            for target in (resolver, call_method)
+            for predicate in (
+                inspect.iscoroutinefunction,
+                inspect.isasyncgenfunction,
+                inspect.isgeneratorfunction,
+            )
         ):
-            raise ValueError("canonical_callable must be synchronous")
+            raise ValueError("canonical_callable must be synchronous and return a state reference")
         try:
             signature = inspect.signature(resolver)
         except (ValueError, TypeError):
@@ -2182,7 +2199,7 @@ def check_state_authority(ctx: DoctorContext) -> Iterable[DoctorCheck]:
                 status=DoctorStatus.PASS,
                 summary="Synchronous state resolver is importable",
                 details="Callable accepts tool, thread_id, run_id, kwargs; it was not invoked.",
-                evidence=EVIDENCE_RUNTIME,
+                evidence=EVIDENCE_STATIC,
             )
     except Exception as exc:
         yield _check(
