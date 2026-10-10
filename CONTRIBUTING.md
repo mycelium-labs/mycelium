@@ -43,6 +43,26 @@ Please avoid speculative abstractions, large generated rewrites, duplicate
 issues, or features without a concrete use case. A pull request should solve a
 demonstrated problem, not create work for maintainers to discover what changed.
 
+## Issue labels
+
+Use the repository's existing labels; do not invent ad-hoc names. Maintainers
+can apply labels when an external contributor cannot.
+
+- `area:*` identifies the affected code or workflow, such as `area:sdk`,
+  `area:clients`, `area:sidecar`, or `area:ops`.
+- `bug`, `enhancement`, and `documentation` describe the request;
+  `type:feature` and `type:docs` refine the kind of work.
+- `scope:*` identifies the product slice: `scope:core`, `scope:opt-in-guard`,
+  `scope:docs`, `scope:composite`, `scope:community`, or `scope:later`.
+- `config-validation` covers YAML coercion, non-finite numbers, and strict
+  boolean or scalar validation.
+- `design decision needed` means agree on the behavior before implementing it.
+- `priority:p2` and `priority:p3` are triage hints, not delivery commitments.
+
+For example, a guard YAML bug may use `bug`, `area:sdk`,
+`scope:opt-in-guard`, and `config-validation`; a client guide may use
+`documentation`, `type:docs`, `area:clients`, and `scope:docs`.
+
 ## Development setup
 
 The distributable Python package lives in `sdk/`. Python 3.10 through 3.13 is
