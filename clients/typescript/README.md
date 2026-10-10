@@ -123,3 +123,7 @@ This package is experimental. The `experimental` tag points to `0.1.1`; npm's
 automatic `latest` tag remains on the first published version, `0.1.0`. Use the
 explicit `@experimental` install command and do not treat the package as a
 production-supported SDK.
+
+Maintainers: use the [client release checklist](../../sdk/docs/RELEASE.md#experimental-typescript-and-go-client-releases)
+for independent versioning, compatibility review, approval, and publishing.
+Python releases do not publish this package.
