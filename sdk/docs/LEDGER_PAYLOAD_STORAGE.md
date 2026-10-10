@@ -170,3 +170,77 @@ Before deleting records, confirm that any required provider-reconciliation
 evidence, audit receipts, and compliance archive have been retained. A direct
 `delete_transitions()` call removes the selected ledger records (and the
 backend's associated effect index/tombstone data) without creating an archive.
+
+## Coordinated audit-receipt cleanup
+
+Transition pruning does **not** delete audit receipts. `FileAuditReceiptStorage`
+and `AtomicAuditReceiptStorage` expose append/list operations, with no receipt
+prune API or CLI. Receipts can retain signed inputs, outputs, and error text
+after the transition is gone. Cleanup is a separate, operator-controlled
+maintenance operation; there is no automatic cascade.
+
+### Review and select before deleting
+
+1. Stop the affected writers, including other workers using the same receipt
+   store, and pause exporters that read it. Keep them stopped through cleanup.
+2. Review the transition prune dry run and export the selected transitions
+   before execution. Record their `receipt_ref` values and the receipt IDs
+   approved for removal. A request can have multiple attempt receipts; inspect
+   the receipt store's `request_id`, `action`, `action_kind`, and `agent_id` as
+   well as the ledger reference. Request IDs alone are not a global join key.
+3. Apply the receipt retention policy and any legal hold independently. Do not
+   infer permission to delete from an old timestamp or a missing transition.
+   Retain evidence needed for reconciliation and incident review.
+4. Securely archive the selected original receipt records if policy requires
+   it, then execute the reviewed transition prune and receipt cleanup. An
+   archive is another copy of the payload; give it its own access and retention
+   policy. This procedure is not a transaction across the two stores.
+5. Verify the exact selected IDs are absent, retained receipts are unchanged,
+   and ledger receipt references that remain are accounted for. Record the
+   operation and counts before resuming writers and exporters.
+
+### File receipts
+
+With `audit_receipt: {storage: file, path: ...}`, the configured
+`audit_receipt.path` is a newline-delimited JSON file, one complete signed
+receipt per line. This is separate from the action-ledger JSON file and its
+effect index. While writers are stopped, parse that file and write a sibling
+temporary file containing only records whose `receipt_id` is **not** in the
+reviewed deletion set. Preserve each retained record, including its signature;
+do not redact or edit a signed payload in place.
+
+Validate the temporary file and removal count, preserve restrictive file
+permissions, flush it to disk, and replace the original on the same filesystem.
+Do not truncate an actively written receipt file or delete the ledger's effect
+index as a substitute. Include old rotated copies and backups in the reviewed
+retention plan; replacing the active file does not erase those copies.
+
+### Shared / atomic receipts
+
+Configured Redis/Postgres receipts and `storage: shared` use a receipt namespace
+`<base>:audit_receipt`. For direct Redis/Postgres configuration, `<base>` is
+`audit_receipt.namespace` (default `mycelium`). For `storage: shared`, or omitted
+receipt storage with a top-level `state_backend`, it is `state_backend.namespace`
+(default `mycelium`). A directly constructed `AtomicAuditReceiptStorage` instead
+defaults to the namespace `audit_receipt`; use the actual constructor value.
+
+| Atomic backend | Receipt location | Scoped removal |
+| --- | --- | --- |
+| File | `state_backend.path`, a JSON object with records carrying `namespace`, `key`, `version`, and `value` | Remove only records in the receipt namespace with the approved receipt ID as `key`, through the backend API. Other guard state may share this file. |
+| Redis | `<prefix><URL-encoded namespace>:<URL-encoded receipt_id>`; default prefix `mycelium:state:` | Remove only the selected receipt keys. Do not flush the database or delete all keys under the state prefix. |
+| Postgres | Configured state table (default `mycelium_state`), with `namespace`, `state_key`, `version`, and JSONB `payload` | Delete only the selected `(namespace, state_key)` pairs. Do not drop the table or remove the other state namespaces. |
+| Memory | Process-local atomic state | There is no durable receipt file or table; restart loses this process's records. |
+
+The lower-level `AtomicStateBackend` API provides `scan(namespace)`,
+`get(namespace, receipt_id)`, and
+`delete(namespace, receipt_id, expected_version=record.version)`. Use the exact
+backend configuration, inspect the scanned receipt payloads, and delete only
+approved IDs with the version observed during review. A failed conditional
+delete requires a fresh review, not an unconditional retry. The receipt adapter
+itself intentionally has no delete method. Keep the namespace and reviewed IDs
+explicit in any operator script; do not derive a broad wildcard from a date.
+
+This removes selected active-store records only. Exported receipts, outcome
+records, backups, Redis persistence files, replicas, and database recovery logs
+need their own retention procedures. Neither transition pruning nor this manual
+procedure guarantees physical erasure of every copy of a payload.
