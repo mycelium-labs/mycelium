@@ -2076,7 +2076,13 @@ def _parse_config(
     registry_allowed = registry_raw.get("allowed", []) or []
     if not isinstance(registry_allowed, list):
         raise ConfigError("'registry.allowed' must be a list")
-    if registry_raw.get("auto") and not registry_allowed:
+    registry_auto = _parse_bool_option(
+        registry_raw,
+        "auto",
+        field="'registry.auto'",
+        default=False,
+    )
+    if registry_auto and not registry_allowed:
         registry_allowed = list(tools.keys())
 
     runner_raw = data.get("runner", {})
