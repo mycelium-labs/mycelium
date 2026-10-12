@@ -1,0 +1,229 @@
+# Keep PR feedback small; ci.yml retains the full main-branch release gate.
+name: PR checks
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version-hygiene:
+    # Docs churn must not move the version line (#71).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: No shields.io &release= pins in READMEs
+        run: |
+          set -euo pipefail
+          if grep -nE 'shields\.io/pypi/v/mycelium-runtime\.svg\?[^\)]*release=' README.md sdk/README.md; then
+            echo "::error::Do not pin PyPI badge cache with &release= — badges track PyPI (see sdk/docs/RELEASE.md § Version-line hygiene)."
+            exit 1
+          fi
+
+      - name: No hardcoded current-version banners in READMEs
+        run: |
+          set -euo pipefail
+          # Forbid "API-stable (**vX.Y.Z**)" / "`mycelium-runtime` **vX.Y.Z**" current banners.
+          # Historical "shipped in vX.Y.Z" elsewhere is fine.
+          if grep -nE 'API-stable \(\*\*v[0-9]|as `mycelium-runtime` \*\*v[0-9]' README.md sdk/README.md; then
+            echo "::error::Do not hardcode the current package version in README banners — link to PyPI instead (#71)."
+            exit 1
+          fi
+
+      - name: pyproject bump requires matching CHANGELOG header
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if ! git diff --name-only "$BASE"...HEAD | grep -qx 'sdk/pyproject.toml'; then
+            echo "sdk/pyproject.toml unchanged — ok"
+            exit 0
+          fi
+          if ! git diff "$BASE"...HEAD -- sdk/pyproject.toml | grep -qE '^\+version[[:space:]]*='; then
+            echo "pyproject.toml touched but version line unchanged — ok"
+            exit 0
+          fi
+          NEW="$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' sdk/pyproject.toml | head -1)"
+          if [ -z "$NEW" ]; then
+            echo "::error::could not parse version from sdk/pyproject.toml"
+            exit 1
+          fi
+          echo "Detected version bump to ${NEW}"
+          if ! grep -nE "^## ${NEW}( |$)" CHANGELOG.md; then
+            echo "::error::sdk/pyproject.toml version is ${NEW} but CHANGELOG.md has no '## ${NEW}' header. Version bumps belong in a release PR with a matching CHANGELOG section."
+            exit 1
+          fi
+
+      - name: Verify architecture map source provenance
+        run: python .github/scripts/check-architecture-provenance.py --strict
+
+      - name: Verify guarantee-to-test map
+        run: python .github/scripts/check-guarantee-map.py
+
+      - name: Check Markdown links and heading anchors
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
+        with:
+          args: >-
+            --verbose
+            --no-progress
+            --offline
+            --exclude-path graphify-out
+            --exclude-path .cache
+            "**/*.md"
+          fail: true
+
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install SDK
+        run: pip install -e "./sdk[dev,redis,postgres,observability]"
+
+      - name: Ruff
+        working-directory: sdk
+        run: ruff check mycelium tests
+
+      - name: Install pinned type checker
+        run: python -m pip install -r .github/typing-requirements.txt
+
+      - name: Pyright scoped Python 3.10 gate
+        working-directory: sdk
+        run: python -m pyright --project pyrightconfig.json --warnings
+
+      - name: Bandit static security scanner
+        working-directory: sdk
+        run: bandit -c pyproject.toml -r mycelium
+
+      - name: Dependency vulnerability audit
+        working-directory: sdk
+        # Dependency vulnerability gate (#146). pip-audit exits non-zero on
+        # findings or service errors. Exceptions must be recorded in
+        # sdk/.pip-audit-ignore with a reason and review date.
+        run: |
+          IGNORE_ARGS=()
+          if [ -f .pip-audit-ignore ]; then
+            while IFS= read -r line || [ -n "$line" ]; do
+              line="${line#"${line%%[![:space:]]*}"}"
+              [[ -z "$line" || "$line" =~ ^# ]] && continue
+              vuln_id=$(echo "$line" | awk '{print $1}')
+              [ -n "$vuln_id" ] && IGNORE_ARGS+=("--ignore-vuln" "$vuln_id")
+            done < .pip-audit-ignore
+          fi
+          pip-audit --desc on "${IGNORE_ARGS[@]}"
+
+      - name: Documentation, provenance, and packaging tests
+        working-directory: sdk
+        run: pytest tests/test_architecture_provenance.py tests/test_doc_commands.py tests/test_package_reproducibility.py -q
+
+  compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.13"]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install SDK
+        run: pip install -e "./sdk[dev]"
+
+      - name: SDK compatibility tests
+        working-directory: sdk
+        run: >
+          pytest tests/ -q
+          --ignore=tests/test_architecture_provenance.py
+          --ignore=tests/test_doc_commands.py
+          --ignore=tests/test_package_reproducibility.py
+
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mycelium
+          POSTGRES_PASSWORD: mycelium
+          POSTGRES_DB: mycelium_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mycelium -d mycelium_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      MYCELIUM_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+      MYCELIUM_TEST_POSTGRES_DSN: postgresql://mycelium:mycelium@127.0.0.1:5432/mycelium_test
+      MYCELIUM_CI_REQUIRE_REDIS: "1"
+      MYCELIUM_CI_REQUIRE_POSTGRES: "1"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install SDK
+        # redis + postgres extras so real-backend proofs import the drivers.
+        run: pip install -e "./sdk[dev,redis,postgres]"
+
+      - name: SDK tests with real backends and coverage gate
+        working-directory: sdk
+        # Real-backend and concurrency proofs run once on the primary Python.
+        # Static documentation checks run in the static job.
+        # This suite also includes the bundled-example smoke tests.
+        run: >
+          pytest tests/ -q
+          --ignore=tests/test_architecture_provenance.py
+          --ignore=tests/test_doc_commands.py
+          --ignore=tests/test_package_reproducibility.py
+          --cov=mycelium --cov-report=term-missing
+
+      - name: Output coverage report to job summary
+        if: always()
+        working-directory: sdk
+        run: |
+          if [ -f .coverage ]; then
+            echo "### Python 3.12 Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            python -m coverage report >> $GITHUB_STEP_SUMMARY 2>&1 || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
