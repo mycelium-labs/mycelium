@@ -1,9 +1,8 @@
+# Full post-merge suite; release.yml requires this workflow to succeed.
 name: CI
 
 on:
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
 
 concurrency:

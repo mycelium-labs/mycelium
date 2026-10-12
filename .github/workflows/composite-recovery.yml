@@ -11,15 +11,6 @@ on:
       - "sdk/tests/*backend_gates*"
       - "sdk/pyproject.toml"
       - ".github/workflows/composite-recovery.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "sdk/mycelium/**"
-      - "sdk/tests/test_composite*"
-      - "sdk/tests/fixtures/composite*"
-      - "sdk/tests/*backend_gates*"
-      - "sdk/pyproject.toml"
-      - ".github/workflows/composite-recovery.yml"
 
 permissions:
   contents: read

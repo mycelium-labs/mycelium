@@ -68,6 +68,17 @@ For example, a guard YAML bug may use `bug`, `area:sdk`,
 The distributable Python package lives in `sdk/`. Python 3.10 through 3.13 is
 tested in CI.
 
+Pull requests run five checks: version and documentation hygiene (including
+Markdown links), static analysis and dependency auditing, the Python 3.12 test
+suite with Redis/Postgres and coverage, and compatibility on Python 3.10 and
+3.13. Bundled-example smoke tests are included in the test suite.
+
+The full `CI` workflow runs after pushes to `main`, including packaging and
+installation checks, Python 3.11 compatibility, CrewAI integration,
+cross-language and shared-sidecar conformance, and reproducible builds. The
+opt-in composite process-recovery proof runs on relevant `main` changes or
+manual dispatch. Releases continue to require a successful full `CI` run.
+
 ### Preferred: uv
 
 ```bash
