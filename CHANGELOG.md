@@ -42,6 +42,9 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Fixed
 
+- Accept canonical negative fractions with a zero integer part (`-0.1`) in the
+  sidecar OpenAPI `DecimalValue` pattern, matching the runtime decimal-1 check
+  and the Go/TypeScript helpers.
 - Report state-authority callable inspection as static Doctor evidence, reject
   generator resolvers (including callable objects), and flag ineffective
   per-tool policy dictionaries without invoking host resolvers or tools.
