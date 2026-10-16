@@ -139,7 +139,7 @@ def openapi_document() -> dict[str, Any]:
                 "profile": {"const": "decimal-1"},
                 "value": {
                     "type": "string",
-                    "pattern": r"^(0|-?[1-9][0-9]*)(\.[0-9]*[1-9])?$",
+                    "pattern": r"^(?:(?:0|-?[1-9][0-9]*)(?:\.[0-9]*[1-9])?|-0\.[0-9]*[1-9])$",
                     "maxLength": 40,
                 },
             },
