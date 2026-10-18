@@ -748,6 +748,8 @@ class MyceliumConfigModel(_ConfigModel):
     @field_validator("config_version", mode="before")
     @classmethod
     def _supported_config_version(cls, value: Any) -> Any:
+        if type(value) is not int:
+            raise ValueError("config_version must be an integer (booleans are not supported)")
         if value != CONFIG_VERSION:
             raise ValueError(
                 f"unsupported config_version {value!r}; this Mycelium "
