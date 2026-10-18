@@ -1967,6 +1967,8 @@ def _parse_config(
                 raise ConfigError(f"unsupported configuration option(s): {paths}{hint}")
 
     config_version = data.get("config_version", CONFIG_VERSION)
+    if type(config_version) is not int:
+        raise ConfigError("config_version must be an integer (booleans are not supported)")
     if config_version != CONFIG_VERSION:
         raise ConfigError(
             f"unsupported config_version {config_version!r}; this Mycelium "
