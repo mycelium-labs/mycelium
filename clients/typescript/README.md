@@ -95,6 +95,19 @@ future dispositions fail closed. Reconciliation, provider attestation, operator
 authorization, hostile clients, public multi-tenant hosting, and production IAM
 remain outside this experiment.
 
+## Request deadlines and token providers
+
+`timeoutMs` (default 10,000; range 1–120,000 milliseconds) sets one deadline
+covering asynchronous `tokenProvider()` acquisition, HTTP fetch, and response
+reading. Deadline expiry rejects with `MyceliumTransportError` and aborts the
+HTTP request. Provider failures also produce a transport error without exposing
+the provider's error message or credentials.
+
+A token provider receives no cancellation signal and may continue running after
+timeout. Its eventual result is discarded, its rejection is handled, and a late
+token never starts an HTTP request. Providers should bound their own background
+work. The client does not retry automatically.
+
 ## Protocol examples and OpenAPI
 
 The sidecar exposes authenticated capabilities and OpenAPI at

@@ -70,11 +70,27 @@ export class JsonTransport {
   async request<T>(method: string, path: string, body?: unknown, authenticated = true): Promise<T> {
     if (!path.startsWith("/") || path.includes("?") || path.includes("#") || path.includes("//")) throw new Error("invalid sidecar path");
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new MyceliumTransportError("sidecar request deadline exceeded"));
+        controller.abort();
+      }, this.timeoutMs);
+    });
     try {
       const headers: Record<string, string> = { Accept: "application/json" };
       if (authenticated) {
-        const token = this.tokenProvider ? await this.tokenProvider() : this.token;
+        let token: string | undefined;
+        try {
+          token = this.tokenProvider
+            ? await Promise.race([Promise.resolve().then(() => this.tokenProvider!()), deadline])
+            : this.token;
+        } catch {
+          // Provider failures can contain credentials; never expose their cause.
+          throw new MyceliumTransportError(controller.signal.aborted
+            ? "sidecar request deadline exceeded" : "sidecar token acquisition failed");
+        }
+        if (controller.signal.aborted) throw new MyceliumTransportError("sidecar request deadline exceeded");
         if (!token) throw new Error("token provider returned an empty token");
         headers.Authorization = `Bearer ${token}`;
       }
@@ -83,13 +99,13 @@ export class JsonTransport {
       }
       let response: Response;
       try {
-        response = await this.fetcher(`${this.baseUrl}${path}`, {
+        response = await Promise.race([this.fetcher(`${this.baseUrl}${path}`, {
           method, headers, body: body === undefined ? undefined : JSON.stringify(body),
           redirect: "error", signal: controller.signal,
-        });
+        }), deadline]);
       } catch (error) { throw new MyceliumTransportError("sidecar request did not complete", error); }
       let text: string;
-      try { text = await boundedText(response); } catch (error) { throw new MyceliumTransportError("sidecar response could not be read", error); }
+      try { text = await Promise.race([boundedText(response), deadline]); } catch (error) { throw new MyceliumTransportError("sidecar response could not be read", error); }
       let payload: unknown;
       try { payload = JSON.parse(text); } catch { throw new MyceliumProtocolError("sidecar returned invalid JSON", { code: "INVALID_RESPONSE", httpStatus: response.status }); }
       if (!response.ok) {
