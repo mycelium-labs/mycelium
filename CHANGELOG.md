@@ -7,6 +7,10 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Added
 
+- Support context-aware, per-request bearer token providers in the Go client
+  without automatic mutation retries (#287).
+- Record host-owned outcome retention across all backends, including exporter,
+  deduplication, and retained-history DTTR limits (#251).
 - Add an opt-in real-process composite recovery proof across SQLite, Redis,
   and PostgreSQL. Kill and suspend workers at durable boundaries, count effects
   in an independent non-deduplicating provider, and verify stored-result replay,
@@ -42,6 +46,10 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ### Fixed
 
+- Reject lossy TypeScript identity inputs and malformed effect IDs, owners, or
+  fences before granting execution authority (#280, #281).
+- Validate sidecar YAML and direct configuration scalar types, finite timeout
+  bounds, and ordered connection-pool limits without coercion (#283).
 - Accept canonical negative fractions with a zero integer part (`-0.1`) in the
   sidecar OpenAPI `DecimalValue` pattern, matching the runtime decimal-1 check
   and the Go/TypeScript helpers.

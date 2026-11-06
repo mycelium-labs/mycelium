@@ -140,3 +140,24 @@ production-supported SDK.
 Maintainers: use the [client release checklist](../../sdk/docs/RELEASE.md#experimental-typescript-and-go-client-releases)
 for independent versioning, compatibility review, approval, and publishing.
 Python releases do not publish this package.
+
+## Identity data and execution authority
+
+Identity candidates must contain lossless JSON data: null, booleans, strings,
+safe integers, dense arrays, and plain objects (including null-prototype
+objects). Fractions use `decimal("1500.25")`. Non-finite numbers, negative zero,
+unsafe integers, undefined properties, sparse arrays, cycles, accessors, symbol
+properties, and custom objects such as `Date`, `Map`, or objects with `toJSON`
+are rejected locally with `MyceliumLocalValidationError` and a field path before
+HTTP submission. The client snapshots validated identity data before awaiting
+credentials; identity hashing remains authoritative on the server.
+
+Effect responses must contain `mycelium:effect:v1:` followed by 64 lowercase
+hexadecimal digits. Present owners must be nonblank strings; present fences
+must be positive JavaScript safe integers. Every effect reply path validates
+these fields, including composite child effects. An `EXECUTE` disposition
+requires both owner and fence. Malformed values raise `MyceliumProtocolError`;
+the client never repairs them into execution authority. Fences above
+`Number.MAX_SAFE_INTEGER` are rejected rather than rounded or coerced to strings.
+Such a response must be resolved through an operator or a client capable of
+representing the server's integer exactly before any provider execution.

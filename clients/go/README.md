@@ -127,3 +127,43 @@ unsupported.
 Maintainers: use the [client release checklist](../../sdk/docs/RELEASE.md#experimental-typescript-and-go-client-releases)
 for compatibility review, approval, and the `clients/go/v*` tag procedure.
 Python releases do not publish this module.
+
+## Rotating bearer tokens
+
+`ClientOptions` accepts exactly one of `Token` or `TokenProvider`. A provider
+is called once per authenticated request with the caller's context bounded by
+`Timeout` (10 seconds by default). Health checks do not acquire credentials.
+Provider failures, empty credentials, and deadline expiry prevent HTTP
+submission. Errors omit provider error text and token contents. The client
+never retries a request automatically, including after a 401 or timeout.
+
+For a long-lived client, keep the current credential in an `atomic.Value`:
+
+```go
+var current atomic.Value // import sync/atomic
+current.Store(initialToken) // acquired from your secret manager
+client, err := mycelium.NewClient(mycelium.ClientOptions{
+    BaseURL: "http://127.0.0.1:8787",
+    TenantID: "tenant-a", ApplicationID: "app-a",
+    TokenProvider: func(ctx context.Context) (string, error) {
+        if err := ctx.Err(); err != nil { return "", err }
+        return current.Load().(string), nil
+    },
+})
+if err != nil { return err }
+// After deploying server configuration that accepts both tokens:
+current.Store(replacementToken)
+// Subsequent authenticated calls use replacementToken on the same client.
+```
+
+First configure `bearer_token_files` with both old and new owner-only token
+files and restart or roll the sidecars so every endpoint accepts both. Then
+update the host's current token. After old-token requests have drained and all
+clients have switched, remove the old file from server configuration and roll
+again. Configuration is loaded at startup, not watched. Existing effect handles
+retain their original identity, owner, and fence throughout rotation.
+
+Providers may be called concurrently: synchronize shared state and honor context
+cancellation, including when contacting a secret manager. A provider that ignores
+cancellation cannot delay HTTP submission beyond the deadline, but its goroutine
+can remain alive until it returns. No acquired token is cached by the client.
