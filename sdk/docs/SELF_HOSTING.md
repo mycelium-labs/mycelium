@@ -157,6 +157,28 @@ internet-facing deployment. For another container platform, use
 [`deploy/sidecar.shared.yaml`](../../deploy/sidecar.shared.yaml), provide
 `MYCELIUM_DATABASE_URL`, and mount the bearer token at `/tmp/token`.
 
+## Configuration scalar validation
+
+YAML settings and direct Python `SidecarConfig` construction use the same
+validation before server binding or storage construction. Numeric strings,
+booleans in numeric fields, and fractional integers are rejected rather than
+coerced. Errors identify the field.
+
+| Setting | Accepted values | Default |
+|---------|-----------------|---------|
+| `server.port` | Integer 0 through 65535; 0 requests an OS-assigned port | 0 |
+| `request_body_limit` | Integer 1 through 16777216 bytes | 1048576 |
+| `legacy_inspection` | YAML boolean `true` or `false`, without quotes | false |
+| `server.request_timeout` | Finite number greater than 0 and at most 120 seconds | 10 |
+| `database.connect_timeout` | Finite number greater than 0 and at most 120 seconds | 5 |
+| `database.pool_timeout` | Finite number greater than 0 and at most 120 seconds | 5 |
+| `database.pool_min_size` | Integer 0 through 1024, at most `pool_max_size` | 1 |
+| `database.pool_max_size` | Integer 1 through 1024, at least `pool_min_size` | 10 |
+
+In Python the corresponding names are `port`, `body_limit`, `legacy_inspection`,
+`request_timeout`, `db_connect_timeout`, `db_pool_timeout`, `db_pool_min_size`,
+and `db_pool_max_size`. NaN and positive/negative infinity are never accepted.
+
 ## Security boundary
 
 - Keep the development profile on loopback.

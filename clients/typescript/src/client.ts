@@ -1,5 +1,5 @@
 import { JsonTransport } from "./transport.js";
-import { MyceliumProtocolError } from "./errors.js";
+import { MyceliumLocalValidationError, MyceliumProtocolError } from "./errors.js";
 import type {
   BoundaryRequest, CapabilitiesReply, ClaimEffectRequest, ClaimReply, CompleteEffectRequest,
   ClaimCompositeRequest, CompositeHandle, CompositeReply, EffectHandle, EffectReply,
@@ -19,22 +19,57 @@ export interface MyceliumClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
+// Copy only lossless JSON data before an asynchronous token lookup can run.
+function identityValue(value: unknown, path: string, ancestors = new Set<object>()): unknown {
+  const invalid = (reason: string): never => { throw new MyceliumLocalValidationError(`${path}: ${reason}`); };
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || Object.is(value, -0)) invalid("identity numbers must be safe integers; use decimal() for fractions");
+    return value;
+  }
+  if (typeof value !== "object") return invalid("expected lossless JSON data");
+  if (ancestors.has(value)) return invalid("cyclic identity value");
+  const array = Array.isArray(value);
+  const prototype = Object.getPrototypeOf(value);
+  if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return invalid("custom objects and serialization are unsupported");
+  ancestors.add(value);
+  try {
+    const result: Record<string, unknown> | unknown[] = array ? [] : Object.create(null);
+    const keys = Reflect.ownKeys(value);
+    if (array && keys.length !== value.length + 1) invalid("sparse arrays and extra array properties are unsupported");
+    for (const key of keys) {
+      if (array && key === "length") continue;
+      if (typeof key !== "string") return invalid("symbol properties are unsupported");
+      if (array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length)) invalid("extra array properties are unsupported");
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+      if (!descriptor.enumerable || !("value" in descriptor)) invalid("non-enumerable properties and accessors are unsupported");
+      Object.defineProperty(result, key, { value: identityValue(descriptor.value, `${path}[${JSON.stringify(key)}]`, ancestors), enumerable: true, writable: true, configurable: true });
+    }
+    return result;
+  } finally { ancestors.delete(value); }
+}
+
 function wireIdentity(input: IdentityRequest, options: MyceliumClientOptions): Record<string, unknown> {
-  return {
+  return identityValue({
     business_request_id: input.businessRequestId, tool_id: input.toolId,
     tool_contract_version: input.toolContractVersion, destination: input.destination,
     execution_scope: input.executionScope, input: input.input,
-    tenant_id: input.tenantId ?? options.tenantId,
-    application_id: input.applicationId ?? options.applicationId,
+    ...((input.tenantId ?? options.tenantId) === undefined ? {} : { tenant_id: input.tenantId ?? options.tenantId }),
+    ...((input.applicationId ?? options.applicationId) === undefined ? {} : { application_id: input.applicationId ?? options.applicationId }),
     identity_version: input.identityVersion ?? "1",
     canonicalization_version: input.canonicalizationVersion ?? "jcs-1",
     ...(input.expectedEffectId === undefined ? {} : { expected_effect_id: input.expectedEffectId }),
-  };
+  }, "identity") as Record<string, unknown>;
 }
 function projection(raw: Record<string, unknown>): EffectReply {
-  if (raw.protocol_version !== PROTOCOL_VERSION || typeof raw.effect_id !== "string" || typeof raw.effect_state !== "string") throw new MyceliumProtocolError("invalid or unsupported effect response", { code: "UNSUPPORTED_PROTOCOL", httpStatus: 200 });
+  if (raw.protocol_version !== PROTOCOL_VERSION || typeof raw.effect_state !== "string") throw new MyceliumProtocolError("invalid or unsupported effect response", { code: "UNSUPPORTED_PROTOCOL", httpStatus: 200 });
+  if (typeof raw.effect_id !== "string" || !/^mycelium:effect:v1:[0-9a-f]{64}$/.test(raw.effect_id)) throw new MyceliumProtocolError("invalid effect identity", { code: "INVALID_RESPONSE", httpStatus: 200 });
   if (!["INTENDED", "ATTEMPTING", "COMMITTED", "ABORTED", "UNKNOWN"].includes(raw.effect_state)) throw new MyceliumProtocolError("unsupported effect state", { code: "UNSUPPORTED_PROTOCOL", httpStatus: 200, effectId: raw.effect_id });
   if (raw.provider_boundary !== null && raw.provider_boundary !== undefined && !["not_crossed", "maybe_crossed", "crossed"].includes(String(raw.provider_boundary))) throw new MyceliumProtocolError("unsupported provider boundary", { code: "UNSUPPORTED_PROTOCOL", httpStatus: 200, effectId: raw.effect_id });
+  if ((raw.owner_id != null && (typeof raw.owner_id !== "string" || raw.owner_id.trim() === "")) ||
+      (raw.fence != null && (typeof raw.fence !== "number" || !Number.isSafeInteger(raw.fence) || raw.fence < 1))) {
+    throw new MyceliumProtocolError("invalid effect ownership data", { code: "INVALID_RESPONSE", httpStatus: 200, effectId: raw.effect_id });
+  }
   const lease = raw.lease && typeof raw.lease === "object" ? raw.lease as Record<string, unknown> : {};
   return {
     protocolVersion: raw.protocol_version, effectId: raw.effect_id, effectState: raw.effect_state,

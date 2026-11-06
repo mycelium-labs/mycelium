@@ -16,9 +16,14 @@ import (
 
 const maxResponseBytes = 1024 * 1024
 
+// TokenProvider returns the current bearer token. It must honor ctx and be safe
+// for concurrent calls. Provider errors and credentials are never included in errors.
+type TokenProvider func(ctx context.Context) (string, error)
+
 // Client is a thin HTTP adapter. It stores no authoritative transition state.
 type Client struct {
 	baseURL       string
+	tokenProvider TokenProvider
 	token         string
 	tenantID      TenantID
 	applicationID ApplicationID
@@ -27,6 +32,7 @@ type Client struct {
 }
 type ClientOptions struct {
 	BaseURL       string
+	TokenProvider TokenProvider
 	Token         string
 	TenantID      TenantID
 	ApplicationID ApplicationID
@@ -42,8 +48,8 @@ func NewClient(options ClientOptions) (*Client, error) {
 	if u.Hostname() == "" || strings.Contains(u.Hostname(), "%") {
 		return nil, errors.New("base URL must use a valid host")
 	}
-	if options.Token == "" {
-		return nil, errors.New("token must not be empty")
+	if (options.Token == "") == (options.TokenProvider == nil) {
+		return nil, errors.New("exactly one of Token or TokenProvider is required")
 	}
 	if options.TenantID == "" || options.ApplicationID == "" {
 		return nil, errors.New("tenant and application assertions are required")
@@ -63,7 +69,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 		hc = &copy
 	}
 	hc.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return errors.New("redirects are not followed") }
-	return &Client{baseURL: strings.TrimRight(options.BaseURL, "/"), token: options.Token, tenantID: options.TenantID, applicationID: options.ApplicationID, httpClient: hc, timeout: timeout}, nil
+	return &Client{baseURL: strings.TrimRight(options.BaseURL, "/"), token: options.Token, tokenProvider: options.TokenProvider, tenantID: options.TenantID, applicationID: options.ApplicationID, httpClient: hc, timeout: timeout}, nil
 }
 
 func (c *Client) request(ctx context.Context, operation, method, path string, body any, out any, authenticated bool) error {
@@ -94,7 +100,11 @@ func (c *Client) request(ctx context.Context, operation, method, path string, bo
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if authenticated {
-		req.Header.Set("Authorization", "Bearer "+c.token)
+		token, err := c.bearerToken(ctx)
+		if err != nil {
+			return err // No HTTP request was submitted; never retry automatically.
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -121,6 +131,48 @@ func (c *Client) request(ctx context.Context, operation, method, path string, bo
 		return validateEffectReply(effect)
 	}
 	return nil
+}
+
+func (c *Client) bearerToken(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	token := c.token
+	if c.tokenProvider != nil {
+		type result struct {
+			token string
+			err   error
+		}
+		ready := make(chan result, 1)
+		go func() {
+			token, err := c.tokenProvider(ctx)
+			ready <- result{token, err}
+		}()
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case value := <-ready:
+			if err := ctx.Err(); err != nil {
+				return "", err
+			}
+			if value.err != nil {
+				return "", errors.New("sidecar token acquisition failed")
+			}
+			token = value.token
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if token == "" {
+		return "", errors.New("sidecar token is empty or invalid")
+	}
+	for _, ch := range token {
+		if ch <= 32 || ch >= 127 {
+			return "", errors.New("sidecar token is empty or invalid")
+		}
+	}
+	return token, nil
 }
 
 func decodeJSON(raw []byte, out any) error {

@@ -1169,6 +1169,27 @@ class SidecarConfig:
     request_timeout: float = 10.0
 
     def __post_init__(self) -> None:
+        for field, lower, upper in (
+            ("port", 0, 65535),
+            ("body_limit", 1, 16 * MAX_BODY_BYTES),
+            ("db_pool_min_size", 0, 1024),
+            ("db_pool_max_size", 1, 1024),
+        ):
+            value = getattr(self, field)
+            if type(value) is not int or not lower <= value <= upper:
+                raise ValueError(f"{field} must be an integer between {lower} and {upper}")
+        if self.db_pool_min_size > self.db_pool_max_size:
+            raise ValueError("db_pool_min_size must not exceed db_pool_max_size")
+        if type(self.legacy_inspection) is not bool:
+            raise ValueError("legacy_inspection must be a boolean")
+        for field in ("request_timeout", "db_connect_timeout", "db_pool_timeout"):
+            value = getattr(self, field)
+            if (
+                type(value) not in (int, float)
+                or not 0 < value <= 120
+                or not math.isfinite(value)
+            ):
+                raise ValueError(f"{field} must be finite and greater than 0, at most 120 seconds")
         try:
             address = ipaddress.ip_address(self.host)
         except ValueError as exc:
@@ -1206,8 +1227,6 @@ class SidecarConfig:
             raise ValueError("shared profile requires Postgres outcome storage")
         if self.outcome_type == "postgres" and not self.outcome_dsn:
             raise ValueError("Postgres outcome storage requires a database URL")
-        if self.request_timeout <= 0 or self.request_timeout > 120:
-            raise ValueError("request_timeout must be between 0 and 120 seconds")
 
     @classmethod
     def from_yaml(cls, path: str | os.PathLike[str]) -> SidecarConfig:
@@ -1259,7 +1278,7 @@ class SidecarConfig:
         )
         return cls(
             host=values.get("host", "127.0.0.1"),
-            port=int(values.get("port", 0)),
+            port=values.get("port", 0),
             tenant_id=data.get("tenant_id", ""),
             application_id=data.get("application_id", ""),
             token=_read_token_file(token_files[0]),
@@ -1267,8 +1286,8 @@ class SidecarConfig:
             outcome_path=Path(outcome["path"]) if outcome.get("path") else None,
             protocol_version=data.get("protocol_version", PROTOCOL_VERSION),
             identity_namespace=data.get("identity_namespace", ""),
-            body_limit=int(data.get("request_body_limit", MAX_BODY_BYTES)),
-            legacy_inspection=bool(data.get("legacy_inspection", False)),
+            body_limit=data.get("request_body_limit", MAX_BODY_BYTES),
+            legacy_inspection=data.get("legacy_inspection", False),
             profile=str(data.get("profile", "development")),
             ledger_type=str(ledger["type"]),
             ledger_dsn=database_url,
@@ -1277,11 +1296,11 @@ class SidecarConfig:
             outcome_dsn=outcome_url,
             outcome_table=str(outcome.get("table", "mycelium_outcomes")),
             bearer_tokens=tuple(_read_token_file(item) for item in token_files),
-            db_connect_timeout=float(database.get("connect_timeout", 5.0)),
-            db_pool_timeout=float(database.get("pool_timeout", 5.0)),
-            db_pool_min_size=int(database.get("pool_min_size", 1)),
-            db_pool_max_size=int(database.get("pool_max_size", 10)),
-            request_timeout=float(values.get("request_timeout", 10.0)),
+            db_connect_timeout=database.get("connect_timeout", 5.0),
+            db_pool_timeout=database.get("pool_timeout", 5.0),
+            db_pool_min_size=database.get("pool_min_size", 1),
+            db_pool_max_size=database.get("pool_max_size", 10),
+            request_timeout=values.get("request_timeout", 10.0),
         )
 
 

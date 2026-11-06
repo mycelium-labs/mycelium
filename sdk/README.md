@@ -2425,6 +2425,12 @@ only `COMPLETED` and `FAILED_BEFORE_EFFECT`; ambiguous, blocked, expired, and
 in-flight records are retained unless explicitly selected with repeatable
 `--outcome` flags. Export and archive files are sanitized NDJSON.
 
+Outcome evidence has a separate, host-owned retention lifecycle. There is no
+`outcomes prune` command; transition pruning does not delete outcome rows.
+See the [outcome retention decision](docs/LEDGER_PAYLOAD_STORAGE.md#outcome-retention-decision)
+for file, memory, Redis, and Postgres procedures, deduplication limits, exporter
+coordination, and partial DTTR reporting after cleanup.
+
 ## Quickstart: task-level idempotency
 
 Stop entire tasks from re-running on framework-level retries:

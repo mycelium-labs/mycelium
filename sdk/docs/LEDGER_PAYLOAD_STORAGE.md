@@ -244,3 +244,42 @@ This removes selected active-store records only. Exported receipts, outcome
 records, backups, Redis persistence files, replicas, and database recovery logs
 need their own retention procedures. Neither transition pruning nor this manual
 procedure guarantees physical erasure of every copy of a payload.
+
+## Outcome retention decision
+
+Decision for issue #251: outcome retention is host-owned. Mycelium keeps the
+append-only `OutcomeStorage.append()` / `list_all()` contract; it does not ship
+an `outcomes prune` command, automatic expiry, or a storage deletion API.
+Transition pruning and ledger `retention_seconds` do not remove outcome rows.
+Hosts must explicitly set, review, and operate a separate outcome retention
+policy, including exports, replicas, snapshots, and backups.
+
+| Outcome backend | Host-owned lifecycle |
+|-----------------|----------------------|
+| Memory | Rows live for the storage object's lifetime; restart or replacing the object loses evidence. Export first if evidence must survive. |
+| File | NDJSON is append-only. Quiesce all emitters/readers, archive and verify the file, then rotate or replace it before resuming. Do not rename it while writers are active. |
+| Redis | Rows live at `<key_prefix>:stream`; deduplication keys live at `<key_prefix>:seen:<event_id>`. Host maintenance may trim stream entries, but must preserve deduplication keys for the entire possible emission-retry horizon. Deleting a deduplication key permits a retried event to reappear. Stream IDs reflect insertion time, while payload `ts` reflects event time; an ID cutoff is not an event-time cutoff. |
+| Postgres | Rows live in the configured outcome table, keyed by `event_id`, with event time in `ts`. Hosts can archive and delete reviewed rows in their own bounded database maintenance jobs. Deleting a row also removes its deduplication protection, so late emission retries can insert it again. |
+
+Before cleanup, choose an event-time cutoff, legal-hold exclusions, the maximum
+late-arrival/retry horizon, and the evidence required by exporters and reports.
+Pause emitters or coordinate a maintenance boundary with them. Preview candidate
+counts, archive full rows securely, verify the archive can be read, and confirm
+exporter checkpoints have passed the selected rows before deleting anything.
+Redis trimming and database maintenance are operator actions outside Mycelium;
+they must account for concurrent appends and late events. Do not apply action
+ledger cleanup commands to outcome keys or tables.
+
+DTTR consumes only the rows supplied to `compute_dttr()` (the CLI and
+`compute_dttr_from_storage()` currently load every retained row). Deleting an
+initial block, resolution, or release event can change both the transition
+population and measured duration. Missing boundary evidence cannot be inferred
+from surviving rows. Label reports after deletion as partial retained-history
+metrics, record the cutoff and missing coverage, and do not compare them as
+full-history DTTR. For a complete historical report, combine verified archives
+with retained rows, deduplicate by `event_id`, and keep all events for each
+included transition. Exporter cursors pointing to deleted data require explicit
+host reconciliation; deletion is never evidence that an export succeeded.
+
+`list_all()` remains unbounded. Retention does not provide pagination or bounded
+DTTR queries; that API decision is tracked separately in #286.
