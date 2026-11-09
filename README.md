@@ -8,30 +8,19 @@
 
 ![Mycelium sits between an AI agent and its tools, checking tool permissions, arguments, destinations, sensitive information, current authority, destructive-action confirmation, duplicate actions, and run budgets. If a required check fails, Mycelium stops the action.](assets/mycelium-tool-checks.png)
 
-Your agent decides what to do. Mycelium makes tool actions reliable across
-their full lifecycle:
+Mycelium checks tool calls before execution, controls retries and run limits,
+and records outcomes for recovery. It is for agents that send messages, charge
+payments, write data, or change external systems. Only calls routed through
+Mycelium are protected; each control must be configured and wired into the
+application.
 
-- **Before execution:** validate inputs, scope, destinations, secrets,
-  authorization, and current facts.
-- **During the run:** control retries, concurrency, crashes, loops, budgets,
-  context, and completion.
-- **After an attempt:** establish what happened, return stored outcomes,
-  reconcile uncertainty, and record evidence.
+Python applications use the runtime directly. Other languages connect through
+the experimental HTTP/JSON sidecar. The Python API follows semantic versioning;
+the `v1alpha1` sidecar protocol is not yet a stable production contract.
 
-Wrong answers are recoverable. Wrong actions are expensive. Mycelium sits
-between your agent and its tools to block invalid actions, control execution,
-and preserve trustworthy outcomes.
-
-It is not a tracer or dashboard. It controls the action path itself.
-
-The engine is written in Python, but the doorway into it is language-neutral.
-Python applications use the runtime directly. TypeScript, Go, and any runtime
-that can send HTTP/JSON can use the same engine through a small local sidecar.
-
-The Python API follows semantic versioning. The `v1alpha1` sidecar protocol is
-for development and is not yet a stable production contract.
-
-Early design-partner use: **live outbound-email lane** (Week 1: 25 ledgered sends, 0 duplicates). This is evidence for one execution-control lane, not the limit of the product. Not a public logo; the interactive sandbox is separate.
+Early design-partner use: a live outbound-email workflow recorded 25 ledgered
+sends and 0 duplicates in its first week. This is a limited observation from one
+workflow, not a general production guarantee or a public customer reference.
 
 ## What it protects
 
@@ -45,28 +34,12 @@ Early design-partner use: **live outbound-email lane** (Week 1: 25 ledgered send
 | False completion | Refuses “done” while required work remains open |
 | Missing evidence | Records durable outcomes and optional signed receipts |
 
-## Who it's for
-
-Developers running **agents with side-effect tools** on **LangGraph, CrewAI,
-plain Python, TypeScript, Go, or another runtime that can speak HTTP/JSON**.
-
-The authoritative engine requires Python 3.10+. Python applications can use
-YAML, `mycelium run`, or decorators. Other languages connect through the
-development sidecar protocol.
-
 ## Works with your stack
 
-Python applications can use YAML, decorators, or a manual API. For other
-languages, the sidecar runs Mycelium as a small local server beside your
-application:
-
-```text
-TypeScript · Go · Java · Rust · any HTTP client
-                         ↓ HTTP/JSON
-                local Mycelium sidecar
-                         ↓
-             authoritative Python engine
-```
+The engine requires Python 3.10+. Python applications use YAML,
+`mycelium run`, decorators, or the manual API, with integrations for LangGraph
+and CrewAI. TypeScript, Go, and other HTTP clients connect to a self-hosted
+sidecar running the same Python engine.
 
 The application asks the sidecar whether an action may run, reports when the
 provider call may have started, and records its result. The sidecar owns action
@@ -95,7 +68,6 @@ client](clients/typescript/README.md), [Go client](clients/go/README.md), and
    uncertain outcome, or stops safely.
 4. It records the decision and outcome for recovery and audit.
 
-Mycelium complements tracers and approval systems; it does not replace them.
 See the [SDK reference](sdk/README.md) for configuration details and the
 [failure and threat model](sdk/docs/FAILURE_AND_THREAT_MODEL.md) for exact
 guarantees and limits.
@@ -162,7 +134,7 @@ configuration, and manual APIs.
 - **Self-host the sidecar:** [local and shared PostgreSQL setup](sdk/docs/SELF_HOSTING.md)
 - **Experimental clients:** [TypeScript](clients/typescript/README.md) · [Go](clients/go/README.md)
 - **Doctor vs Verify:** `mycelium doctor` inspects configuration; `mycelium verify` runs synthetic failure scenarios. Neither proves a real provider is correct.
-- **Release policy & checklist:** [sdk/docs/RELEASE.md](sdk/docs/RELEASE.md) (batch; calm over velocity)
+- **Release policy & checklist:** [sdk/docs/RELEASE.md](sdk/docs/RELEASE.md)
 - **Security policy & private reporting:** [SECURITY.md](SECURITY.md)
 - **PyPI:** https://pypi.org/project/mycelium-runtime/
 

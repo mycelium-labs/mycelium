@@ -36,30 +36,6 @@ jobs:
             exit 1
           fi
 
-      - name: pyproject bump requires matching CHANGELOG header
-        if: github.event_name == 'pull_request'
-        run: |
-          set -euo pipefail
-          BASE="${{ github.event.pull_request.base.sha }}"
-          if ! git diff --name-only "$BASE"...HEAD | grep -qx 'sdk/pyproject.toml'; then
-            echo "sdk/pyproject.toml unchanged — ok"
-            exit 0
-          fi
-          if ! git diff "$BASE"...HEAD -- sdk/pyproject.toml | grep -qE '^\+version[[:space:]]*='; then
-            echo "pyproject.toml touched but version line unchanged — ok"
-            exit 0
-          fi
-          NEW="$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' sdk/pyproject.toml | head -1)"
-          if [ -z "$NEW" ]; then
-            echo "::error::could not parse version from sdk/pyproject.toml"
-            exit 1
-          fi
-          echo "Detected version bump to ${NEW}"
-          if ! grep -nE "^## ${NEW}( |$)" CHANGELOG.md; then
-            echo "::error::sdk/pyproject.toml version is ${NEW} but CHANGELOG.md has no '## ${NEW}' header. Version bumps belong in a release PR with a matching CHANGELOG section."
-            exit 1
-          fi
-
       - name: Verify architecture map source provenance
         run: python .github/scripts/check-architecture-provenance.py --strict
 

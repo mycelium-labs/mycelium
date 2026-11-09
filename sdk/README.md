@@ -6,26 +6,17 @@
 **The reliability layer for AI agents** — installable as `mycelium-runtime`
 (current version on [PyPI](https://pypi.org/project/mycelium-runtime/)).
 
-Your agent decides what to do. Mycelium makes tool actions reliable across the
-full lifecycle: validate inputs and authority before execution; control retries,
-concurrency, crashes, loops, budgets, context, and completion during the run;
-then establish outcomes, reconcile uncertainty, and retain evidence.
+Mycelium checks tool calls, coordinates retries and concurrent workers, enforces
+configured run limits, and records outcomes for recovery. Controls cover input
+validation, scope, destinations, secrets, authority, context, and completion.
+Only calls routed through the configured runtime boundary are protected.
 
-The engine is Python, but the doorway into it is language-neutral. Python
-applications import the runtime directly. TypeScript, Go, and any runtime that
-can send HTTP/JSON can use the same authoritative ledger, policy, fencing, and
-recovery engine through the experimental self-hosted `v1alpha1` sidecar
-protocol. Run it on loopback for one trusted application, or use the shared
-PostgreSQL profile to coordinate multiple sidecars.
+Python applications import the runtime directly. Other languages use the
+experimental self-hosted `v1alpha1` HTTP/JSON sidecar, on loopback for one
+trusted application or with PostgreSQL for multiple sidecars.
 
-**Releases:** batch; calm over velocity — [release policy & pre-release checklist](docs/RELEASE.md).
-
-The lifecycle surface includes call validation, scope and destination policy,
-secret protection, destructive grants, authority and fact freshness, loop and
-budget control, context integrity, completion contracts, and execution
-recovery. For retries and crashes, the ledger, leases, reconciliation, and
-operator release provide any-tool / any-provider run-or-not evidence and
-at-most-once enforcement.
+See the [release policy and checklist](docs/RELEASE.md) for compatibility and
+release requirements.
 
 ## Start with one risky tool
 
@@ -99,15 +90,11 @@ validate setup.
 
 **LangGraph Cloud redispatches a long tool call while the first is still running.** Both complete. You pay twice. Side effects run twice. See [langgraph#7417](https://github.com/langchain-ai/langgraph/issues/7417).
 
-Mycelium’s answer is a provider-reconciled, operator-releaseable, auditable
-**execution ledger**: **any tool, any provider** — prove run-or-not and enforce
-**at-most-once**. Claim before the side effect, hold a **lease** while work is
-in flight, record **terminal state**, and **hard-block** (or reconcile with the
-provider) when a mutating redispatch would be unsafe. Same key while in-flight
-→ poll; completed → return stored; ambiguous mutate → stop. Not “idempotency
-key + cached result” alone.
-
-On LangGraph Cloud, long tool calls can be redispatched on the order of **~180s**, aligned with the platform’s **`BG_JOB_HEARTBEAT`** sweep. Mycelium’s lease / auto-renew / poll / hard-block path is the operator-side guard for that window — see [Resolution gates](#resolution-gates).
+The execution ledger claims a stable action identity before the tool runs,
+renews its lease while work is in flight, and records the outcome. A concurrent
+redispatch waits; a completed action returns its stored result. An ambiguous
+mutation stops until a reconciler or operator can establish what happened.
+See [Resolution gates](#resolution-gates) for the decision rules.
 
 ```bash
 pip install 'mycelium-runtime[langgraph]'  # Python 3.10+; automatic runtime IDs
@@ -129,13 +116,13 @@ tools:
 mycelium run --config mycelium.yaml -- python -m my_agent
 ```
 
-In v1.11.0, the default `mycelium init` YAML enables `integrations.langgraph`. LangGraph's
+The default `mycelium init` YAML enables `integrations.langgraph`. LangGraph's
 `ToolNode` / `create_agent` injects a hidden `ToolRuntime`, and Mycelium maps
 its `tool_call_id`, thread, run, and node into the transition key. No
 `tool_call_id` parameter is needed on your function. Explicit IDs still win;
 custom tool executors may continue passing them manually.
 
-New in v1.12.0, `mycelium run` wraps all configured tool/task callable paths before application
+`mycelium run` wraps all configured tool/task callable paths before application
 startup and then replaces itself with the child Python process. Existing
 `@config.apply`, `@config.apply_task`, and `config.instrument` flows remain
 supported for explicit code-level control.
@@ -148,7 +135,7 @@ to the workflow's risks:
 
 | Lifecycle stage | Control | What Mycelium does |
 |---|---------------|-------------------|
-| **Execute / recover** | **Duplicate or uncertain effects** | Any tool, any provider — prove run-or-not and enforce at-most-once. Ledger · lease · gates · `Reconciler` · operator release · receipts |
+| **Execute / recover** | **Duplicate or uncertain effects** | Coordinate claims and leases, return stored outcomes, and block ambiguous mutations pending reconciliation or operator evidence |
 | **During the run** | **Infinite action loops** | `loop_guard:` — action-hash streak across *new* `tool_call_id`s; soft then hard; operator `mycelium loops release` |
 | **During the run** | **Budget / runaway spend** | `budget:` — `max_duration` / `max_steps` / `max_tokens` / `max_usd`; tools auto-wrapped; **LLM turns auto-wired** on LangGraph/LangChain; `missing_usage_policy`; operator `mycelium budget release` |
 | **Before execution** | **Secret-in-args** | `secret_args:` — block raw credentials before claim; pass `secret://` references; shared sanitizer on evidence. Fail-closed is primary; redaction is defense-in-depth |
@@ -165,15 +152,10 @@ to the workflow's risks:
 
 Envelope fields (`side_effect_class` → spendability → boundary → …) are
 documented under [Transition envelope fields](#transition-envelope-fields).
-They implement execution control; they do not define the whole product.
 
 The default `mycelium init` scaffold starts with an execution ledger for one
 tool. Configure the other lifecycle controls that apply, or use
 `mycelium init --full` to inspect the complete surface.
-
-Framework-agnostic in Python, and language-neutral through the sidecar. Raw
-message lists and plain Python functions work directly; non-Python runtimes use
-the same HTTP/OpenAPI transition lifecycle.
 
 ### Framework integration support
 
@@ -1263,14 +1245,14 @@ def send_payment(amount, recipient):
 | Reconcile result | What happens on redispatch |
 |------------------|-----------------------------|
 | `COMPLETED` | returns the reconciled result — the tool body does **not** run again |
-| `NOT_EXECUTED` | the tool is allowed to run **exactly once** more |
+| `NOT_EXECUTED` | one worker may claim the next attempt; normal execution checks still apply |
 | `UNKNOWN` | hard-blocks, exactly as if no reconciler were set |
 
 Reconciliation is **fail-closed**: no ref, no reconciler, or a reconciler that raises/times out all resolve to a hard-block — an exception in the reconciler never propagates. Async tools can implement `reconcile_async`; the async claim path prefers it and falls back to `reconcile`. Wire a reconciler via `@ledger` / `@ledger_sync` or `ActionLedger(reconciler=...)`.
 
 #### Demo adapter: Gmail sent-log (`GmailReconciler`)
 
-Not the product story — a shipped **demo** of the general `Reconciler` contract (prove run-or-not; fail closed on indexing lag). Email send tools often fail after the provider accepts the message but before the 250 OK reaches the agent. The ambiguous transition hard-blocks; `GmailReconciler` asks the Gmail sent-log:
+The Gmail reference adapter demonstrates read-only reconciliation and fails closed on indexing lag. If a send fails after the provider accepts the message, the transition hard-blocks; `GmailReconciler` checks the sent log:
 
 ```python
 from mycelium import ledger_sync, GmailReconciler, ReconcileResult
@@ -1482,7 +1464,7 @@ mycelium transitions release <request_id> --verified completed \
   --result-json '{"charged": true, "id": "pi_..."}' \
   --by ops@example.com --reason "pi_... succeeded in Stripe dashboard"
 
-# Effect provably NEVER happened → the next redispatch re-executes exactly once.
+# Effect provably never happened: allow a new claim on redispatch.
 mycelium transitions release <request_id> --verified not-executed \
   --by ops@example.com --reason "no charge for pi_... in Stripe; worker OOM-killed"
 ```
@@ -1490,7 +1472,7 @@ mycelium transitions release <request_id> --verified not-executed \
 | `--verified` | Meaning | Next redispatch |
 |--------------|---------|-----------------|
 | `completed` | the effect happened; you supply the result | returns the recorded result — the tool body does **not** run again |
-| `not-executed` | the effect provably never ran | consumes the release and runs the tool **exactly once** |
+| `not-executed` | the effect provably never ran | consumes the release for one new claim, subject to normal execution checks |
 
 Release is **one-shot** (a recorded verification is never overwritten — a second release fails) and **fail-closed**: unknown request ids, already-`COMPLETED` transitions, and `IN_FLIGHT` transitions with a still-held lease (a worker may be alive) are all refused. Entries are never deleted — the resolution (`operator_resolution`, `resolved_by`, `resolution_reason`, `resolved_at`, `released_from_outcome`) is stamped onto the durable record, so `provider_idempotency_key` enforcement and audit history survive. When an `AuditReceiptEmitter` is configured on the ledger, releases also emit signed receipts.
 
