@@ -36,8 +36,6 @@ def _overall(checks: list[DoctorCheck]) -> DoctorStatus:
 
 
 def _distributed_ready(cfg: MyceliumConfig, checks: list[DoctorCheck]) -> bool:
-    if any(c.status == DoctorStatus.FAIL and c.id.startswith("topology") for c in checks):
-        return False
     if any(
         c.id == "topology.omitted" and c.status == DoctorStatus.WARN for c in checks
     ):
@@ -165,11 +163,6 @@ def exit_code_for_report(
     if strict and report.warning_count > 0:
         return 1
     return 0
-
-
-def doctor_options_from_mapping(raw: dict[str, Any]) -> dict[str, Any]:
-    """Reserved for future doctor: YAML overrides (unused today)."""
-    return dict(raw)
 
 
 __all__ = [

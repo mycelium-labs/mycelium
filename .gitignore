@@ -27,3 +27,7 @@ proof/fixtures/af002/_hf_af002_index.json
 notes/
 graphify-out/
 STRATEGY_AND_IMPLEMENTATION_PLAN.md
+
+# Local OS metadata and property-test caches
+.DS_Store
+.hypothesis/

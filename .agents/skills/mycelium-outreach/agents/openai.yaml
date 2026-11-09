@@ -1,4 +1,0 @@
-interface:
-  display_name: "Mycelium Outreach"
-  short_description: "Draft concise outreach inviting issue authors to try Mycelium."
-  default_prompt: "Draft a concise, human email or message explaining that I found the recipient through a specific issue, inviting them to try Mycelium, and asking them to report missing capabilities or share candid feedback."

@@ -4,19 +4,11 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Literal, Protocol, TypeVar
+from typing import Any, Literal, TypeVar
 
 ClaimOutcome = Literal["claimed", "completed", "in_flight"]
 
 E = TypeVar("E")
-
-
-class EntryProtocol(Protocol):
-    request_id: str
-    status: str
-    lease_until: float | None
-
-    def to_dict(self) -> dict[str, Any]: ...
 
 
 def entry_fence(entry: Any) -> int | None:
