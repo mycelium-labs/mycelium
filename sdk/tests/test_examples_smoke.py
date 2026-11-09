@@ -145,6 +145,15 @@ MANIFEST: tuple[Example, ...] = (
         "script",
         marker="verdict=allow_with_warnings",
     ),
+    Example(
+        "outcome_telemetry_dttr.py",
+        "python-guards",
+        "script",
+        marker=(
+            "DTTR summary: dttr=0.000 silent_duplicates=0 "
+            "long_running_or_redispatched=1 transitions=2"
+        ),
+    ),
     # Webhook event-id dedupe recipes (fakes only, no provider credentials).
     Example(
         "webhooks/stripe_handler.py",

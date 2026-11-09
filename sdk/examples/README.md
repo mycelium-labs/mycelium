@@ -60,6 +60,7 @@ it to the manifest with a mode, or say why it is skipped.
 | [Repeated search](loop_guard_db_search.py): `loop_guard_db_search.py` | Stop repeated identical searches and show an operator allow-once decision. | script | No credentials |
 | [Tool allowlist](scope_guard_allowlist.py): `scope_guard_allowlist.py` | Refuse a tool outside the frozen run scope. | script | No credentials |
 | [Completion checklist](completion_contract_checklist.py): `completion_contract_checklist.py` | Require host checklist evidence before finishing a run. | script | No credentials |
+| [Outcome telemetry and DTTR](outcome_telemetry_dttr.py): `outcome_telemetry_dttr.py` | Emit synthetic outcome rows to a temporary `FileOutcomeStorage` and reload a `DttrReport`. | script | No credentials |
 | [Stripe webhook](webhooks/stripe.md): `webhooks/stripe_handler.py` | Deduplicate event handling with a fake Stripe event stream. | script | No credentials for the fake handler |
 | [GitHub webhook](webhooks/github.md): `webhooks/github_handler.py` | Deduplicate deliveries with a fake GitHub event stream. | script | No credentials for the fake handler |
 | [Twilio webhook](webhooks/twilio.md): `webhooks/twilio_handler.py` | Deduplicate messages with a fake Twilio event stream. | script | No credentials for the fake handler |
