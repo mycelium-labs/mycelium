@@ -35,3 +35,9 @@ reconciliation support. Direct provider calls bypass Mycelium coverage.
 The [discovery and instrumentation design spike](DISCOVERY_AND_INSTRUMENTATION_DESIGN.md)
 shows how a reviewed Python callable can be instrumented without changing its
 application body, and records the coverage limits of that approach.
+
+To re-check this wiring on every change, copy the
+[downstream CI gate template](../examples/ci/README.md): a GitHub Actions
+workflow that runs Doctor and a small named Verify scenario set against
+throwaway SQLite storage in your own repository, and keeps the JSON reports
+as artifacts when a check fails.

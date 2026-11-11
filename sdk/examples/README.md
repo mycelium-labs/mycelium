@@ -25,6 +25,13 @@ pytest tests/test_examples_smoke.py -rs
 `-rs` prints every skip with its reason. The manifest lives in
 [`tests/test_examples_smoke.py`](../tests/test_examples_smoke.py).
 
+## CI gate template
+
+The [CI gate template](ci/README.md) is documentation, not a runnable
+example: a GitHub Actions workflow for a downstream application's own
+repository, running Doctor and a named Verify scenario set against
+throwaway SQLite storage. It is not part of the smoke suite below.
+
 ## What the smoke suite checks
 
 | Mode | What runs | Fails when |
