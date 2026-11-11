@@ -154,6 +154,13 @@ MANIFEST: tuple[Example, ...] = (
             "long_running_or_redispatched=1 transitions=2"
         ),
     ),
+    # Signed receipt emit, reload, verify, and tamper check with a throwaway key.
+    Example(
+        "audit_receipt_roundtrip.py",
+        "python-guards",
+        "script",
+        marker="round-trip ok: original=True tampered=False wrong_key=False",
+    ),
     # Webhook event-id dedupe recipes (fakes only, no provider credentials).
     Example(
         "webhooks/stripe_handler.py",
