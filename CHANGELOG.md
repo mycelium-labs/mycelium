@@ -5,6 +5,8 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ## Unreleased
 
+## 1.38.6 (2026-11-12)
+
 ### Added
 
 - Support context-aware, per-request bearer token providers in the Go client
