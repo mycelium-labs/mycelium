@@ -2633,7 +2633,10 @@ Evidence labels distinguish what Mycelium can prove (`statically_verified`,
 `runtime_registration_verified`, `connectivity_verified`) from what remains an
 **operator assertion** (for example Redis AOF) or is **not verifiable** from
 config alone (call-site `request_id` / `run_id` binding). Doctor does not
-replace integration tests or fault injection.
+replace integration tests or fault injection. For CI consumers parsing
+`--json` output — evidence kinds, readiness fields, exit codes, and sanitized
+excerpts — see the
+[report consumer guide](docs/ONBOARDING.md#report-consumer-guide-doctor-and-verify-json).
 
 Doctor also inspects an optional `state_authority.canonical_callable` for
 importability and a synchronous host-resolver signature, without calling it.
@@ -2713,7 +2716,10 @@ system. Redis persistence remains operator-asserted. Host business-identity
 authority remains an application responsibility. `empirically_verified` is true
 only when every selected scenario passed; Doctor `operator_asserted` /
 `not_verifiable` evidence is never promoted to “proven.” File and SQLite are
-labeled single-node; PostgreSQL is the recommended distributed backend.
+labeled single-node; PostgreSQL is the recommended distributed backend. For
+`--json` field meanings (`overall_status`, `isolation_status`, `refused`,
+`production_ready`, scenario `SKIP` vs `PASS`, strict-mode exit codes), see the
+[report consumer guide](docs/ONBOARDING.md#report-consumer-guide-doctor-and-verify-json).
 
 #### Optional cluster verification
 
