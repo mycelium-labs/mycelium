@@ -89,6 +89,16 @@ MANIFEST: tuple[Example, ...] = (
         covered_by="test_example_langgraph_redis_crash.py",
     ),
     Example("langgraph_redis_crash/mycelium.example.yaml", "langgraph", "config"),
+    # Plain-Python SQLite crash window + operator recovery (no Redis / LangGraph).
+    Example(
+        "sqlite_crash_recovery/run.py",
+        "failure-gates",
+        "script",
+        marker=(
+            "walkthrough complete - provider_effects=1 "
+            "ambiguous_hard_block=True verified_return=True"
+        ),
+    ),
     # In-process gate repros (RETURN / POLL / HARD_BLOCK / REPAIR / reconcile).
     Example(
         "failure_cases/run_all.py",
