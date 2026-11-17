@@ -5,6 +5,11 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ## Unreleased
 
+### Documentation
+
+- Add a local use-time-currency example that rejects a changed decide-time fact
+  before a consequential tool call (#327).
+
 ## 1.38.6 (2026-11-12)
 
 ### Added

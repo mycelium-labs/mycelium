@@ -161,6 +161,13 @@ MANIFEST: tuple[Example, ...] = (
         "script",
         marker="round-trip ok: original=True tampered=False wrong_key=False",
     ),
+    # Use-time currency: decide-time fact invalid before a second consequential call.
+    Example(
+        "use_time_currency_changed_fact.py",
+        "python-guards",
+        "script",
+        marker="walkthrough ok: permitted=1 refused_changed=1 bodies=1",
+    ),
     # Webhook event-id dedupe recipes (fakes only, no provider credentials).
     Example(
         "webhooks/stripe_handler.py",

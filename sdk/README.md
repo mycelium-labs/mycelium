@@ -2101,6 +2101,12 @@ use_time_facts.capture(
 )
 ```
 
+Local walkthrough with a fake mutable record (permit once, then refuse after
+the fact changes; also missing/stale/unverifiable):
+`python examples/use_time_currency_changed_fact.py` (from `sdk/`).
+This validates declared dependencies, not the semantic truth of every model
+belief.
+
 ### Scope guard: freeze run tool allowlist
 
 This guard stops a narrow grant from **widening mid-run** through a handoff,
