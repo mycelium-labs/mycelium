@@ -20,6 +20,12 @@ Ask the developer to:
 The trial must use a sandbox or local provider. It must not send real messages,
 use production credentials, or call a paid model API.
 
+A successful sandbox trial is not a production claim. When a consenting
+deployment owner later wants to publish verifiable evidence from a real
+consequential workflow, use the blank
+[`PRODUCTION_PROOF_TEMPLATE.md`](PRODUCTION_PROOF_TEMPLATE.md) instead of
+reinterpreting this worksheet.
+
 ## Commands to collect
 
 ```bash
