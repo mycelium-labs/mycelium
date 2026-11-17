@@ -147,4 +147,7 @@ that every application call is instrumented. Doctor checks that protections
 are configured and detectably wired; Verify re-proves the named guarantees
 against throwaway storage. Coverage of your real call sites is a separate
 question — see `mycelium coverage` and the
-[onboarding guide](../../docs/ONBOARDING.md).
+[onboarding guide](../../docs/ONBOARDING.md). When a gate fails, parse the
+artifact JSON with the
+[report consumer guide](../../docs/ONBOARDING.md#report-consumer-guide-doctor-and-verify-json)
+rather than treating `SKIP` or Doctor `operator_asserted` evidence as proof.
