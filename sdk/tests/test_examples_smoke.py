@@ -178,6 +178,13 @@ MANIFEST: tuple[Example, ...] = (
         "script",
         marker="boundary ok: accepted=1 rejected_empty=1 rejected_type=1 bodies=1",
     ),
+    # Authority window: a grant valid at authorize expires before the side effect.
+    Example(
+        "authority_window_expiry.py",
+        "python-guards",
+        "script",
+        marker="walkthrough ok: provider_calls=1 expired_refusals=1",
+    ),
     # Use-time currency: decide-time fact invalid before a second consequential call.
     Example(
         "use_time_currency_changed_fact.py",
