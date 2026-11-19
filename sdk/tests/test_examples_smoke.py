@@ -171,6 +171,13 @@ MANIFEST: tuple[Example, ...] = (
         "script",
         marker="round-trip ok: original=True tampered=False wrong_key=False",
     ),
+    # Array length boundary: type-valid but empty list is rejected before the body.
+    Example(
+        "bounded_nonempty_list.py",
+        "python-guards",
+        "script",
+        marker="boundary ok: accepted=1 rejected_empty=1 rejected_type=1 bodies=1",
+    ),
     # Use-time currency: decide-time fact invalid before a second consequential call.
     Example(
         "use_time_currency_changed_fact.py",
