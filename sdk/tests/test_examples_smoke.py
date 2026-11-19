@@ -228,6 +228,13 @@ MANIFEST: tuple[Example, ...] = (
         "script",
         marker="work ran for: ['SM1001', 'SM1002']",
     ),
+    # CrewAI identity and completion terminal; needs the optional crewai extra.
+    Example(
+        "crewai_fake_order_lookup/run.py",
+        "agent-app",
+        "existing",
+        covered_by="test_example_crewai_fake_order_lookup.py",
+    ),
     # Real agent application; the Groq decision call is stubbed here.
     Example("groq_support_agent.py", "agent-app", "stubbed"),
     # Generated reference configuration.

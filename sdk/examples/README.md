@@ -78,6 +78,7 @@ it to the manifest with a mode, or say why it is skipped.
 | [Stripe webhook](webhooks/stripe.md): `webhooks/stripe_handler.py` | Deduplicate event handling with a fake Stripe event stream. | script | No credentials for the fake handler |
 | [GitHub webhook](webhooks/github.md): `webhooks/github_handler.py` | Deduplicate deliveries with a fake GitHub event stream. | script | No credentials for the fake handler |
 | [Twilio webhook](webhooks/twilio.md): `webhooks/twilio_handler.py` | Deduplicate messages with a fake Twilio event stream. | script | No credentials for the fake handler |
+| [CrewAI order lookup](crewai_fake_order_lookup/README.md): `crewai_fake_order_lookup/run.py` | Bind crew tool calls to a stable host run id and enforce a completion contract at the real CrewAI terminal, with a credential-free fake tool and scripted stub model. | existing ([test](../tests/test_example_crewai_fake_order_lookup.py)) | The optional `crewai` extra; no credentials or network |
 | [Support agent](groq_support_agent.py): `groq_support_agent.py` | Guard refund actions in a support-agent application. | stubbed | CI uses a stub model; live use requires `GROQ_API_KEY` and network access |
 | [Starter configuration](mycelium.generated.example.yaml): `mycelium.generated.example.yaml` | Load a generated starter matching the current configuration schema. | config | No credentials |
 
