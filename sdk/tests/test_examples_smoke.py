@@ -89,6 +89,13 @@ MANIFEST: tuple[Example, ...] = (
         covered_by="test_example_langgraph_redis_crash.py",
     ),
     Example("langgraph_redis_crash/mycelium.example.yaml", "langgraph", "config"),
+    # Pinned host item list: interrupt mid-batch, reject a changed list, resume.
+    Example(
+        "composite_items_resume/run.py",
+        "failure-gates",
+        "script",
+        marker="walkthrough ok: effects=['A', 'B', 'C'] replay_effects=0",
+    ),
     # Plain-Python SQLite crash window + operator recovery (no Redis / LangGraph).
     Example(
         "sqlite_crash_recovery/run.py",
