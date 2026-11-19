@@ -185,6 +185,16 @@ MANIFEST: tuple[Example, ...] = (
         "script",
         marker="walkthrough ok: provider_calls=1 expired_refusals=1",
     ),
+    # Provider-neutral reconciler fixture that passes the conformance kit.
+    Example(
+        "custom_reconciler_fixture/run.py",
+        "python-guards",
+        "script",
+        marker=(
+            "conformance ok: adapter=local-note-example cases=8 verified=True "
+            "tamper_refused=True synthetic_adapter_evidence=True"
+        ),
+    ),
     # Use-time currency: decide-time fact invalid before a second consequential call.
     Example(
         "use_time_currency_changed_fact.py",
