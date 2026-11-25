@@ -46,14 +46,24 @@ jobs:
         run: |
           set -euo pipefail
           echo "sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
-          SUCCESSFUL_PUSH_RUNS=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=${SOURCE_SHA}&status=completed&per_page=100" \
-            --jq '[.workflow_runs[] | select(.event == "push" and .conclusion == "success")] | length')
-          if [ "$SUCCESSFUL_PUSH_RUNS" -lt 1 ]; then
-            echo "::error::No successful push-triggered CI run found for ${SOURCE_SHA}."
-            echo "::error::Refusing to create a release tag for an unverified commit."
-            exit 1
-          fi
+          MAX_ATTEMPTS=12
+          SLEEP_SECONDS=10
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            SUCCESSFUL_PUSH_RUNS=$(gh api \
+              "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=${SOURCE_SHA}&status=completed&per_page=100" \
+              --jq '[.workflow_runs[] | select(.event == "push" and .conclusion == "success")] | length')
+            if [ "$SUCCESSFUL_PUSH_RUNS" -ge 1 ]; then
+              echo "Found ${SUCCESSFUL_PUSH_RUNS} successful push-triggered CI run(s) for ${SOURCE_SHA}."
+              exit 0
+            fi
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              echo "No successful push-triggered CI run visible for ${SOURCE_SHA} yet (attempt ${attempt}/${MAX_ATTEMPTS}); retrying in ${SLEEP_SECONDS}s..."
+              sleep "$SLEEP_SECONDS"
+            fi
+          done
+          echo "::error::No successful push-triggered CI run found for ${SOURCE_SHA} after ${MAX_ATTEMPTS} attempts."
+          echo "::error::Refusing to create a release tag for an unverified commit."
+          exit 1
 
       - name: Set up Python 3.12
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
