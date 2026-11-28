@@ -848,8 +848,7 @@ class MyceliumConfig:
                 tool_name=name,
             )
 
-        # LangGraph outermost so it can inject scope/dispatch before inner guards.
-        if self.langgraph_enabled and (
+        requires_framework_context = (
             tool_config.ledger is not None
             or applies_loop
             or applies_scope
@@ -858,7 +857,10 @@ class MyceliumConfig:
             or applies_entity
             or applies_destructive
             or applies_use_time
-        ):
+        )
+
+        # LangGraph outermost so it can inject scope/dispatch before inner guards.
+        if self.langgraph_enabled and requires_framework_context:
             try:
                 func = instrument_langgraph_tool(func)
             except LangGraphIntegrationError as exc:
@@ -867,16 +869,7 @@ class MyceliumConfig:
         # CrewAI runtime hooks are process-scoped and preserve this callable's
         # public signature. Installing here also catches an enabled integration
         # whose optional dependency is absent before the tool can be registered.
-        if self.crewai_enabled and (
-            tool_config.ledger is not None
-            or applies_loop
-            or applies_scope
-            or applies_state
-            or applies_secret
-            or applies_entity
-            or applies_destructive
-            or applies_use_time
-        ):
+        if self.crewai_enabled and requires_framework_context:
             try:
                 func = instrument_crewai_tool(
                     func,
