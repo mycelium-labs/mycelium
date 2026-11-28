@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import warnings
-from collections.abc import AsyncIterator, Iterator, Mapping
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -32,7 +32,7 @@ class _ActiveTransition:
     ledger: ActionLedger
     request_id: str
     binding: ToolTransitionBinding | None
-    call_kwargs: Mapping[str, Any]
+    call_kwargs: dict[str, Any]
     owner: str | None
     fence: int
 

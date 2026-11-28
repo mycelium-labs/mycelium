@@ -322,23 +322,23 @@ def _ensure_provider_key_for_execution(
     call_mapping: dict[str, Any],
     owner: str | None,
     fence: int,
-) -> LedgerEntry:
+) -> None:
     """Inject and persist provider key from effect_id when policy requests it."""
     if transition_binding is None:
-        return claimed_entry
+        return
     param = transition_binding.provider_idempotency_key_param
     if param is None:
-        return claimed_entry
+        return
     if clean_kwargs.get(param) is not None:
-        return claimed_entry
+        return
     if not should_propagate_effect_id_as_provider_key(transition_binding):
-        return claimed_entry
+        return
     provider_key = claimed_entry.provider_idempotency_key or claimed_entry.effect_id
     if provider_key is None:
         raise LedgerError(
             f"Cannot derive provider idempotency key for {request_id!r}: missing effect_id"
         )
-    updated = ledger.attach_provider_idempotency_key(
+    ledger.attach_provider_idempotency_key(
         request_id,
         provider_key,
         expected_owner=owner,
@@ -354,7 +354,171 @@ def _ensure_provider_key_for_execution(
                 call_kwargs={**dict(active.call_kwargs), param: provider_key},
             )
         )
-    return updated
+
+
+def _prepare_tool_call(
+    func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    active: _ActiveTransition,
+    claimed_entry: LedgerEntry,
+    clean_kwargs: dict[str, Any],
+    tool_name: str,
+    authorized_reexec: bool,
+    auth_decision: Any,
+    currency_decision: Any,
+    blocked: Exception | None,
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from mycelium.use_time_currency import UseTimeCurrencyError
+
+    ledger = active.ledger
+    request_id = active.request_id
+    transition_binding = active.binding
+    call_mapping = active.call_kwargs
+    owner = active.owner
+    fence = active.fence
+    side_effect_class = (
+        transition_binding.side_effect_class if transition_binding is not None else None
+    )
+
+    if blocked is not None:
+        event = (
+            "use_time_currency"
+            if isinstance(blocked, UseTimeCurrencyError)
+            else "authority_window"
+        )
+        try:
+            ledger._emit_outcome(
+                request_id=request_id,
+                tool=tool_name,
+                event=event,
+                gate="DENY",
+                terminal_outcome=TerminalOutcome.FAILED_BEFORE_EFFECT,
+                side_effect_class=side_effect_class,
+                tool_body_executed=False,
+                authorized_reexec=authorized_reexec,
+                owner=owner,
+                error_class=type(blocked).__name__,
+                policy_version=(
+                    transition_binding.policy_version
+                    if transition_binding is not None
+                    else None
+                ),
+            )
+        except Exception:
+            _logger.exception(
+                "could not emit %s denial for %s",
+                event,
+                request_id,
+            )
+
+    if getattr(auth_decision, "decision", "skipped") == "allowed":
+        try:
+            ledger._emit_outcome(
+                request_id=request_id,
+                tool=tool_name,
+                event="authority_window",
+                gate="ALLOW",
+                terminal_outcome=TerminalOutcome.IN_FLIGHT,
+                side_effect_class=side_effect_class,
+                tool_body_executed=False,
+                authorized_reexec=authorized_reexec,
+                owner=owner,
+                policy_version=getattr(auth_decision, "policy_version", None)
+                or (
+                    transition_binding.policy_version
+                    if transition_binding is not None
+                    else None
+                ),
+            )
+        except Exception:
+            _logger.exception(
+                "could not emit authority_window allow for %s",
+                request_id,
+            )
+
+    if getattr(currency_decision, "decision", "skipped") == "allowed":
+        try:
+            ledger._emit_outcome(
+                request_id=request_id,
+                tool=tool_name,
+                event="use_time_currency",
+                gate="ALLOW",
+                terminal_outcome=TerminalOutcome.IN_FLIGHT,
+                side_effect_class=side_effect_class,
+                tool_body_executed=False,
+                authorized_reexec=authorized_reexec,
+                owner=owner,
+                policy_version=currency_decision.policy_version
+                or (
+                    transition_binding.policy_version
+                    if transition_binding is not None
+                    else None
+                ),
+            )
+        except Exception:
+            _logger.exception(
+                "could not emit use_time_currency allow for %s",
+                request_id,
+            )
+
+    decision = _record_boundary_decision(
+        ledger,
+        request_id,
+        tool=tool_name,
+        args=args,
+        kwargs=call_mapping,
+        transition_key=(
+            derive_transition_key_for_call(tool_name, args, dict(kwargs), transition_binding)
+            if transition_binding is not None
+            else None
+        ),
+        auth_decision=auth_decision,
+        currency_decision=currency_decision,
+        owner=owner,
+        fence=fence,
+    )
+    if blocked is not None:
+        raise blocked
+    from mycelium.decision import get_policy_blocked_error
+
+    policy_blocked = get_policy_blocked_error()
+    if policy_blocked is not None:
+        raise policy_blocked
+    _raise_denied_decision(request_id, decision)
+    _ensure_provider_key_for_execution(
+        ledger=ledger,
+        request_id=request_id,
+        transition_binding=transition_binding,
+        claimed_entry=claimed_entry,
+        clean_kwargs=clean_kwargs,
+        call_mapping=call_mapping,
+        owner=owner,
+        fence=fence,
+    )
+
+    ledger._emit_outcome(
+        request_id=request_id,
+        tool=tool_name,
+        event="body_start",
+        terminal_outcome=TerminalOutcome.IN_FLIGHT,
+        side_effect_class=side_effect_class,
+        tool_body_executed=True,
+        authorized_reexec=authorized_reexec,
+        owner=owner,
+    )
+
+    from mycelium.secret_protection import (
+        get_active_secret_policy,
+        resolve_declared_secret_fields,
+    )
+
+    policy = get_active_secret_policy()
+    extra = policy.secret_fields if policy is not None else frozenset()
+    return resolve_declared_secret_fields(
+        func, args, clean_kwargs, extra_fields=extra
+    )
 
 
 def _identity_lookup_kwargs(
@@ -480,16 +644,8 @@ def _run_ledgered(
     )
 
     call_mapping = _use_boundary_call_mapping(func, args, clean_kwargs, kwargs)
-    token = _active_transition_var.set(
-        _ActiveTransition(
-            ledger,
-            request_id,
-            transition_binding,
-            call_mapping,
-            owner,
-            fence,
-        )
-    )
+    active = _ActiveTransition(ledger, request_id, transition_binding, call_mapping, owner, fence)
+    token = _active_transition_var.set(active)
     try:
         from mycelium.authority_window import (
             AuthorityExpiredError,
@@ -515,141 +671,18 @@ def _run_ledgered(
                 authority_offset=authority_offset,
                 currency_offset=currency_offset,
             )
-            event = (
-                "use_time_currency"
-                if isinstance(blocked, UseTimeCurrencyError)
-                else "authority_window"
-            )
-            try:
-                ledger._emit_outcome(
-                    request_id=request_id,
-                    tool=tool_name,
-                    event=event,
-                    gate="DENY",
-                    terminal_outcome=TerminalOutcome.FAILED_BEFORE_EFFECT,
-                    side_effect_class=side_effect_class,
-                    tool_body_executed=False,
-                    authorized_reexec=authorized_reexec,
-                    owner=owner,
-                    error_class=type(blocked).__name__,
-                    policy_version=(
-                        transition_binding.policy_version
-                        if transition_binding is not None
-                        else None
-                    ),
-                )
-            except Exception:
-                _logger.exception(
-                    "could not emit %s denial for %s",
-                    event,
-                    request_id,
-                )
-
-        if getattr(auth_decision, "decision", "skipped") == "allowed":
-            try:
-                ledger._emit_outcome(
-                    request_id=request_id,
-                    tool=tool_name,
-                    event="authority_window",
-                    gate="ALLOW",
-                    terminal_outcome=TerminalOutcome.IN_FLIGHT,
-                    side_effect_class=side_effect_class,
-                    tool_body_executed=False,
-                    authorized_reexec=authorized_reexec,
-                    owner=owner,
-                    policy_version=getattr(auth_decision, "policy_version", None)
-                    or (
-                        transition_binding.policy_version
-                        if transition_binding is not None
-                        else None
-                    ),
-                )
-            except Exception:
-                _logger.exception(
-                    "could not emit authority_window allow for %s",
-                    request_id,
-                )
-
-        if getattr(currency_decision, "decision", "skipped") == "allowed":
-            try:
-                ledger._emit_outcome(
-                    request_id=request_id,
-                    tool=tool_name,
-                    event="use_time_currency",
-                    gate="ALLOW",
-                    terminal_outcome=TerminalOutcome.IN_FLIGHT,
-                    side_effect_class=side_effect_class,
-                    tool_body_executed=False,
-                    authorized_reexec=authorized_reexec,
-                    owner=owner,
-                    policy_version=currency_decision.policy_version
-                    or (
-                        transition_binding.policy_version
-                        if transition_binding is not None
-                        else None
-                    ),
-                )
-            except Exception:
-                _logger.exception(
-                    "could not emit use_time_currency allow for %s",
-                    request_id,
-                )
-
-        decision = _record_boundary_decision(
-            ledger,
-            request_id,
-            tool=tool_name,
-            args=args,
-            kwargs=call_mapping,
-            transition_key=(
-                derive_transition_key_for_call(tool_name, args, dict(kwargs), transition_binding)
-                if transition_binding is not None
-                else None
-            ),
-            auth_decision=auth_decision,
-            currency_decision=currency_decision,
-            owner=owner,
-            fence=fence,
-        )
-        if blocked is not None:
-            raise blocked
-        from mycelium.decision import get_policy_blocked_error
-
-        policy_blocked = get_policy_blocked_error()
-        if policy_blocked is not None:
-            raise policy_blocked
-        _raise_denied_decision(request_id, decision)
-        existing = _ensure_provider_key_for_execution(
-            ledger=ledger,
-            request_id=request_id,
-            transition_binding=transition_binding,
+        exec_args, exec_kwargs = _prepare_tool_call(
+            func,
+            args,
+            kwargs,
+            active=active,
             claimed_entry=existing,
             clean_kwargs=clean_kwargs,
-            call_mapping=call_mapping,
-            owner=owner,
-            fence=fence,
-        )
-
-        ledger._emit_outcome(
-            request_id=request_id,
-            tool=tool_name,
-            event="body_start",
-            terminal_outcome=TerminalOutcome.IN_FLIGHT,
-            side_effect_class=side_effect_class,
-            tool_body_executed=True,
+            tool_name=tool_name,
             authorized_reexec=authorized_reexec,
-            owner=owner,
-        )
-
-        from mycelium.secret_protection import (
-            get_active_secret_policy,
-            resolve_declared_secret_fields,
-        )
-
-        policy = get_active_secret_policy()
-        extra = policy.secret_fields if policy is not None else frozenset()
-        exec_args, exec_kwargs = resolve_declared_secret_fields(
-            func, args, clean_kwargs, extra_fields=extra
+            auth_decision=auth_decision,
+            currency_decision=currency_decision,
+            blocked=blocked,
         )
         with _lease_auto_renew(
             ledger,
@@ -887,16 +920,8 @@ async def _run_ledgered_async(
     )
 
     call_mapping = _use_boundary_call_mapping(func, args, clean_kwargs, kwargs)
-    token = _active_transition_var.set(
-        _ActiveTransition(
-            ledger,
-            request_id,
-            transition_binding,
-            call_mapping,
-            owner,
-            fence,
-        )
-    )
+    active = _ActiveTransition(ledger, request_id, transition_binding, call_mapping, owner, fence)
+    token = _active_transition_var.set(active)
     try:
         from mycelium.authority_window import (
             AuthorityExpiredError,
@@ -922,141 +947,18 @@ async def _run_ledgered_async(
                 authority_offset=authority_offset,
                 currency_offset=currency_offset,
             )
-            event = (
-                "use_time_currency"
-                if isinstance(blocked, UseTimeCurrencyError)
-                else "authority_window"
-            )
-            try:
-                ledger._emit_outcome(
-                    request_id=request_id,
-                    tool=tool_name,
-                    event=event,
-                    gate="DENY",
-                    terminal_outcome=TerminalOutcome.FAILED_BEFORE_EFFECT,
-                    side_effect_class=side_effect_class,
-                    tool_body_executed=False,
-                    authorized_reexec=authorized_reexec,
-                    owner=owner,
-                    error_class=type(blocked).__name__,
-                    policy_version=(
-                        transition_binding.policy_version
-                        if transition_binding is not None
-                        else None
-                    ),
-                )
-            except Exception:
-                _logger.exception(
-                    "could not emit %s denial for %s",
-                    event,
-                    request_id,
-                )
-
-        if getattr(auth_decision, "decision", "skipped") == "allowed":
-            try:
-                ledger._emit_outcome(
-                    request_id=request_id,
-                    tool=tool_name,
-                    event="authority_window",
-                    gate="ALLOW",
-                    terminal_outcome=TerminalOutcome.IN_FLIGHT,
-                    side_effect_class=side_effect_class,
-                    tool_body_executed=False,
-                    authorized_reexec=authorized_reexec,
-                    owner=owner,
-                    policy_version=getattr(auth_decision, "policy_version", None)
-                    or (
-                        transition_binding.policy_version
-                        if transition_binding is not None
-                        else None
-                    ),
-                )
-            except Exception:
-                _logger.exception(
-                    "could not emit authority_window allow for %s",
-                    request_id,
-                )
-
-        if getattr(currency_decision, "decision", "skipped") == "allowed":
-            try:
-                ledger._emit_outcome(
-                    request_id=request_id,
-                    tool=tool_name,
-                    event="use_time_currency",
-                    gate="ALLOW",
-                    terminal_outcome=TerminalOutcome.IN_FLIGHT,
-                    side_effect_class=side_effect_class,
-                    tool_body_executed=False,
-                    authorized_reexec=authorized_reexec,
-                    owner=owner,
-                    policy_version=currency_decision.policy_version
-                    or (
-                        transition_binding.policy_version
-                        if transition_binding is not None
-                        else None
-                    ),
-                )
-            except Exception:
-                _logger.exception(
-                    "could not emit use_time_currency allow for %s",
-                    request_id,
-                )
-
-        decision = _record_boundary_decision(
-            ledger,
-            request_id,
-            tool=tool_name,
-            args=args,
-            kwargs=call_mapping,
-            transition_key=(
-                derive_transition_key_for_call(tool_name, args, dict(kwargs), transition_binding)
-                if transition_binding is not None
-                else None
-            ),
-            auth_decision=auth_decision,
-            currency_decision=currency_decision,
-            owner=owner,
-            fence=fence,
-        )
-        if blocked is not None:
-            raise blocked
-        from mycelium.decision import get_policy_blocked_error
-
-        policy_blocked = get_policy_blocked_error()
-        if policy_blocked is not None:
-            raise policy_blocked
-        _raise_denied_decision(request_id, decision)
-        existing = _ensure_provider_key_for_execution(
-            ledger=ledger,
-            request_id=request_id,
-            transition_binding=transition_binding,
+        exec_args, exec_kwargs = _prepare_tool_call(
+            func,
+            args,
+            kwargs,
+            active=active,
             claimed_entry=existing,
             clean_kwargs=clean_kwargs,
-            call_mapping=call_mapping,
-            owner=owner,
-            fence=fence,
-        )
-
-        ledger._emit_outcome(
-            request_id=request_id,
-            tool=tool_name,
-            event="body_start",
-            terminal_outcome=TerminalOutcome.IN_FLIGHT,
-            side_effect_class=side_effect_class,
-            tool_body_executed=True,
+            tool_name=tool_name,
             authorized_reexec=authorized_reexec,
-            owner=owner,
-        )
-
-        from mycelium.secret_protection import (
-            get_active_secret_policy,
-            resolve_declared_secret_fields,
-        )
-
-        policy = get_active_secret_policy()
-        extra = policy.secret_fields if policy is not None else frozenset()
-        exec_args, exec_kwargs = resolve_declared_secret_fields(
-            func, args, clean_kwargs, extra_fields=extra
+            auth_decision=auth_decision,
+            currency_decision=currency_decision,
+            blocked=blocked,
         )
         with _lease_auto_renew(
             ledger,
