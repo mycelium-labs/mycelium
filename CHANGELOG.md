@@ -5,10 +5,24 @@ small PyPI versions. Pre-release checklist: [sdk/docs/RELEASE.md](sdk/docs/RELEA
 
 ## Unreleased
 
+## 1.38.7 (2026-11-28)
+
+### Runtime and release
+
+- Share framework-context selection across LangGraph and CrewAI, and share
+  pre-call ledger decisions and argument preparation across sync and async tools.
+- Derive the package's public export list from its import registry while
+  preserving existing imports and order.
+- Retry the GitHub Actions CI lookup before tagging a verified release (#353).
+
 ### Documentation
 
-- Add a local use-time-currency example that rejects a changed decide-time fact
-  before a consequential tool call (#327).
+- Add runnable examples for SQLite crash recovery, interrupted `composite_items`
+  workflows, and a custom reconciler (#326, #230, #322).
+- Show how to validate tool input, reject expired authority or changed facts,
+  and set up a CrewAI order lookup with a fake provider (#319, #320, #327, #253).
+- Document Doctor and Verify JSON evidence and add a production-proof evidence
+  template (#324, #325).
 
 ## 1.38.6 (2026-11-12)
 
